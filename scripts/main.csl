@@ -1,0 +1,456 @@
+import "core:ao"
+import "ui"
+
+HealthBarBack_Red: Texture_Asset;
+HealthBarFill_Red: Texture_Asset;
+
+// Item drops:
+// Use `ItemDrops.spawn(...)` / `ItemDrops.spawn_from_definition(...)` from `scripts/ItemDrops.csl`
+// to drop items into the world. Pickups will magnet to nearby players and grant the item.
+
+
+// Project load
+
+ao_before_scene_load :: proc() {
+    // Called before the scene is loaded
+    ItemManager.AllItemDefinitions();
+
+    // Economy currency registration (global, safe to call once).
+    #static coin_currency_registered: bool;
+    if !coin_currency_registered {
+        coin_currency_registered = true;
+        coin_icon := get_asset(Texture_Asset, "Items/Coin.png");
+        Economy.register_currency("Coins", coin_icon);
+    }
+}
+
+ao_start :: proc() {
+    // Called after the scene is loaded
+     // cached textures
+    HealthBarBack_Red = get_asset(Texture_Asset, "UI/Health_Bar/health_bar_red/healthbar_back.png");
+    HealthBarFill_Red = get_asset(Texture_Asset, "UI/Health_Bar/health_bar_red/healthbar_fill.png");
+}
+
+ao_update :: proc(dt: float) {
+    // Called once per frame
+}
+
+ao_late_update :: proc(dt: float) {
+    // Called once per frame after physics has been resolved
+}
+
+COIN_CURRENCY :: "Coins";
+
+// Convert any legacy "coin" item stacks into Coin currency.
+// (We used to award Coins as an Item_Definition; now it's a currency.)
+migrate_legacy_coin_items_to_currency :: proc(player: Player) {
+    if player == null return;
+    if !Game.is_server() return;
+
+    inv := player.default_inventory;
+    if inv == null || inv.self == null return;
+    if inv.capacity <= 0 return;
+
+    total_converted: s64 = 0;
+    MAX_STEPS :: 20000;
+
+    for slot: 0..inv.capacity-1 {
+        item := inv->get_item(slot);
+        if item == null continue;
+        if item.self == null continue;
+
+        defn := item->get_definition();
+        if defn == null continue;
+        if defn->get_id() != "coin" continue;
+
+        // Destroy 1 at a time to count the stack.
+        for step: 0..MAX_STEPS {
+            cur := inv->get_item(slot);
+            if cur == null break;
+            if cur.self == null break;
+            cur_defn := cur->get_definition();
+            if cur_defn == null break;
+            if cur_defn->get_id() != "coin" break;
+
+            Items.destroy_item_instance(cur, 1);
+            total_converted += 1;
+        }
+    }
+
+    if total_converted > 0 {
+        Economy.deposit_currency(player, COIN_CURRENCY, total_converted);
+        Notifier.notify(player, "Converted legacy Coin items into % Coins.", {total_converted});
+    }
+}
+
+draw_coin_currency_hud :: proc(player: Player) {
+    if player == null return;
+    if !player->is_local_or_server() return;
+
+    safe := UI.get_safe_screen_rect();
+
+    // Top-right coin panel
+    panel := safe->bottom_left_rect()->grow(50, 100, 50, 100)->offset(150, 70);
+    UI.quad(panel, get_asset(Texture_Asset, "UI/GoldFrame.png"), {0.5, 0.5, 0.5, 1});
+
+    inner := panel->inset(12);
+    icon_rect := inner->cut_left_unscaled(54);
+    _ := inner->cut_left_unscaled(12);
+
+    #static coin_icon := get_asset(Texture_Asset, "Items/Coin.png");
+    if coin_icon != null {
+        UI.quad(icon_rect->fit_aspect(coin_icon->get_aspect()), coin_icon);
+    }
+
+    balance := Economy.get_balance(player, COIN_CURRENCY);
+
+    ts := UI.default_text_settings();
+    ts.size = 36;
+    ts.halign = .LEFT;
+    ts.valign = .CENTER;
+    ts.do_outline = true;
+    ts.outline_thickness = 3;
+    ts.outline_color = {0, 0, 0, 1};
+    UI.text(inner, ts, "%", {balance});
+}
+
+
+
+Player :: class : Player_Base {
+
+    MaxHealth: float;
+    CurrentHealth: float;
+
+    // UI state (per-player, multiplayer safe)
+    sell_shop_open: bool;
+    sell_shop_movement_locked: bool;
+
+    // PlayerBase ownership state (per-player, multiplayer safe)
+    base_entity: Entity;
+    base_spawn_index: s64;
+
+    give_item :: proc(player: Player, item_id: string) {
+    item := Items.create_item_instance(ItemManager.FindItem(item_id), 1);
+
+    will_destroy: bool;
+    if Items.can_move_item_to_inventory(item, player.default_inventory, ref will_destroy) {
+        Items.move_item_to_inventory(item, player.default_inventory);
+    }
+    else {
+        // Inventory full → destroy the instance we created
+        Items.destroy_item_instance(item);
+    }
+}
+
+    ao_start :: method() {
+        // Called when this component is created
+        MaxHealth = 100;
+        CurrentHealth = MaxHealth;
+
+        sell_shop_open = false;
+        sell_shop_movement_locked = false;
+
+        base_entity = null;
+        base_spawn_index = -1;
+
+        // One-time migration: convert any legacy Coin items into Coin currency.
+        if Game.is_server() {
+            migrate_legacy_coin_items_to_currency(this);
+
+            // Joining player: ask the GameManager to assign bases (or warp to 0,0 if full).
+            gm := get_game_manager();
+            if gm != null {
+                gm->request_base_reconcile();
+            }
+        }
+
+        // Camera tuning:
+        // `camera.size` is an orthographic size where larger values zoom OUT.
+        // We increase it a bit to avoid feeling overly zoomed-in.
+        {
+            CAMERA_SIZE_MULT :: 1.25;
+            CAMERA_SIZE_MIN  :: 7.5;
+
+            new_size := camera.size * CAMERA_SIZE_MULT;
+            if new_size < CAMERA_SIZE_MIN {
+                new_size = CAMERA_SIZE_MIN;
+            }
+
+            camera.size = new_size;
+            camera.follow_player = true;
+        }
+    }
+
+    ao_update :: method(dt: float) {
+        // Called once per frame
+        // Ensure the player can't move while the Sell Shop modal is open.
+        // Do this server-side so movement is authoritatively blocked.
+        if Game.is_server() {
+            if sell_shop_open {
+                if !sell_shop_movement_locked {
+                    this->add_disable_movement_input_reason("sell_shop_ui");
+                    sell_shop_movement_locked = true;
+                }
+            }
+            else {
+                if sell_shop_movement_locked {
+                    this->remove_disable_movement_input_reason("sell_shop_ui");
+                    sell_shop_movement_locked = false;
+                }
+            }
+        }
+    }
+
+    ao_late_update :: method(dt: float) {
+        // Called once per frame after physics has been resolved
+
+         // UI should only be drawn for the local player (and on server for validation if needed)
+        if !this->is_local_or_server() {
+            return;
+        }
+
+        // Draw the floating health bar above the player's name, except for the Monster.
+        this->draw_health_bar();
+
+         // Draw floating combat text damage numbers in world space.
+        this->draw_damage_numbers(dt);
+
+        // Draw the built-in inventory hotbar (engine UI).
+        draw_player_hotbar(this);
+
+        // Currency HUD
+        draw_coin_currency_hud(this);
+
+        // Draw sell shop button + modal UI.
+        draw_sell_shop_ui(this);
+    }
+
+    ao_end :: method() {
+        // Called when this component is destroyed
+        if Game.is_server() {
+            // Safety: ensure movement is re-enabled if the player leaves while UI is open.
+            if sell_shop_movement_locked {
+                this->remove_disable_movement_input_reason("sell_shop_ui");
+                sell_shop_movement_locked = false;
+            }
+
+            gm := get_game_manager();
+            if gm != null {
+                gm->server_on_player_left(this);
+            }
+        }
+    }
+
+    ao_can_use_ability :: method(ability: Ability_Base) -> bool {
+        // Called to determine if the player is allowed to use the given ability
+        return true;
+    }
+
+    ao_can_use_interactable :: method(interactable: Interactable) -> bool {
+        // Called to determine if the player is allowed to use the given interactable
+        return true;
+    }
+
+    ao_on_interactable_used :: method(interactable: Interactable) {
+        // Called when the player uses the given interactable
+    }
+
+    ao_on_holding_interactable :: method(interactable: Interactable) {
+        // Called once per frame while the player is holding on the interactable
+    }
+
+    // Draws a health bar just above the player's position on screen and returns the bar rect.
+    draw_health_bar :: proc(using this: Player) -> Rect {
+
+        // Screen-space UI so we explicitly position over the player's screen position.
+        UI.push_world_draw_context();
+        defer UI.pop_draw_context();
+
+        // Make sure the bar renders above most HUD.
+        UI.push_z(entity.world_position.y - 0.001);
+        defer UI.pop_z();
+
+        // Compute the player's position on screen, slightly above the character.
+        bar_pos := entity.world_position + v2{0, 1.55};
+        base_rect := Rect{bar_pos, bar_pos};
+
+        // Grow into a horizontal health bar centered at the screen position and offset slightly upward.
+        health_rect := base_rect->grow(0.15, 0.65, 0, 0.65)->offset(0, 0.05);
+
+        border_rect := health_rect->grow(0.05, 0.04, 0.05, 0.04)->offset(0, -0.02);
+
+        // Placeholder in case we want to draw a level badge later.
+        level_rect := health_rect;
+
+        back := HealthBarBack_Red;
+        fill := HealthBarFill_Red;
+
+        // Draw bar background.
+        UI.quad(border_rect, back, {1, 1, 1, 1});
+
+        // Avoid division by zero when MaxHealth is not initialized for some reason.
+        if MaxHealth <= 0 {
+            return health_rect;
+        }
+
+        health_percent := CurrentHealth / MaxHealth;
+
+        // Clamp to [0, 1] to avoid weird rendering when values go out of range.
+        if health_percent < 0 {
+            health_percent = 0;
+        }
+        if health_percent > 1 {
+            health_percent = 1;
+        }
+
+        health_percent_rect := health_rect->subrect(0, 0, health_percent, 1);
+        UI.quad(health_percent_rect, fill, {1, 1, 1, 1});
+
+        return health_rect;
+    }
+
+    draw_damage_numbers :: proc(using this: Player, dt: float) {
+        gm := get_game_manager();
+        if gm == null {
+            return;
+        }
+
+        numbers := gm.damage_numbers;
+        if numbers.count == 0 {
+            return;
+        }
+
+        // World-space drawing context on a mid-level layer.
+        UI.push_world_draw_context();
+        defer UI.pop_draw_context();
+
+        UI.push_layer(5);
+        defer UI.pop_layer();
+
+        // Iterate backwards so we can safely remove finished entries.
+        for i: 0..numbers.count-1 #reverse {
+            dn := numbers[i];
+            if dn == null {
+                continue;
+            }
+
+            speed := 0.5;
+
+            // Start from the stored text settings (value type copy).
+            ts := dn.TextSettings;
+
+            dn.T += dt * speed;
+
+            if dn.T >= 1.0 && dn.DoingFading {
+                // Remove this entry and continue.
+                gm.damage_numbers->unordered_remove_by_value(dn);
+                continue;
+            }
+
+            if dn.T >= 1.0 && !dn.DoingFading {
+                dn.T = 0.0;
+                dn.DoingFading = true;
+            }
+
+            if !dn.DoingFading {
+                pos := dn.Position;
+
+                // Ease the upward motion over time.
+                t := dn.T;
+                if t < 0.0 {
+                    t = 0.0;
+                }
+                if t > 1.0 {
+                    t = 1.0;
+                }
+
+                t1 := 1.0 - t;
+                t_eased := 1.0 - t1 * t1 * t1 * t1; // Approximate Ease.OutQuart
+
+                pos.y += lerp(0.0, 0.5, t_eased);
+
+                // Simple fade-in-then-out curve in [0, 1].
+                fade_t := t;
+                if fade_t < 0.0 {
+                    fade_t = 0.0;
+                }
+                if fade_t > 1.0 {
+                    fade_t = 1.0;
+                }
+                color01 := 1.0 - abs(2.0 * fade_t - 1.0);
+
+                ts.color = lerp(ts.color, dn.Color, color01);
+                dn.LastPosition = pos;
+            }
+            else {
+                ts.spacing_multiplier = 1.0;
+
+                zero_color := v4{0, 0, 0, 0};
+                ts.color = lerp(ts.color, zero_color, dn.T);
+            }
+
+            ts.size = dn.TextSettings.size;
+
+            rect := Rect{dn.LastPosition, dn.LastPosition};
+            UI.text(rect, ts, dn.Text);
+        }
+    }
+
+    // Draw a directional arrow in the HUD pointing from this player toward a world-space target.
+    // Uses the built-in Tutorial_Arrow helper so near/far behavior and off-screen targets work correctly.
+    draw_arrow_to_position :: proc(using this: Player, target_world: v2) {
+        options := Tutorial_Arrow.default_options();
+        options.alpha = 1.0;
+        options.far = true;   // Show arrow when the target is far away
+        options.near = true;  // Also show when close so the direction stays clear
+        options.bob_scale = 0.5;
+        options.bob_bias = 1.5;
+
+        Tutorial_Arrow.draw(this, target_world, options);
+    }
+
+    // Apply damage to this player from server-authoritative logic.
+    take_damage :: proc(using this: Player, amount: float, source: Player = null) {
+        if amount <= 0 {
+            return;
+        }
+
+        // Health should only be modified on the server.
+        if !Game.is_server() {
+            return;
+        }
+
+        CurrentHealth -= amount;
+        if CurrentHealth < 0 {
+            CurrentHealth = 0;
+        }
+
+        // Spawn a simple damage number above this player.
+        gm := get_game_manager();
+        if gm != null {
+            dn := new(DamageNumbers);
+            dn.Text = format_string("-%", {amount.(int)});
+            dn.Position = entity.world_position + v2{0, 1.75};
+            dn.LastPosition = dn.Position;
+            dn.Color = {1, 0.2, 0.2, 1};
+            dn.T = 0.0;
+            dn.SpaceText = false;
+            dn.DoingFading = false;
+
+            ts := UI.default_text_settings();
+            ts.size = 26;
+            ts.halign = .CENTER;
+            ts.valign = .CENTER;
+            ts.do_outline = true;
+            ts.outline_thickness = 2;
+            ts.outline_color = {0, 0, 0, 1};
+            dn.TextSettings = ts;
+
+            gm.damage_numbers->append(dn);
+        }
+
+        // Start a damage flicker on this player's rig for visual feedback.
+        //flash := new(Damage_Flash_Effect);
+        //entity->add_passive_effect(flash);
+    }
+}

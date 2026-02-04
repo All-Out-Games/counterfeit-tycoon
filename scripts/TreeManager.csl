@@ -1,0 +1,208 @@
+import "core:ao"
+
+// TreeManager:
+// - Server-authoritative tree spawning + tracking (clients stay consistent via replication)
+// - Enforces a max number of trees in the world
+// - Avoids spawning trees too close together (min spacing radius check)
+//
+// Usage:
+// - Create a Tree prefab in /res (folder ending in .prefab) and set `tree_prefab_path`
+// - Place an entity in the scene and add `TreeManager` to it (ideally only one)
+//
+// Tip:
+// - If you want trees to be chop-able, add `Treecutting_Tree` to the prefab.
+
+TreeManager :: class : Component {
+    // Prefab path in /res, like: "Trees/Tree.prefab"
+    tree_prefab_path: string @ao_serialize;
+
+    // Spawn area (circle) centered on this entity's world position + offset.
+    spawn_radius: float @ao_serialize;
+    spawn_center_offset: v2 @ao_serialize;
+
+    // Limits
+    max_trees: s64 @ao_serialize;
+
+    // Spacing rule: reject any spawn if another tree is within this radius.
+    // Requested default: 1.5 units.
+    min_spacing_radius: float @ao_serialize;
+
+    // Spawn attempts & pacing
+    attempts_per_tree: s64 @ao_serialize;
+    spawn_budget_per_tick: s64 @ao_serialize;
+    respawn_interval: float @ao_serialize; // seconds between refill passes
+
+    // Runtime
+    rng: u64;
+    last_respawn_time: float;
+    cached_prefab: Prefab_Asset;
+
+    ao_start :: method() {
+        // Only the server should create/destroy gameplay entities.
+        if !Game.is_server() {
+            return;
+        }
+
+        // Defaults (only if not set in editor)
+        if spawn_radius <= 0 {
+            spawn_radius = 12.0;
+        }
+        if max_trees <= 0 {
+            max_trees = 25;
+        }
+        if min_spacing_radius <= 0 {
+            min_spacing_radius = 1.5;
+        }
+        if attempts_per_tree <= 0 {
+            attempts_per_tree = 25;
+        }
+        if spawn_budget_per_tick <= 0 {
+            spawn_budget_per_tick = 4;
+        }
+        if respawn_interval <= 0 {
+            respawn_interval = 0.5;
+        }
+
+        // Seed RNG deterministically from this manager entity (server-only).
+        rng = rng_seed(entity.id);
+        last_respawn_time = -99999.0;
+
+        // Initial fill.
+        refill_trees();
+    }
+
+    ao_update :: method(dt: float) {
+        _ := dt;
+
+        if !Game.is_server() {
+            return;
+        }
+
+        // Periodically refill to max (e.g., after trees are chopped/destroyed).
+        if get_time() - last_respawn_time >= respawn_interval {
+            refill_trees();
+        }
+    }
+
+    refill_trees :: method() {
+        if tree_prefab_path.count == 0 {
+            // Misconfigured; don't spam logs every tick.
+            if last_respawn_time < -1000.0 {
+                log_warning("TreeManager: tree_prefab_path is empty (set it to something like \"Trees/Tree.prefab\")", {});
+            }
+            last_respawn_time = get_time();
+            return;
+        }
+
+        ensure_prefab_loaded();
+        if cached_prefab == null {
+            if last_respawn_time < -1000.0 {
+                log_warning("TreeManager: couldn't load prefab at path: %", {tree_prefab_path});
+            }
+            last_respawn_time = get_time();
+            return;
+        }
+
+        // Spawn up to budget this tick (to avoid frame hitches).
+        existing := count_managed_trees();
+        to_spawn := max_trees - existing;
+        if to_spawn <= 0 {
+            last_respawn_time = get_time();
+            return;
+        }
+        if to_spawn > spawn_budget_per_tick {
+            to_spawn = spawn_budget_per_tick;
+        }
+
+        for _i: 1..to_spawn {
+            if !try_spawn_one_tree() {
+                // If we fail to find a valid spot for a single tree, stop early this tick.
+                break;
+            }
+        }
+        last_respawn_time = get_time();
+    }
+
+    ensure_prefab_loaded :: method() {
+        if cached_prefab != null {
+            return;
+        }
+        cached_prefab = get_asset(Prefab_Asset, tree_prefab_path);
+    }
+
+    count_managed_trees :: method() -> s64 {
+        count: s64;
+        foreach t: component_iterator(ManagedTree) {
+            if t == null continue;
+            if t.manager_entity_id != entity.id continue;
+            count += 1;
+        }
+        return count;
+    }
+
+    try_spawn_one_tree :: method() -> bool {
+        // Try N random positions.
+        for _attempt: 1..attempts_per_tree {
+            _ := _attempt;
+            pos := sample_spawn_position();
+            if is_position_clear(pos) {
+                spawned := Scene.instantiate(
+                    cached_prefab,
+                    pos,
+                    this,
+                    proc(spawned_entity: Entity, userdata: Object) {
+                        mgr := userdata.(TreeManager);
+                        if mgr == null return;
+                        if spawned_entity == null return;
+                        if spawned_entity.self == null return;
+
+                        tag := spawned_entity->add_component(ManagedTree);
+                        if tag == null return;
+                        tag.manager_entity_id = mgr.entity.id;
+                    }
+                );
+
+                if spawned == null continue;
+                if spawned.self == null continue;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    sample_spawn_position :: method() -> v2 {
+        center := entity.world_position + spawn_center_offset;
+
+        // Uniform random point in a circle:
+        // r = sqrt(u) * R, theta = v * 2PI
+        u := rng_range_float(ref rng, 0.0, 1.0);
+        v := rng_range_float(ref rng, 0.0, 1.0);
+
+        r := sqrt(u) * spawn_radius;
+        theta := v * (PI * 2.0);
+
+        offset := v2{cos(theta), sin(theta)} * r;
+        return center + offset;
+    }
+
+    is_position_clear :: method(pos: v2) -> bool {
+        // Enforce: no other tree within min_spacing_radius of pos.
+        r2 := min_spacing_radius * min_spacing_radius;
+        foreach t: component_iterator(ManagedTree) {
+            if t == null continue;
+            if t.manager_entity_id != entity.id continue;
+
+            // Be defensive: only access entity fields if entity is valid.
+            e := t.entity;
+            if e == null continue;
+            if e.self == null continue;
+
+            delta := e.world_position - pos;
+            if length_squared(delta) < r2 {
+                return false;
+            }
+        }
+        return true;
+    }
+}
+

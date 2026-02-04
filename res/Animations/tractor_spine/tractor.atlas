@@ -1,0 +1,29 @@
+8e91e402e4912fb2.png
+	size: 756, 756
+	filter: Linear, Linear
+misc/tractor/tractor body
+	bounds: 2, 309, 618, 444
+	offsets: 1, 1, 620, 446
+misc/tractor/tractor smoke/smoke 1
+	bounds: 622, 450, 121, 169
+	offsets: 1, 1, 123, 170
+misc/tractor/tractor smoke/smoke 2
+	bounds: 542, 84, 161, 163
+	offsets: 1, 1, 163, 165
+misc/tractor/tractor smoke/smoke particle1
+	bounds: 622, 325, 123, 110
+	offsets: 1, 1, 125, 112
+	rotate: 90
+misc/tractor/tractor smoke/smoke particle2
+	bounds: 622, 249, 74, 70
+	offsets: 1, 1, 76, 72
+	rotate: 90
+misc/tractor/tractor wheels l
+	bounds: 2, 60, 256, 247
+	offsets: 1, 1, 258, 249
+misc/tractor/tractor wheels r
+	bounds: 622, 621, 131, 132
+	offsets: 1, 1, 133, 133
+misc/tractor/window
+	bounds: 260, 88, 280, 219
+	offsets: 1, 1, 282, 221

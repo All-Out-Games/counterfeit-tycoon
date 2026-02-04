@@ -1,0 +1,289 @@
+import "core:ao"
+
+VAULT_SAVE_KEY_FINISHED_BILLS :: "vault_finished_bills";
+
+// Vault:
+// - Players can interact to deposit Finished Bills from their inventory.
+// - The Vault does NOT produce output; it only stores up to a max capacity.
+// - Renders a small in-world UI panel with finished bill count + a "fullness" bar.
+//
+// Setup:
+// - Add `Vault` to an entity that is a CHILD of a PlayerBase entity in the editor/prefab.
+// - Tune `radius` (inherited) for interaction range if needed.
+Vault :: class : Interactable {
+    // Tuning
+    max_capacity: s64 @ao_serialize;         // max stored Finished Bills
+    deposit_per_interact: s64 @ao_serialize; // best-effort per interaction
+
+    // World UI
+    ui_offset: v2 @ao_serialize;
+
+    // Stored (synced)
+    stored_finished_bills: s64;
+
+    // Save/load (server only)
+    loaded_from_save: bool;
+    loaded_for_user_id: string;
+
+    ao_start :: method() {
+        this->set_listener(this);
+
+        // Defaults (only if not set in editor)
+        if max_capacity <= 0 {
+            max_capacity = 5000;
+        }
+        if deposit_per_interact <= 0 {
+            deposit_per_interact = 25;
+        }
+        if ui_offset.x == 0 && ui_offset.y == 0 {
+            ui_offset = {0, 1.25};
+        }
+
+        // Interaction prompt
+        this->set_text("Deposit finished bills");
+        this->set_hold_text("Depositing...");
+
+        // Interactable defaults if not set
+        if radius <= 0 {
+            radius = 1.25;
+        }
+        if prompt_offset.x == 0 && prompt_offset.y == 0 {
+            prompt_offset = ui_offset;
+        }
+
+        loaded_from_save = false;
+        loaded_for_user_id = {};
+
+        // If ownership was already assigned during spawn, load immediately.
+        server_try_load_from_save();
+    }
+
+    ao_update :: method(dt: float) {
+        _ := dt;
+        server_try_load_from_save();
+    }
+
+    can_use :: method(player: Player) -> bool {
+        // Only the owning player (from our parent entity's PlayerBase) may use this vault.
+        return is_owner_of_parent_base(entity, player);
+    }
+
+    on_interact :: method(player: Player) {
+        if player == null return;
+
+        // Server-authoritative safety check (in case client-side can_use is bypassed).
+        if Game.is_server() && !is_owner_of_parent_base(entity, player) {
+            Notifier.notify(player, "This vault belongs to someone else.");
+            return;
+        }
+
+        // Server authoritative inventory changes + stored counts.
+        if !Game.is_server() {
+            return;
+        }
+
+        // Ensure we don't overwrite an existing save with a default 0.
+        server_try_load_from_save();
+
+        if max_capacity <= 0 {
+            max_capacity = 5000;
+        }
+
+        room := max_capacity - stored_finished_bills;
+        if room <= 0 {
+            Notifier.notify(player, "Vault is full!");
+            return;
+        }
+
+        to_try := deposit_per_interact;
+        if to_try > room {
+            to_try = room;
+        }
+        if to_try <= 0 {
+            Notifier.notify(player, "Vault is full!");
+            return;
+        }
+
+        taken: s64 = 0;
+        for i: 1..to_try {
+            _ := i;
+            if !try_take_one_finished_bill(player) {
+                break;
+            }
+            taken += 1;
+        }
+
+        if taken <= 0 {
+            Notifier.notify(player, "No finished bills to deposit!");
+            return;
+        }
+
+        stored_finished_bills += taken;
+        Notifier.notify(player, "Deposited Finished Bills x%", {taken});
+
+        if stored_finished_bills >= max_capacity {
+            stored_finished_bills = max_capacity;
+            Notifier.notify(player, "Vault is now full!");
+        }
+
+        // Persist immediately so disconnects/crashes don't lose progress.
+        Save.set_int(player, VAULT_SAVE_KEY_FINISHED_BILLS, stored_finished_bills);
+    }
+
+    server_try_load_from_save :: method() {
+        if !Game.is_server() {
+            return;
+        }
+
+        pb := get_parent_player_base(entity);
+        if pb == null {
+            return;
+        }
+
+        // Only attempt load once per owner assignment.
+        if loaded_from_save && loaded_for_user_id == pb.owner_user_id {
+            return;
+        }
+
+        owner := pb->get_owner();
+        if owner == null {
+            return; // owner not connected yet
+        }
+
+        cap := max_capacity;
+        if cap <= 0 {
+            cap = 5000;
+        }
+
+        saved := Save.get_int(owner, VAULT_SAVE_KEY_FINISHED_BILLS, 0);
+        if saved < 0 {
+            saved = 0;
+        }
+        if saved > cap {
+            saved = cap;
+        }
+
+        // Don't overwrite non-zero runtime state with an older save (defensive).
+        if stored_finished_bills < saved {
+            stored_finished_bills = saved;
+        }
+        if stored_finished_bills < 0 {
+            stored_finished_bills = 0;
+        }
+        if stored_finished_bills > cap {
+            stored_finished_bills = cap;
+        }
+
+        loaded_from_save = true;
+        loaded_for_user_id = pb.owner_user_id;
+
+        // Ensure save reflects the authoritative in-world value.
+        if stored_finished_bills != saved {
+            Save.set_int(owner, VAULT_SAVE_KEY_FINISHED_BILLS, stored_finished_bills);
+        }
+    }
+
+    try_take_one_finished_bill :: method(player: Player) -> bool {
+        if player == null return false;
+
+        inv := player.default_inventory;
+        if inv == null return false;
+        if inv.self == null return false;
+        if inv.capacity <= 0 return false;
+
+        for i: 0..inv.capacity-1 {
+            item := inv->get_item(i);
+            if item == null continue;
+            if item.self == null continue;
+
+            defn := item->get_definition();
+            if defn == null continue;
+
+            id := defn->get_id();
+            if id == "finished_bills" || id == "FinishedBills" {
+                // Remove exactly 1 finished bill from this stack (engine will destroy stack if it hits 0).
+                Items.destroy_item_instance(item, 1);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    ao_late_update :: method(dt: float) {
+        _ := dt;
+        draw_world_status();
+    }
+
+    draw_world_status :: method() {
+        UI.push_world_draw_context();
+        defer UI.pop_draw_context();
+
+        // Ensure we draw above most sprites nearby.
+        UI.push_layer(5);
+        defer UI.pop_layer();
+
+        UI.push_z(entity.world_position.y - 0.002);
+        defer UI.pop_z();
+
+        pos := entity.world_position + ui_offset;
+
+        // Panel rect in world units (meters).
+        panel_bg := Rect{pos, pos}->grow(0.24, 0.90, 0.24, 0.90);
+        panel_content := Rect{pos, pos}->grow(0.24, 0.75, 0.24, 0.75);
+        UI.quad(panel_bg, core_globals.white_sprite, {0, 0, 0, 0.6});
+
+        content := panel_content->inset(0.06);
+        icon_row := content->cut_top(0.30);
+        bar_row := content;
+
+        row_pad :: 0.02;
+        icon_row = icon_row->inset(row_pad);
+        bar_row = bar_row->inset(row_pad);
+
+        ts := UI.default_text_settings();
+        ts.size = 0.34;
+        ts.halign = .LEFT;
+        ts.valign = .CENTER;
+        ts.do_outline = true;
+        ts.outline_thickness = 2;
+        ts.outline_color = {0, 0, 0, 1};
+        ts.color = {1, 1, 1, 1};
+        ts.offset = {0.05, 0};
+
+        // Finished Bills
+        {
+            r := icon_row;
+            icon_rect := r->cut_left(0.26)->inset(0.01);
+            text_rect := r;
+
+            #static finished_icon := get_asset(Texture_Asset, "Items/FinishedBills.png");
+            if finished_icon != null {
+                UI.quad(icon_rect->fit_aspect(finished_icon->get_aspect()), finished_icon);
+            }
+
+            cap := max_capacity;
+            if cap <= 0 {
+                cap = 5000;
+            }
+            UI.text(text_rect, ts, "x% / %", {stored_finished_bills, cap});
+        }
+
+        // "Timer" bar used as fullness (stored / capacity)
+        bar := bar_row->inset(0.04);
+        UI.quad(bar, core_globals.white_sprite, {0, 0, 0, 0.7});
+
+        progress := 0.0;
+        cap := max_capacity;
+        if cap <= 0 {
+            cap = 5000;
+        }
+        if cap > 0 {
+            progress = clamp(stored_finished_bills.(float) / cap.(float), 0.0, 1.0);
+        }
+
+        fill := bar->subrect(0, 0, progress, 1);
+        UI.quad(fill, core_globals.white_sprite, {0.9, 0.8, 0.2, 1});
+    }
+}
+

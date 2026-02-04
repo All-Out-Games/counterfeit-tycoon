@@ -1,0 +1,167 @@
+// Treecutting system:
+// Add `Treecutting_Tree` to any "tree" entity in the editor to make it chop-able.
+//
+// Behavior:
+// - Player interacts -> tree rotates over time until it has fallen 90 degrees sideways
+// - When fall completes -> destroy tree entity and spawn 3-5 Wood item drops near the trunk midpoint
+//
+// Notes:
+// - Server authoritative: fall + drop spawning happen on server and sync automatically.
+// - Visual fall animation runs on clients (and may also run on server), but only the server spawns drops/destroys the entity.
+// - For best visuals, your tree entity origin/pivot should be at the base of the trunk.
+//   If it isn't, you can set `pivot_local` to keep a local-space pivot point fixed while rotating.
+//
+Treecutting_Tree :: class : Interactable {
+    // Drop behavior
+    min_wood_drops: s64 @ao_serialize; // inclusive
+    max_wood_drops: s64 @ao_serialize; // inclusive
+    trunk_length: float @ao_serialize;  // world units from pivot to tip (used for drop midpoint)
+    drop_spread_along: float @ao_serialize; // world units along trunk axis (centered at midpoint)
+    drop_spread_perp: float @ao_serialize;  // world units perpendicular to trunk axis
+
+    // Fall behavior
+    fall_duration: float @ao_serialize; // seconds
+    fall_right: bool @ao_serialize;     // true => +90deg, false => -90deg
+
+    // Optional: local-space offset from entity origin to desired pivot point (e.g., base of trunk).
+    // If {0,0}, no pivot correction is applied.
+    pivot_local: v2 @ao_serialize;
+
+    // Runtime state (synced)
+    is_falling: bool;
+    fall_start_time: float;
+    start_rotation: float;
+    target_rotation: float;
+    start_local_position: v2;
+    pivot_anchor_local: v2; // pivot point in parent-local space (where we keep pivot fixed)
+
+    ao_start :: method() {
+        this->set_listener(this);
+
+        // Default tuning (only if not set in editor)
+        if min_wood_drops <= 0 {
+            min_wood_drops = 3;
+        }
+        if max_wood_drops <= 0 {
+            max_wood_drops = 5;
+        }
+        if max_wood_drops < min_wood_drops {
+            max_wood_drops = min_wood_drops;
+        }
+        if trunk_length <= 0 {
+            trunk_length = 3.0;
+        }
+        if drop_spread_along <= 0 {
+            drop_spread_along = 0.6;
+        }
+        if drop_spread_perp <= 0 {
+            drop_spread_perp = 0.25;
+        }
+        if fall_duration <= 0 {
+            fall_duration = 1.0;
+        }
+
+        // Prompt text
+        this->set_text("Chop tree");
+        this->set_hold_text("Chopping...");
+    }
+
+    can_use :: method(player: Player) -> bool {
+        _ := player;
+        if is_falling return false;
+        return true;
+    }
+
+    on_interact :: method(player: Player) {
+        _ := player;
+        if is_falling return;
+
+        // Only the server should drive transforms + spawn drops.
+        if !Game.is_server() {
+            return;
+        }
+
+        is_falling = true;
+        fall_start_time = get_time();
+
+        start_rotation = entity.local_rotation;
+        start_local_position = entity.local_position;
+
+        dir := 1.0;
+        if !fall_right {
+            dir = -1.0;
+        }
+        target_rotation = start_rotation + dir * 90.0;
+
+        // Precompute where the pivot anchor is in parent-local space.
+        // pivot_anchor = origin + rotate(pivot_local, start_rotation)
+        pivot_anchor_local = start_local_position + rotate_v2(pivot_local, deg_to_rad(start_rotation));
+    }
+
+    ao_update :: method(dt: float) {
+        _ := dt;
+        if !is_falling return;
+
+        t := Ease.out_quart(Ease.T(get_time() - fall_start_time, fall_duration));
+        rot := lerp(start_rotation, target_rotation, t);
+
+        entity->set_local_rotation(rot);
+
+        // Optional pivot correction to make rotation appear to hinge at trunk base.
+        if pivot_local.x != 0 || pivot_local.y != 0 {
+            pos := pivot_anchor_local - rotate_v2(pivot_local, deg_to_rad(rot));
+            entity->set_local_position(pos);
+        }
+
+        // Only the server should spawn drops and destroy the tree.
+        if Game.is_server() && t >= 1.0 {
+            spawn_wood_drops();
+            entity->destroy();
+        }
+    }
+
+    spawn_wood_drops :: method() {
+        wood_defn := ItemManager.FindItem("wood");
+        if wood_defn == null {
+            log_warning("Treecutting: couldn't find Wood item definition", {});
+            return;
+        }
+
+        rng := rng_seed_time();
+        count := rng_range_int(ref rng, min_wood_drops, max_wood_drops);
+
+        // Compute a midpoint along the fallen trunk in world space.
+        // pivot_world = origin_world + rotate(pivot_local, world_rot)
+        rot_rad := deg_to_rad(entity.world_rotation);
+        pivot_world := entity.world_position + rotate_v2(pivot_local, rot_rad);
+
+        trunk_axis := up_from_angle(rot_rad); // local +Y rotated into world
+        midpoint := pivot_world + trunk_axis * (trunk_length * 0.5);
+        perp := v2{-trunk_axis.y, trunk_axis.x};
+
+        for i: 1..count {
+            _ := i;
+            along := rng_range_float(ref rng, -drop_spread_along, drop_spread_along);
+            side := rng_range_float(ref rng, -drop_spread_perp, drop_spread_perp);
+            pos := midpoint + trunk_axis * along + perp * side;
+            _ := ItemDrops.spawn_from_definition(pos, wood_defn, 1);
+        }
+    }
+}
+
+deg_to_rad :: proc(deg: float) -> float {
+    return deg * (PI / 180.0);
+}
+
+rotate_v2 :: proc(v: v2, angle_rad: float) -> v2 {
+    c := cos(angle_rad);
+    s := sin(angle_rad);
+    return v2{v.x * c - v.y * s, v.x * s + v.y * c};
+}
+
+// Vector representing local +Y rotated by angle.
+up_from_angle :: proc(angle_rad: float) -> v2 {
+    // Rotating (0, 1) gives (-sin, cos)
+    return v2{-sin(angle_rad), cos(angle_rad)};
+}
+

@@ -1,0 +1,50 @@
+import "core:ao"
+
+// Draw the engine hotbar for a player's default inventory.
+// - Must be called from Player.ao_late_update inside `player->is_local_or_server()`
+// - Server handles authoritative effects (use/drop) based on the returned result.
+draw_player_hotbar :: proc(player: Player) {
+    if player == null return;
+    if player.entity == null return;
+    if player.entity.self == null return;
+
+    inv := player.default_inventory;
+    if inv == null return;
+    if inv.self == null return;
+    if inv.capacity <= 0 return;
+
+    options := Inventory_Draw_Options.default();
+    options.hotbar_item_count = 6;
+    options.enable_use_from_hotbar = true;
+
+    // Mobile-first: avoid keyboard-only interactions.
+    options.keyboard_item_selection = false;
+    options.scroll_item_selection = true;
+
+    result := Items.draw_hotbar(player, inv, options);
+
+    // Apply gameplay effects server-side so all peers stay in sync.
+    if !Game.is_server() {
+        return;
+    }
+
+    // Clicking a hotbar slot can "use" the item (implementation-dependent).
+    //
+    // IMPORTANT:
+    // `result.selected_item` can be non-null but still be an invalid/dangling instance (engine-owned),
+    // which will crash when calling `item->get_definition()`.
+    // Re-fetch from the authoritative inventory slot by index instead.
+    if result.selected_item_index >= 0 && result.selected_item_index < inv.capacity {
+        selected := inv->get_item(result.selected_item_index);
+        if selected != null {
+            ItemManager.TryUseItem(player, selected);
+        }
+    }
+
+    // Dragging an item out of the hotbar/inventory drops it into the world.
+    if result.dropped_item != null {
+        drop_pos := player.entity.world_position + v2{0, 0.5};
+        _ := ItemDrops.spawn_from_inventory_item(drop_pos, result.dropped_item);
+    }
+}
+

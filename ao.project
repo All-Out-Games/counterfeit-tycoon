@@ -1,0 +1,10 @@
+{
+    csl: true
+    projects:
+    [
+        {
+            name: "Counterfeit Tycoon"
+            id: "697fed014dbbc40714514d3e"
+        }
+    ]
+}

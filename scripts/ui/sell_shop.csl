@@ -1,0 +1,435 @@
+import "core:ao"
+
+// Sell Shop UI:
+// - Drawn from Player.ao_late_update via draw_sell_shop_ui(player)
+// - Server-authoritative selling (no explicit RPCs required)
+//
+// Notes:
+// - CSL does not expose item stack counts directly. To sell a stack, we repeatedly destroy 1 item
+//   from the stack until the slot becomes empty, counting how many were removed.
+// - We intentionally DO NOT call Items.draw_inventory() here (some builds crash in items_draw_inventory()).
+
+SELL_WOOD_VALUE     :: 1;
+SELL_PAPER_VALUE    :: 3;
+SELL_BLANK_VALUE    :: 8;
+SELL_COLORED_VALUE  :: 15;
+SELL_FINISHED_VALUE :: 50;
+
+SELL_MAX_STEPS_PER_STACK :: 10000; // Safety guard against infinite loops.
+
+SELL_SHOP_COIN_CURRENCY :: "Coins";
+
+Sell_Item_Info :: struct {
+    id: string;
+    display_name: string;
+    coin_value_each: s64;
+    icon: Texture_Asset;
+}
+
+sell_shop_items :: proc() -> [5]Sell_Item_Info {
+    return {
+        {"wood",           "Wood",           SELL_WOOD_VALUE,     get_asset(Texture_Asset, "Items/Wood.png")},
+        {"paper",          "Paper",          SELL_PAPER_VALUE,    get_asset(Texture_Asset, "Items/Paper.png")},
+        {"blank_bills",    "Blank Bills",    SELL_BLANK_VALUE,    get_asset(Texture_Asset, "Items/BlankBills.png")},
+        {"colored_bills",  "Colored Bills",  SELL_COLORED_VALUE,  get_asset(Texture_Asset, "Items/ColoredBills.png")},
+        {"finished_bills", "Finished Bills", SELL_FINISHED_VALUE, get_asset(Texture_Asset, "Items/FinishedBills.png")},
+    };
+}
+
+get_sell_value_for_id :: proc(item_id: string) -> s64 {
+    switch item_id {
+        case "wood":           return SELL_WOOD_VALUE;
+        case "paper":          return SELL_PAPER_VALUE;
+        case "blank_bills":    return SELL_BLANK_VALUE;
+        case "colored_bills":  return SELL_COLORED_VALUE;
+        case "finished_bills": return SELL_FINISHED_VALUE;
+    }
+    return 0;
+}
+
+is_sellable_id :: proc(item_id: string) -> bool {
+    return get_sell_value_for_id(item_id) > 0;
+}
+
+spawn_sale_coin_shower :: proc(player: Player, coins: s64) {
+    if player == null return;
+    if coins <= 0 return;
+    if !Game.is_server() return;
+    if player.entity == null || player.entity.self == null return;
+
+    // We spawn "coin" item drops. ItemDrops handles converting "coin" drops into currency on pickup.
+    coin_defn := ItemManager.TryFindItem("coin");
+    if coin_defn == null {
+        // Fallback: still pay out, even if coin item isn't registered (shouldn't happen).
+        Economy.deposit_currency(player, SELL_SHOP_COIN_CURRENCY, coins);
+        Notifier.notify(player, "Sold items for % Coins.", {coins});
+        return;
+    }
+
+    MAX_DROPS :: 10;
+    drop_count := 1 + coins / 50;
+    if drop_count > MAX_DROPS {
+        drop_count = MAX_DROPS;
+    }
+    if drop_count > coins {
+        drop_count = coins;
+    }
+    if drop_count <= 0 {
+        drop_count = 1;
+    }
+
+    rng := rng_seed_time();
+    remaining := coins;
+    base := player.entity.world_position + v2{0, 0.6};
+
+    for i: 0..drop_count-1 {
+        drops_left := drop_count - i;
+        amt := remaining / drops_left;
+        if amt <= 0 {
+            amt = 1;
+        }
+
+        dx := rng_range_float(ref rng, -0.7, 0.7);
+        dy := rng_range_float(ref rng, -0.3, 0.5);
+        pos := base + v2{dx, dy};
+
+        drop := ItemDrops.spawn_from_definition(pos, coin_defn, amt);
+        if drop != null {
+            drop->set_exclusive(player);
+        }
+
+        remaining -= amt;
+        if remaining <= 0 {
+            break;
+        }
+    }
+}
+
+give_coins_to_player :: proc(player: Player, coins: s64) {
+    if player == null return;
+    if coins <= 0 return;
+    if !Game.is_server() return;
+
+    spawn_sale_coin_shower(player, coins);
+}
+
+// Sells the entire stack in a specific inventory slot, counting removed units.
+sell_stack_in_slot :: proc(player: Player, slot_index: s64) {
+    if player == null return;
+    if !Game.is_server() return;
+
+    inv := player.default_inventory;
+    if inv == null || inv.self == null return;
+    if slot_index < 0 || slot_index >= inv.capacity return;
+
+    initial := inv->get_item(slot_index);
+    if initial == null return;
+    if initial.self == null return;
+
+    defn := initial->get_definition();
+    if defn == null return;
+
+    id := defn->get_id();
+    if !is_sellable_id(id) {
+        Notifier.notify(player, "That item can't be sold here.");
+        return;
+    }
+
+    value_each := get_sell_value_for_id(id);
+    if value_each <= 0 return;
+
+    sold_count: s64 = 0;
+
+    for step: 0..SELL_MAX_STEPS_PER_STACK {
+        cur := inv->get_item(slot_index);
+        if cur == null break;
+        if cur.self == null break;
+
+        cur_defn := cur->get_definition();
+        if cur_defn == null break;
+        if cur_defn->get_id() != id {
+            break; // Slot changed under us
+        }
+
+        Items.destroy_item_instance(cur, 1);
+        sold_count += 1;
+    }
+
+    if sold_count <= 0 return;
+
+    coins := sold_count * value_each;
+    give_coins_to_player(player, coins);
+    Notifier.notify(player, "Sold % x% for % Coins.", {defn->get_name(), sold_count, coins});
+}
+
+sell_all_of_type :: proc(player: Player, item_id: string) {
+    if player == null return;
+    if !Game.is_server() return;
+    if item_id.count <= 0 return;
+    if !is_sellable_id(item_id) {
+        Notifier.notify(player, "That item can't be sold here.");
+        return;
+    }
+
+    inv := player.default_inventory;
+    if inv == null || inv.self == null return;
+
+    for i: 0..inv.capacity-1 {
+        item := inv->get_item(i);
+        if item == null continue;
+        if item.self == null continue;
+        defn := item->get_definition();
+        if defn == null continue;
+        if defn->get_id() != item_id continue;
+
+        sell_stack_in_slot(player, i);
+    }
+}
+
+draw_sell_shop_button :: proc(player: Player) {
+    if player == null return;
+
+    safe := UI.get_safe_screen_rect();
+    btn_rect := safe->right_center_rect()->grow(75)->offset(-90, 0);
+
+    bs := UI.default_button_settings();
+    ts := UI.default_text_settings();
+    ts.size = 34;
+
+    bs.sprite = get_asset(Texture_Asset, "Buttons/shopicon.png");
+    bs.press_scaling = 0.8;
+
+    if UI.button(btn_rect, bs, ts, "Sell").clicked {
+        player.sell_shop_open = !player.sell_shop_open;
+    }
+}
+
+draw_sell_shop_modal :: proc(player: Player) {
+    UI.push_screen_draw_context();
+    defer UI.pop_draw_context();
+
+    UI.push_layer(200);
+    defer UI.pop_layer();
+
+    screen := UI.get_safe_screen_rect();
+
+    // Dim background
+    UI.quad(screen, core_globals.white_sprite, {0, 0, 0, 0.65});
+
+    // Window
+    window := screen->inset(100);
+    UI.quad(window, core_globals.white_sprite, {0.12, 0.12, 0.12, 0.95});
+
+    // Header
+    header := window;
+    header = header->cut_top(110);
+    header = header->inset(20);
+
+    ts_title := UI.default_text_settings();
+    ts_title.size = 52;
+    ts_title.halign = .LEFT;
+    ts_title.valign = .CENTER;
+    ts_title.offset = {20, 0};
+    ts_title.do_outline = true;
+    ts_title.outline_thickness = 3;
+    ts_title.outline_color = {0, 0, 0, 1};
+    UI.text(header, ts_title, "Sell");
+
+    // Content area (below header, above footer)
+    content := window->inset(30);
+    _ := content->cut_top(110);
+
+    // Footer
+    footer := content->cut_bottom(95);
+    {
+        bs_close := UI.default_button_settings();
+        ts_close := UI.default_text_settings();
+        ts_close.size = 40;
+        ts_close.halign = .CENTER;
+        ts_close.valign = .CENTER;
+
+        bs_close.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_3.png"); // Red
+        bs_close.press_scaling = 0.45;
+
+        close_btn := footer->inset(10);
+        if UI.button(close_btn, bs_close, ts_close, "Close").clicked {
+            player.sell_shop_open = false;
+            return;
+        }
+    }
+
+    body := content;
+
+    // Split body into left (sellable list) and right (rates + quick sell)
+    GAP_PX :: 20.0;
+    MIN_PANEL_PX :: 220.0;
+
+    body_w := body->width();
+    left_w := clamp(body_w * 0.58, MIN_PANEL_PX, body_w - MIN_PANEL_PX - GAP_PX);
+    if left_w < MIN_PANEL_PX {
+        left_w = MIN_PANEL_PX;
+    }
+    if left_w > body_w - GAP_PX {
+        left_w = body_w - GAP_PX;
+    }
+
+    left := body->cut_left_unscaled(left_w);
+    _ := body->cut_left_unscaled(GAP_PX);
+    right := body;
+
+    // Left panel: sellable stacks
+    inv := player.default_inventory;
+    {
+        UI.quad(left, core_globals.white_sprite, {0.08, 0.08, 0.08, 0.95});
+        panel := left->inset(18);
+
+        title_rect := panel->cut_top(50);
+        ts_h := UI.default_text_settings();
+        ts_h.size = 40;
+        ts_h.halign = .LEFT;
+        ts_h.valign = .CENTER;
+        ts_h.offset = {10, 0};
+        ts_h.do_outline = true;
+        ts_h.outline_thickness = 2;
+        ts_h.outline_color = {0, 0, 0, 1};
+        UI.text(title_rect, ts_h, "Sellable stacks");
+
+        _ := panel->cut_top(10);
+
+        ts_row := UI.default_text_settings();
+        ts_row.size = 28;
+        ts_row.halign = .LEFT;
+        ts_row.valign = .CENTER;
+        ts_row.offset = {10, 0};
+        ts_row.do_outline = true;
+        ts_row.outline_thickness = 2;
+        ts_row.outline_color = {0, 0, 0, 1};
+
+        bs_row := UI.default_button_settings();
+        bs_row.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_8.png"); // Grey
+        bs_row.press_scaling = 0.25;
+
+        found_any: bool = false;
+        if inv != null && inv.self != null && inv.capacity > 0 {
+            for i: 0..inv.capacity-1 {
+                item := inv->get_item(i);
+                if item == null continue;
+                if item.self == null continue;
+
+                defn := item->get_definition();
+                if defn == null continue;
+
+                id := defn->get_id();
+                if !is_sellable_id(id) continue;
+
+                found_any = true;
+
+                row := panel->cut_top(66);
+                _ := panel->cut_top(8);
+
+                UI.push_id("sell_slot_%", {i});
+                defer UI.pop_id();
+
+                result := UI.begin_button(row, bs_row, ts_row, ""); {
+                    defer UI.end_button();
+
+                    content_row := result.rect->inset(10);
+                    icon_rect := content_row->cut_left_unscaled(46);
+                    _ := content_row->cut_left_unscaled(10);
+
+                    icon := defn->get_icon();
+                    if icon != null {
+                        UI.quad(icon_rect->fit_aspect(icon->get_aspect()), icon);
+                    }
+
+                    value_each := get_sell_value_for_id(id);
+                    // CSL doesn't expose stack quantity for an inventory slot.
+                    // We sell the entire stack on click, and report the exact sold amount server-side.
+                    UI.text(content_row, ts_row, "% - % coin(s) each", {defn->get_name(), value_each});
+                }
+
+                if result.clicked {
+                    sell_stack_in_slot(player, i);
+                }
+            }
+        }
+
+        if !found_any {
+            empty_rect := panel;
+            ts_empty := UI.default_text_settings();
+            ts_empty.size = 32;
+            ts_empty.halign = .CENTER;
+            ts_empty.valign = .CENTER;
+            ts_empty.word_wrap = true;
+            ts_empty.do_outline = true;
+            ts_empty.outline_thickness = 2;
+            ts_empty.outline_color = {0, 0, 0, 1};
+            UI.text(empty_rect->inset(10), ts_empty, "No sellable items in your inventory.");
+        }
+    }
+
+    // Right panel: rates + quick sell
+    {
+        UI.quad(right, core_globals.white_sprite, {0.08, 0.08, 0.08, 0.95});
+        panel := right->inset(18);
+
+        rates_header := panel->cut_top(50);
+        ts_h := UI.default_text_settings();
+        ts_h.size = 40;
+        ts_h.halign = .LEFT;
+        ts_h.valign = .CENTER;
+        ts_h.offset = {10, 0};
+        ts_h.do_outline = true;
+        ts_h.outline_thickness = 2;
+        ts_h.outline_color = {0, 0, 0, 1};
+        UI.text(rates_header, ts_h, "Rates");
+
+        rates_rect := panel->cut_top(180);
+        ts_rate := UI.default_text_settings();
+        ts_rate.size = 30;
+        ts_rate.halign = .LEFT;
+        ts_rate.valign = .TOP;
+        ts_rate.word_wrap = true;
+        ts_rate.do_outline = true;
+        ts_rate.outline_thickness = 2;
+        ts_rate.outline_color = {0, 0, 0, 1};
+
+        UI.text(
+            rates_rect->inset(10),
+            ts_rate,
+            "Wood: 1 Coin each\nPaper: 3 Coins each\nBlank Bills: 8 Coins each\nColored Bills: 15 Coins each\nFinished Bills: 50 Coins each"
+        );
+
+        _ := panel->cut_top(10);
+
+        ts_btn := UI.default_text_settings();
+        ts_btn.size = 30;
+
+        bs_btn := UI.default_button_settings();
+        bs_btn.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_2.png"); // Green
+        bs_btn.press_scaling = 0.4;
+
+        items := sell_shop_items();
+        for i: 0..4 {
+            info := items[i];
+            row := panel->cut_top(62);
+            UI.push_id("sell_all_%", {info.id});
+            defer UI.pop_id();
+
+            label := format_string("Sell all %", {info.display_name});
+            if UI.button(row, bs_btn, ts_btn, label).clicked {
+                sell_all_of_type(player, info.id);
+            }
+            _ := panel->cut_top(8);
+        }
+    }
+}
+
+draw_sell_shop_ui :: proc(player: Player) {
+    if player == null return;
+
+    if player.sell_shop_open {
+        draw_sell_shop_modal(player);
+    }
+}
+

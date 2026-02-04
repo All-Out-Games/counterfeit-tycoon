@@ -1,0 +1,125 @@
+import "core:ao"
+
+// PlayerBase:
+// Attach this to a "base" / parent entity in the scene and assign ownership at runtime.
+// Child machines (mills/presses) can read the parent PlayerBase to determine who may use them.
+//
+// Ownership is stored as a user id string (stable + safe to sync), but exposed via helpers that
+// work with the Player component type.
+PlayerBase :: class : Component {
+    owner_user_id: string;
+
+    // Optional: a sprite to tint for ownership feedback.
+    // If `sprite_entity` is set in-editor, we resolve the Sprite_Renderer from it.
+    // Otherwise we try to use a Sprite_Renderer on this same entity.
+    sprite_entity: Entity @ao_serialize;
+    sprite_renderer: Sprite_Renderer;
+
+    // Assign ownership using a Player.
+    set_owner :: method(owner: Player) {
+        owner_user_id = {};
+        if owner != null {
+            owner_user_id = owner->get_user_id();
+        }
+    }
+
+    ao_start :: method() {
+        resolve_sprite_renderer();
+    }
+
+    ao_late_update :: method(dt: float) {
+        _ := dt;
+
+        // Cosmetic-only: run on clients so we can show per-player ownership colors.
+        // If we do this on the server, the color would replicate and all players would see the same tint.
+        if Game.is_server() {
+            return;
+        }
+
+        if sprite_renderer == null {
+            resolve_sprite_renderer();
+        }
+        if sprite_renderer == null {
+            return;
+        }
+
+        local_player := get_local_player();
+        if local_player == null {
+            return;
+        }
+
+        // Green if this client owns the base, red otherwise.
+        if is_owner(local_player) {
+            sprite_renderer.color = v4{0, 1, 0.5, 0.4};
+        }
+        else {
+            sprite_renderer.color = v4{1, 0, 0, 0.4};
+        }
+    }
+
+    // Returns the owning Player component if currently connected; otherwise null.
+    get_owner :: method() -> Player {
+        if owner_user_id.count == 0 {
+            return null;
+        }
+
+        foreach p: component_iterator(Player) {
+            if p == null continue;
+            if p->get_user_id() == owner_user_id {
+                return p;
+            }
+        }
+        return null;
+    }
+
+    // Checks if the given player is the owner.
+    is_owner :: method(player: Player) -> bool {
+        if player == null return false;
+        if owner_user_id.count == 0 return false;
+        return player->get_user_id() == owner_user_id;
+    }
+
+    resolve_sprite_renderer :: method() {
+        sprite_renderer = null;
+
+        if sprite_entity != null && sprite_entity.self != null {
+            sprite_renderer = sprite_entity->get_component(Sprite_Renderer);
+        }
+        if sprite_renderer == null && entity != null && entity.self != null {
+            sprite_renderer = entity->get_component(Sprite_Renderer);
+        }
+    }
+}
+
+// Best-effort: find the local player's Player component on this client.
+get_local_player :: proc() -> Player {
+    foreach p: component_iterator(Player) {
+        if p == null continue;
+
+        // On clients, only the local player returns true for is_local_or_server().
+        if p->is_local_or_server() {
+            return p;
+        }
+    }
+    return null;
+}
+
+// Returns the PlayerBase component on the parent of `child_entity` (if any).
+get_parent_player_base :: proc(child_entity: Entity) -> PlayerBase {
+    if child_entity == null return null;
+    if child_entity.self == null return null;
+
+    // NOTE: The "in-world Parent entity" is the entity transform parent.
+    parent := child_entity.parent;
+    if parent == null return null;
+    if parent.self == null return null;
+
+    return parent->get_component(PlayerBase);
+}
+
+// Convenience: check if `player` owns the parent base of `child_entity`.
+is_owner_of_parent_base :: proc(child_entity: Entity, player: Player) -> bool {
+    pb := get_parent_player_base(child_entity);
+    if pb == null return false;
+    return pb->is_owner(player);
+}

@@ -1,0 +1,291 @@
+import "core:ao"
+
+DamageNumbers :: class {
+    Text: string;
+    Position: v2;
+    Color: v4;
+    T: float;
+    TextSettings: Text_Settings;
+    SpaceText: bool;
+    DoingFading: bool;
+    LastPosition: v2;
+}
+
+Spawn_Base_Userdata :: class {
+    player: Player;
+    spawn_index: s64;
+}
+
+find_truck_for_base :: proc(base: PlayerBase) -> Truck {
+    if base == null return null;
+    if base.entity == null || base.entity.self == null return null;
+
+    foreach t: component_iterator(Truck) {
+        if t == null continue;
+        if t.entity == null || t.entity.self == null continue;
+        if !t.entity->get_world_enabled() continue;
+
+        pb := get_parent_player_base(t.entity);
+        if pb == base {
+            return t;
+        }
+    }
+    return null;
+}
+
+find_harvester_for_base :: proc(base: PlayerBase) -> Harvester {
+    if base == null return null;
+    if base.entity == null || base.entity.self == null return null;
+
+    foreach h: component_iterator(Harvester) {
+        if h == null continue;
+        if h.entity == null || h.entity.self == null continue;
+        if !h.entity->get_world_enabled() continue;
+
+        pb := get_parent_player_base(h.entity);
+        if pb == base {
+            return h;
+        }
+    }
+    return null;
+}
+
+
+GameManager :: class : Component {
+    damage_numbers: [..]DamageNumbers;
+
+    // Player base / plot-style spawning:
+    // - Up to 6 bases can exist at once
+    // - Each base is spawned at a configured spawn entity (set these in-editor)
+    // - Ownership is set via PlayerBase.set_owner(player)
+    player_base_prefab_path: string @ao_serialize; // e.g. "Plots/PlayerBase.prefab"
+    PlayerSpawns: [6]Entity @ao_serialize;
+
+    // Runtime
+    cached_player_base_prefab: Prefab_Asset;
+    needs_base_reconcile: bool;
+    warned_missing_base_prefab: bool;
+
+    ao_start :: proc(using this: GameManager) {
+        // Called when this component is created
+        if Game.is_server() {
+            needs_base_reconcile = true;
+        }
+    }
+
+    ao_update :: proc(using this: GameManager, dt: float) {
+        // Server-authoritative game state machine
+        _ := dt;
+
+        if !Game.is_server() {
+            return;
+        }
+
+        if needs_base_reconcile {
+            needs_base_reconcile = false;
+            this->server_reconcile_player_bases();
+        }
+    }
+
+    request_base_reconcile :: method() {
+        if !Game.is_server() {
+            return;
+        }
+        needs_base_reconcile = true;
+    }
+
+    server_on_player_left :: method(player: Player) {
+        if !Game.is_server() return;
+        if player == null return;
+
+        // Persist player base state before cleanup.
+        if player.base_entity != null && player.base_entity.self != null {
+            pb := player.base_entity->get_component(PlayerBase);
+            if pb != null {
+                vault := find_vault_for_base(pb);
+                if vault != null {
+                    // Make sure we don't clobber an older save with an uninitialized vault value.
+                    vault->server_try_load_from_save();
+                    Save.set_int(player, VAULT_SAVE_KEY_FINISHED_BILLS, vault.stored_finished_bills);
+                }
+            }
+        }
+
+        // Best-effort cleanup: destroy the base they owned.
+        if player.base_entity != null && player.base_entity.self != null {
+            player.base_entity->destroy();
+        }
+
+        player.base_entity = null;
+        player.base_spawn_index = -1;
+
+        // Next tick, backfill the freed slot to a player without a base.
+        needs_base_reconcile = true;
+    }
+
+    ensure_player_base_prefab_loaded :: method() {
+        if cached_player_base_prefab != null {
+            return;
+        }
+        if player_base_prefab_path.count == 0 {
+            return;
+        }
+        cached_player_base_prefab = get_asset(Prefab_Asset, player_base_prefab_path);
+    }
+
+    get_spawn_position :: method(spawn_index: s64) -> v2, bool {
+        if spawn_index < 0 || spawn_index >= 6 {
+            return v2{}, false;
+        }
+
+        spawn_e := PlayerSpawns[spawn_index];
+        if spawn_e == null return v2{}, false;
+        if spawn_e.self == null return v2{}, false;
+
+        return spawn_e.world_position, true;
+    }
+
+    server_reconcile_player_bases :: method() {
+        MAX_BASES :: 6;
+
+        // Track which indices are already taken.
+        used: [6]bool;
+
+        // 1) Validate existing assignments and mark used slots.
+        foreach p: component_iterator(Player) {
+            if p == null continue;
+
+            // Clear invalid base refs so they can be reassigned.
+            if p.base_spawn_index < 0 || p.base_spawn_index >= MAX_BASES {
+                p.base_spawn_index = -1;
+                p.base_entity = null;
+                continue;
+            }
+
+            if p.base_entity != null && p.base_entity.self != null {
+                used[p.base_spawn_index] = true;
+            }
+            else {
+                // Reserved index but no base entity (e.g., prefab missing or base destroyed)
+                // Treat as no-base so we can attempt a respawn.
+                p.base_entity = null;
+            }
+        }
+
+        // 2) Assign bases to players who don't have one yet, while slots are available.
+        foreach p: component_iterator(Player) {
+            if p == null continue;
+
+            if p.base_entity != null && p.base_entity.self != null {
+                continue; // already has a base
+            }
+
+            // Find a free spawn index with a valid spawn entity.
+            free_idx: s64 = -1;
+            for i: 0..MAX_BASES-1 {
+                if used[i] continue;
+                if PlayerSpawns[i] == null continue;
+                if PlayerSpawns[i].self == null continue;
+                free_idx = i;
+                break;
+            }
+
+            if free_idx < 0 {
+                // No slots left. Warp to 0,0 as requested.
+                if p.entity != null && p.entity.self != null {
+                    p.entity->set_local_position(v2{0, 0});
+                }
+                p.base_spawn_index = -1;
+                p.base_entity = null;
+                continue;
+            }
+
+            spawn_pos, ok := get_spawn_position(free_idx);
+            if !ok {
+                // Shouldn't happen since we validated above, but be defensive.
+                used[free_idx] = true;
+                continue;
+            }
+
+            // Teleport the player near their base (offset from the PlayerSpawn center).
+            if p.entity != null && p.entity.self != null {
+                // Players 1-3 (spawn 0-2) spawn a bit LOWER; players 4-6 (spawn 3-5) spawn a bit HIGHER.
+                offset := v2{0, -2};
+                if free_idx >= 3 {
+                    offset = v2{0, 2};
+                }
+                p.entity->set_local_position(spawn_pos + offset);
+            }
+
+            // Spawn a PlayerBase prefab for them (server-only).
+            ensure_player_base_prefab_loaded();
+            if cached_player_base_prefab == null {
+                if !warned_missing_base_prefab {
+                    warned_missing_base_prefab = true;
+                    log_warning("GameManager: player_base_prefab_path is empty or invalid (set it to something like \"Plots/PlayerBase.prefab\")", {});
+                }
+
+                // Reserve the slot anyway so we don't stack all players on the same spawn.
+                p.base_spawn_index = free_idx;
+                p.base_entity = null;
+                used[free_idx] = true;
+                continue;
+            }
+
+            ud := new(Spawn_Base_Userdata);
+            ud.player = p;
+            ud.spawn_index = free_idx;
+
+            spawned := Scene.instantiate(
+                cached_player_base_prefab,
+                spawn_pos,
+                ud,
+                proc(spawned_entity: Entity, userdata: Object) {
+                    ud := userdata.(Spawn_Base_Userdata);
+                    if ud == null return;
+
+                    player := ud.player;
+                    spawn_index := ud.spawn_index;
+                    if player == null return;
+                    if spawned_entity == null return;
+                    if spawned_entity.self == null return;
+
+                    pb := spawned_entity->get_component(PlayerBase);
+                    if pb != null {
+                        pb->set_owner(player);
+
+                        // Adjust the truck's local starting position based on which PlayerSpawn this base is using.
+                        // - Player 1/2/3 (spawn 0/1/2): leave truck where it is in the prefab.
+                        // - Player 4/5/6 (spawn 3/4/5): move truck to local (0, 6).
+                        if spawn_index >= 3 {
+                            truck := find_truck_for_base(pb);
+                            if truck != null && truck.entity != null && truck.entity.self != null {
+                                truck.entity->set_local_position(v2{0, 6});
+                            }
+
+                            // Same as Truck, but only alter Y: keep prefab X and set local Y to 6.
+                            harvester := find_harvester_for_base(pb);
+                            if harvester != null && harvester.entity != null && harvester.entity.self != null {
+                                lp := harvester.entity.local_position;
+                                lp.y = 6;
+                                harvester.entity->set_local_position(lp);
+                            }
+                        }
+                    }
+                }
+            );
+
+            p.base_spawn_index = free_idx;
+            p.base_entity = spawned;
+            used[free_idx] = true;
+        }
+    }
+}
+
+get_game_manager :: proc() -> GameManager {
+    // Returns the first GameManager component found in the scene (or null if none exist)
+    foreach gm: component_iterator(GameManager) {
+        return gm;
+    }
+    return null;
+}

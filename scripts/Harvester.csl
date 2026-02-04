@@ -1,0 +1,689 @@
+import "core:ao"
+
+// Harvester:
+// - Owned via its parent entity's PlayerBase (same pattern as Paper_Mill / Vault / Truck).
+// - On interact by the owner:
+//   - If carrying wood: spawns exclusive Wood item drops for the player to pick up.
+//   - Else: paths to the closest Treecutting_Tree, triggers the same logic as a player interacting,
+//           then collects ONLY Wood world drops into its internal storage until full.
+// - When full, returns to its starting position ("home") and waits for the owner to interact.
+// - Renders an in-world icon + "xN" showing carried wood above the Harvester.
+//
+// Setup:
+// - Add `Harvester` to an entity that has a `Movement_Agent` component.
+// - The Harvester entity should be a CHILD of a PlayerBase entity (so it can resolve ownership).
+// - Ensure there are one or more `Treecutting_Tree` entities in the scene.
+
+Harvester_State :: enum {
+    IDLE_AT_HOME;
+    TO_TREE;
+    COLLECTING_AT_TREE;
+    RETURN_HOME;
+}
+
+find_closest_treecutting_tree_to_position :: proc(pos: v2) -> Treecutting_Tree {
+    best: Treecutting_Tree;
+    best_d2 := 0.0;
+    found: bool = false;
+
+    foreach t: component_iterator(Treecutting_Tree) {
+        if t == null continue;
+        if t.entity == null || t.entity.self == null continue;
+        if !t.entity->get_world_enabled() continue;
+        if t.is_falling continue;
+
+        d2 := length_squared(t.entity.world_position - pos);
+        if !found || d2 < best_d2 {
+            found = true;
+            best = t;
+            best_d2 = d2;
+        }
+    }
+
+    return best;
+}
+
+find_treecutting_tree_by_entity_id :: proc(id: u64) -> Treecutting_Tree {
+    if id == 0 return null;
+    foreach t: component_iterator(Treecutting_Tree) {
+        if t == null continue;
+        if t.entity == null || t.entity.self == null continue;
+        if t.entity.id == id {
+            return t;
+        }
+    }
+    return null;
+}
+
+harvester_find_connected_player_by_user_id :: proc(user_id: string) -> Player {
+    if user_id.count <= 0 return null;
+    foreach p: component_iterator(Player) {
+        if p == null continue;
+        if p.self == null continue;
+        if p->get_user_id() == user_id {
+            return p;
+        }
+    }
+    return null;
+}
+
+Harvester :: class : Interactable {
+    // Tuning
+    move_speed: float @ao_serialize;
+    arrive_radius: float @ao_serialize;
+    max_drive_seconds: float @ao_serialize; // Safety timeout to prevent soft-locks.
+
+    // Spine visuals
+    // Optional: assign a child entity that has the Spine_Animator.
+    // If unset, we'll try to find Spine_Animator on the Harvester entity itself.
+    spine_entity: Entity @ao_serialize;
+
+    // Wood collection
+    max_wood_capacity: s64 @ao_serialize;
+    collect_radius: float @ao_serialize;
+
+    // When we pay out carried wood, we spawn drops around the player.
+    loot_spawn_radius: float @ao_serialize;
+
+    // World UI
+    ui_offset: v2 @ao_serialize;
+
+    // Runtime / synced
+    state: Harvester_State;
+    carried_wood: s64;
+    owner_user_id: string;
+    target_tree_entity_id: u64;
+
+    // Runtime
+    agent: Movement_Agent;
+    home_world_pos: v2;
+    target_world_pos: v2;
+    drive_start_time: float;
+    harvest_start_time: float;
+    last_collect_time: float;
+
+    spine: Spine_Animator;
+    spine_sm: State_Machine;
+    spine_base_scale: v2;
+    spine_scale_initialized: bool;
+
+    last_world_pos: v2;
+    last_world_pos_initialized: bool;
+
+    ao_start :: method() {
+        this->set_listener(this);
+
+        // Defaults (only if not set in editor)
+        if move_speed <= 0 {
+            move_speed = 4.0;
+        }
+        if arrive_radius <= 0 {
+            arrive_radius = 0.6;
+        }
+        if max_drive_seconds <= 0 {
+            max_drive_seconds = 60.0;
+        }
+        if max_wood_capacity <= 0 {
+            max_wood_capacity = 10;
+        }
+        if collect_radius <= 0 {
+            collect_radius = 1.8;
+        }
+        if loot_spawn_radius <= 0 {
+            loot_spawn_radius = 1.0;
+        }
+        if ui_offset.x == 0 && ui_offset.y == 0 {
+            ui_offset = {0, 1.35};
+        }
+
+        // Interactable defaults if not set
+        if radius <= 0 {
+            radius = 1.35;
+        }
+        if prompt_offset.x == 0 && prompt_offset.y == 0 {
+            prompt_offset = ui_offset;
+        }
+
+        // Home is wherever the harvester started the game.
+        home_world_pos = entity.world_position;
+        target_world_pos = home_world_pos;
+
+        last_world_pos = entity.world_position;
+        last_world_pos_initialized = true;
+
+        state = .IDLE_AT_HOME;
+        carried_wood = 0;
+        owner_user_id = {};
+        target_tree_entity_id = 0;
+        drive_start_time = 0;
+        harvest_start_time = 0;
+        last_collect_time = 0;
+
+        agent = entity->get_component(Movement_Agent);
+        if agent == null {
+            log_warning("Harvester: missing Movement_Agent on Harvester entity", {});
+        }
+
+        resolve_spine();
+        setup_spine_state_machine();
+        update_visuals(); // ensure correct initial anim + facing
+
+        refresh_prompt_text();
+    }
+
+    is_moving :: method() -> bool {
+        return state == .TO_TREE || state == .RETURN_HOME;
+    }
+
+    is_at_home :: method() -> bool {
+        delta := entity.world_position - home_world_pos;
+        return length_squared(delta) <= arrive_radius * arrive_radius;
+    }
+
+    can_use :: method(player: Player) -> bool {
+        if player == null return false;
+        if is_moving() return false;
+        if !is_at_home() return false;
+        if !is_owner_of_parent_base(entity, player) return false;
+        return true;
+    }
+
+    on_interact :: method(player: Player) {
+        if player == null return;
+
+        // Server-authoritative safety check (in case client-side can_use is bypassed).
+        if Game.is_server() && !is_owner_of_parent_base(entity, player) {
+            Notifier.notify(player, "This harvester belongs to someone else.");
+            return;
+        }
+        // Client-side early-out for non-owners (avoid local prediction for other players).
+        if !Game.is_server() && !is_owner_of_parent_base(entity, player) {
+            return;
+        }
+
+        // Only interact at home and when not moving.
+        if is_moving() || !is_at_home() {
+            return;
+        }
+
+        // If we're carrying wood, pay it out to the owner.
+        if carried_wood > 0 {
+            if Game.is_server() {
+                payout_wood_to_player(player);
+                carried_wood = 0;
+                state = .IDLE_AT_HOME;
+                refresh_prompt_text();
+            }
+            return;
+        }
+
+        if agent == null {
+            agent = entity->get_component(Movement_Agent);
+            if agent == null {
+                if Game.is_server() {
+                    Notifier.notify(player, "Harvester can't move (missing Movement Agent).");
+                }
+                return;
+            }
+        }
+
+        // Resolve and cache owner id for later (tree interaction is "as if player interacted").
+        pb := get_parent_player_base(entity);
+        owner_user_id = {};
+        if pb != null {
+            owner_user_id = pb.owner_user_id;
+        }
+
+        // Find a tree.
+        tree := find_closest_treecutting_tree_to_position(entity.world_position);
+        if tree == null {
+            if Game.is_server() {
+                Notifier.notify(player, "No trees found.");
+            }
+            return;
+        }
+
+        // Dispatch.
+        home_world_pos = entity.world_position; // recapture at dispatch time
+        target_tree_entity_id = tree.entity.id;
+        target_world_pos = tree.entity.world_position;
+        state = .TO_TREE;
+        drive_start_time = get_time();
+        harvest_start_time = 0;
+        last_collect_time = get_time();
+
+        refresh_prompt_text();
+        if Game.is_server() {
+            Notifier.notify(player, "Harvester dispatched.");
+        }
+    }
+
+    ao_update :: method(dt: float) {
+        _ := dt;
+
+        // Visuals/animation should run on all peers (server + clients).
+        update_visuals();
+
+        // Movement target should be set on BOTH client and server for smooth motion,
+        // but gameplay state changes remain server-authoritative.
+        if agent == null {
+            agent = entity->get_component(Movement_Agent);
+        }
+
+        if agent != null {
+            switch state {
+                case .TO_TREE: {
+                    // If our target tree was chopped by a player (destroyed / disabled / falling),
+                    // retarget to a new closest tree.
+                    cur_target := find_treecutting_tree_by_entity_id(target_tree_entity_id);
+                    target_valid := false;
+                    if cur_target != null && cur_target.entity != null && cur_target.entity.self != null {
+                        if cur_target.entity->get_world_enabled() && !cur_target.is_falling {
+                            target_valid = true;
+                        }
+                    }
+
+                    if !target_valid {
+                        next := find_closest_treecutting_tree_to_position(entity.world_position);
+                        if next != null {
+                            target_tree_entity_id = next.entity.id;
+                            target_world_pos = next.entity.world_position;
+                        }
+                    }
+
+                    _ := agent->set_path_target(target_world_pos, move_speed);
+                }
+                case .RETURN_HOME: {
+                    _ := agent->set_path_target(home_world_pos, move_speed);
+                }
+            }
+        }
+
+        // Server authoritative state changes + wood collection.
+        if !Game.is_server() {
+            return;
+        }
+
+        // Always keep capacity sane.
+        if max_wood_capacity <= 0 {
+            max_wood_capacity = 10;
+        }
+        if carried_wood < 0 {
+            carried_wood = 0;
+        }
+        if carried_wood > max_wood_capacity {
+            carried_wood = max_wood_capacity;
+        }
+
+        // Timeout safety: if we get stuck, return home (keep carried wood).
+        if state == .TO_TREE || state == .RETURN_HOME {
+            if drive_start_time > 0 && max_drive_seconds > 0 {
+                if get_time() - drive_start_time > max_drive_seconds {
+                    begin_return_home();
+                    return;
+                }
+            }
+        }
+
+        // Working states: collect wood drops near us.
+        if state == .TO_TREE || state == .COLLECTING_AT_TREE {
+            collect_nearby_wood_drops();
+            if carried_wood >= max_wood_capacity {
+                begin_return_home();
+                return;
+            }
+        }
+
+        switch state {
+            case .IDLE_AT_HOME: {
+                // Stay put.
+            }
+            case .TO_TREE: {
+                if has_arrived(target_world_pos) {
+                    on_arrive_at_tree();
+                }
+            }
+            case .COLLECTING_AT_TREE: {
+                // Wait for nearby drops to finish spawning/being collected, then go to next tree.
+                // Treecutting fall animation lasts ~1s; drops spawn at the end.
+                if harvest_start_time <= 0 {
+                    harvest_start_time = get_time();
+                }
+
+                DONE_AFTER_SECONDS :: 3.0;
+                NO_PICKUP_GRACE :: 0.75;
+
+                time_since_start := get_time() - harvest_start_time;
+                time_since_collect := get_time() - last_collect_time;
+
+                if time_since_start >= DONE_AFTER_SECONDS && time_since_collect >= NO_PICKUP_GRACE {
+                    // Seek another tree (or return home if none).
+                    tree := find_closest_treecutting_tree_to_position(entity.world_position);
+                    if tree == null {
+                        // Nothing left to do.
+                        begin_return_home();
+                        return;
+                    }
+
+                    target_tree_entity_id = tree.entity.id;
+                    target_world_pos = tree.entity.world_position;
+                    state = .TO_TREE;
+                    drive_start_time = get_time();
+                    harvest_start_time = 0;
+                    refresh_prompt_text();
+                }
+            }
+            case .RETURN_HOME: {
+                if has_arrived(home_world_pos) {
+                    state = .IDLE_AT_HOME;
+                    drive_start_time = 0;
+                    refresh_prompt_text();
+                }
+            }
+        }
+    }
+
+    ao_late_update :: method(dt: float) {
+        _ := dt;
+        draw_carried_ui();
+    }
+
+    resolve_spine :: method() {
+        spine = null;
+
+        target_entity := entity;
+        if spine_entity != null && spine_entity.self != null {
+            target_entity = spine_entity;
+        }
+
+        if target_entity != null && target_entity.self != null {
+            spine = target_entity->get_component(Spine_Animator);
+        }
+
+        if spine != null {
+            spine->awaken();
+        }
+
+        // Cache initial scale for flip logic.
+        if !spine_scale_initialized {
+            if target_entity != null && target_entity.self != null {
+                spine_base_scale = target_entity.local_scale;
+                if spine_base_scale.x == 0 {
+                    spine_base_scale.x = 1;
+                }
+                if spine_base_scale.y == 0 {
+                    spine_base_scale.y = 1;
+                }
+                spine_scale_initialized = true;
+            }
+        }
+    }
+
+    setup_spine_state_machine :: method() {
+        if spine == null return;
+        if spine.instance == null return;
+        if spine_sm != null return;
+
+        spine_sm = State_Machine.create();
+
+        is_moving_var := spine_sm->create_variable("is_moving", .BOOL);
+        layer := spine_sm->create_layer("main", 0);
+
+        // Note: state names must match animation names in the Spine rig.
+        // Requested behavior:
+        // - play "idle" when moving
+        // - play "idle_pose" when stationary
+        idle_pose_state := layer->create_state("idle_pose", true);
+        idle_state := layer->create_state("idle", true);
+        layer->set_initial_state(idle_pose_state);
+
+        to_idle := layer->create_transition(idle_pose_state, idle_state, false);
+        to_idle->create_bool_condition(is_moving_var, true);
+
+        to_pose := layer->create_transition(idle_state, idle_pose_state, false);
+        to_pose->create_bool_condition(is_moving_var, false);
+
+        spine.instance->set_state_machine(spine_sm, true); // transfer ownership to spine instance
+    }
+
+    update_spine_state :: method() {
+        if spine == null return;
+        if spine.instance == null return;
+        if spine.instance.state_machine == null return;
+
+        spine.instance.state_machine->set_bool("is_moving", is_moving());
+    }
+
+    update_visuals :: method() {
+        // If the animator was assigned after start, resolve lazily.
+        if spine == null {
+            resolve_spine();
+            setup_spine_state_machine();
+        }
+
+        // Track motion direction using replicated transform delta (works on clients too).
+        cur := entity.world_position;
+        if !last_world_pos_initialized {
+            last_world_pos = cur;
+            last_world_pos_initialized = true;
+        }
+        delta := cur - last_world_pos;
+        last_world_pos = cur;
+
+        // Flip spine X scale based on horizontal travel.
+        if spine_scale_initialized {
+            target_entity := entity;
+            if spine_entity != null && spine_entity.self != null {
+                target_entity = spine_entity;
+            }
+
+            if target_entity != null && target_entity.self != null {
+                if delta.x > 0.001 {
+                    target_entity->set_local_scale({abs(spine_base_scale.x), spine_base_scale.y});
+                }
+                else if delta.x < -0.001 {
+                    target_entity->set_local_scale({-abs(spine_base_scale.x), spine_base_scale.y});
+                }
+            }
+        }
+
+        // Keep spine state machine in sync with harvester state.
+        update_spine_state();
+    }
+
+    refresh_prompt_text :: method() {
+        if carried_wood > 0 {
+            this->set_text("Collect wood");
+            this->set_hold_text("Collecting...");
+        }
+        else {
+            // Only show "Send" when idle; otherwise show "In transit".
+            if state == .IDLE_AT_HOME {
+                this->set_text("Send harvester");
+                this->set_hold_text("Dispatching...");
+            } else {
+                this->set_text("Harvester busy");
+                this->set_hold_text("...");
+            }
+        }
+    }
+
+    has_arrived :: method(target: v2) -> bool {
+        delta := entity.world_position - target;
+        return length_squared(delta) <= arrive_radius * arrive_radius;
+    }
+
+    begin_return_home :: method() {
+        target_world_pos = home_world_pos;
+        target_tree_entity_id = 0;
+        state = .RETURN_HOME;
+        drive_start_time = get_time();
+        refresh_prompt_text();
+    }
+
+    on_arrive_at_tree :: method() {
+        // Trigger the same tree interaction a player would do.
+        tree := find_treecutting_tree_by_entity_id(target_tree_entity_id);
+        if tree == null {
+            // Fallback: something changed; best effort pick a nearby tree.
+            tree = find_closest_treecutting_tree_to_position(entity.world_position);
+            if tree != null {
+                target_tree_entity_id = tree.entity.id;
+                target_world_pos = tree.entity.world_position;
+            }
+        }
+        if tree != null {
+            owner := harvester_find_connected_player_by_user_id(owner_user_id);
+            tree->on_interact(owner); // player param is ignored by Treecutting_Tree today
+        }
+        else {
+            // No tree to harvest, just go home.
+            begin_return_home();
+            return;
+        }
+
+        state = .COLLECTING_AT_TREE;
+        harvest_start_time = get_time();
+        last_collect_time = get_time();
+        drive_start_time = 0;
+        refresh_prompt_text();
+    }
+
+    collect_nearby_wood_drops :: method() {
+        if collect_radius <= 0 {
+            collect_radius = 1.8;
+        }
+        if carried_wood >= max_wood_capacity {
+            return;
+        }
+
+        // NOTE: We intentionally avoid `Scene.get_all_components_in_range(...)` here.
+        // Some engine builds have been observed to crash inside the native `get_all_components_in_range_raw()`.
+        // Iterating components is safer and the counts here are small enough.
+        origin := entity.world_position;
+        max_d2 := collect_radius * collect_radius;
+
+        foreach d: component_iterator(Item_Drop_Magnet) {
+            if d == null continue;
+            if d.entity == null || d.entity.self == null continue;
+            if !d.entity->get_world_enabled() continue;
+            if d.defn == null continue;
+            if d.count <= 0 continue;
+            if d.defn->get_id() != "wood" continue;
+
+            // Respect exclusivity: don't steal another player's exclusive drop.
+            if d.exclusive_to_player.count > 0 && d.exclusive_to_player != owner_user_id {
+                continue;
+            }
+
+            // Range check
+            d2 := length_squared(d.entity.world_position - origin);
+            if d2 > max_d2 continue;
+
+            room := max_wood_capacity - carried_wood;
+            if room <= 0 {
+                break;
+            }
+
+            take := d.count;
+            if take > room {
+                take = room;
+            }
+            if take <= 0 {
+                continue;
+            }
+
+            carried_wood += take;
+            d.count -= take;
+            last_collect_time = get_time();
+
+            if d.count <= 0 {
+                // Let the drop play its claim shrink/fade logic rather than hard-destroying mid-frame.
+                d.claimed = true;
+                d.time_claimed = get_time();
+                d.entity->queue_for_destruction(1);
+            }
+
+            if carried_wood >= max_wood_capacity {
+                break;
+            }
+        }
+    }
+
+    payout_wood_to_player :: method(player: Player) {
+        if player == null return;
+        if player.entity == null || player.entity.self == null return;
+        if carried_wood <= 0 return;
+
+        wood_defn := ItemManager.TryFindItem("wood");
+        if wood_defn == null {
+            log_warning("Harvester: couldn't find Wood item definition", {});
+            return;
+        }
+
+        // Spawn exclusive drops so other nearby players can't steal the payout.
+        rng := rng_seed_time();
+
+        remaining := carried_wood;
+        if remaining <= 0 {
+            return;
+        }
+
+        // Keep stacks within the definition's stack size (64).
+        MAX_STACK :: 64;
+
+        while remaining > 0 {
+            give_count := remaining;
+            if give_count > MAX_STACK {
+                give_count = MAX_STACK;
+            }
+
+            spawn_pos := ItemDrops.random_point_on_circle_edge(player.entity.world_position, loot_spawn_radius, ref rng);
+            drop := ItemDrops.spawn_from_definition(spawn_pos, wood_defn, give_count);
+            if drop != null {
+                drop->set_exclusive(player);
+            }
+
+            remaining -= give_count;
+        }
+
+        Notifier.notify(player, "Collected Wood x%.", {carried_wood});
+    }
+
+    draw_carried_ui :: method() {
+        UI.push_world_draw_context();
+        defer UI.pop_draw_context();
+
+        UI.push_layer(5);
+        defer UI.pop_layer();
+
+        UI.push_z(entity.world_position.y - 0.002);
+        defer UI.pop_z();
+
+        pos := entity.world_position + ui_offset;
+
+        // Simple row: [icon] [xN]
+        rect := Rect{pos, pos}->grow(0.18, 0.55, 0.18, 0.55);
+
+        icon_rect := rect->cut_left(0.22)->inset(0.01);
+        text_rect := rect;
+
+        #static wood_icon := get_asset(Texture_Asset, "Items/Wood.png");
+        if wood_icon != null {
+            UI.quad(icon_rect->fit_aspect(wood_icon->get_aspect()), wood_icon);
+        }
+
+        ts := UI.default_text_settings();
+        ts.size = 0.34;
+        ts.halign = .LEFT;
+        ts.valign = .CENTER;
+        ts.do_outline = true;
+        ts.outline_thickness = 2;
+        ts.outline_color = {0, 0, 0, 1};
+        ts.color = {1, 1, 1, 1};
+        ts.offset = {0.05, 0};
+
+        UI.text(text_rect, ts, "x%", {carried_wood});
+    }
+}
+

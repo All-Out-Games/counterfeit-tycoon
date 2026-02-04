@@ -1,0 +1,48 @@
+1cb3190ca5d15faa.png
+	size: 3704, 2112
+	filter: Linear, Linear
+back_view/shadow
+	bounds: 587, 7, 463, 568
+	offsets: 15, 13, 493, 587
+	rotate: 90
+front_view/shadow
+	bounds: 587, 7, 463, 568
+	offsets: 15, 13, 493, 587
+	rotate: 90
+back_view/truck
+	bounds: 3, 3, 467, 581
+	offsets: 1, 1, 469, 583
+	rotate: 90
+front_view/truck
+	bounds: 1158, 3, 467, 539
+	offsets: 1, 1, 469, 541
+	rotate: 90
+front_view/truck_interior
+	bounds: 2986, 12, 333, 183
+	offsets: 1, 1, 335, 185
+front_view/wheel
+	bounds: 2779, 62, 93, 76
+	offsets: 1, 1, 95, 78
+side_view/shadow
+	bounds: 2308, 141, 675, 329
+	offsets: 16, 16, 707, 361
+side_view/truck
+	bounds: 1700, 62, 605, 408
+	offsets: 1, 1, 607, 410
+side_view/truck_interior
+	bounds: 2986, 198, 249, 272
+	offsets: 1, 1, 251, 273
+side_view/wheel
+	bounds: 2308, 16, 122, 122
+	offsets: 1, 1, 124, 124
+side_view/wheel_front
+	bounds: 2433, 33, 122, 105
+	offsets: 1, 1, 124, 107
+smoke_A
+	bounds: 2673, 34, 103, 104
+	offsets: 5, 5, 113, 114
+smoke_B
+	bounds: 2558, 28, 112, 110
+	offsets: 5, 5, 122, 119
+template
+	bounds: 3, 473, 3696, 1634

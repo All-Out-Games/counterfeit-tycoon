@@ -1,0 +1,43 @@
+import "core:ao"
+
+// Bank:
+// - Interactable that opens the Sell Shop UI for the interacting player.
+//
+// Setup:
+// - Add `Bank` to an entity in the editor (the entity can be a counter, NPC, kiosk, etc.)
+// - Tune `radius` and `prompt_offset` (inherited from Interactable) as needed.
+Bank :: class : Interactable {
+    ao_start :: method() {
+        this->set_listener(this);
+
+        // Prompt text
+        this->set_text("Open sell menu");
+
+        // Interactable defaults (only if not set in editor)
+        if radius <= 0 {
+            radius = 1.5;
+        }
+        if prompt_offset.x == 0 && prompt_offset.y == 0 {
+            prompt_offset = {0, 1.2};
+        }
+    }
+
+    can_use :: method(player: Player) -> bool {
+        if player == null return false;
+        // Don't allow re-triggering while the modal is already open.
+        if player.sell_shop_open return false;
+        return true;
+    }
+
+    on_interact :: method(player: Player) {
+        if player == null return;
+
+        // The gameplay/UI state should be set on the server so it replicates to the client.
+        if !Game.is_server() {
+            return;
+        }
+
+        player.sell_shop_open = true;
+    }
+}
+

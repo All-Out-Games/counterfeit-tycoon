@@ -1,0 +1,8 @@
+import "core:ao"
+
+// Marker component added to trees spawned by `TreeManager`.
+// Used so the manager can find only its own trees without caching Entity references.
+ManagedTree :: class : Component {
+    manager_entity_id: u64;
+}
+

@@ -1,0 +1,397 @@
+import "core:ao"
+
+// Finished Bill Press:
+// - Players can interact to deposit Colored Bills from their inventory.
+// - Deposited Colored Bills are converted into Finished Bills over time (server-authoritative).
+// - Finished Bills are automatically granted to the closest player who enters collect radius.
+// - Renders a small in-world UI panel with colored/finished bill counts + a timer bar.
+//
+// Setup:
+// - Add `Finished_Bill_Press` to an entity in the editor.
+// - Tune `radius` (inherited) for interaction range and `collect_radius` for auto-collection.
+Finished_Bill_Press :: class : Interactable {
+    // Tuning
+    seconds_per_finished_bill: float @ao_serialize; // 1 colored bill -> 1 finished bill every N seconds
+    deposit_per_interact: s64 @ao_serialize;        // how many colored bills to deposit per interaction (best-effort)
+    collect_radius: float @ao_serialize;            // auto-collect radius (player proximity)
+    collect_cooldown: float @ao_serialize;          // seconds between auto-collect attempts
+    loot_spawn_radius: float @ao_serialize;         // radius around player where output spawns (edge of circle)
+
+    // World UI
+    ui_offset: v2 @ao_serialize;
+
+    // Stored resources (synced)
+    stored_colored_bills: s64;
+    stored_finished_bills: s64;
+    convert_timer: float;
+
+    // Runtime
+    last_collect_time: float;
+
+    ao_start :: method() {
+        this->set_listener(this);
+
+        // Defaults (only if not set in editor)
+        if seconds_per_finished_bill <= 0 {
+            seconds_per_finished_bill = 2.0;
+        }
+        if deposit_per_interact <= 0 {
+            deposit_per_interact = 5;
+        }
+        if collect_radius <= 0 {
+            collect_radius = 1.5;
+        }
+        if collect_cooldown <= 0 {
+            collect_cooldown = 0.25;
+        }
+        if loot_spawn_radius <= 0 {
+            loot_spawn_radius = 1.25;
+        }
+        if ui_offset.x == 0 && ui_offset.y == 0 {
+            ui_offset = {0, 1.25};
+        }
+
+        // Interaction prompt
+        this->set_text("Deposit colored bills");
+        this->set_hold_text("Depositing...");
+
+        // Interactable defaults if not set
+        if radius <= 0 {
+            radius = 1.25;
+        }
+        if prompt_offset.x == 0 && prompt_offset.y == 0 {
+            prompt_offset = ui_offset;
+        }
+    }
+
+    can_use :: method(player: Player) -> bool {
+        // Only the owning player (from our parent entity's PlayerBase) may use this press.
+        return is_owner_of_parent_base(entity, player);
+    }
+
+    on_interact :: method(player: Player) {
+        if player == null return;
+
+        // Server-authoritative safety check (in case client-side can_use is bypassed).
+        if Game.is_server() && !is_owner_of_parent_base(entity, player) {
+            Notifier.notify(player, "This machine belongs to someone else.");
+            return;
+        }
+
+        // Server authoritative inventory changes + stored counts.
+        if !Game.is_server() {
+            return;
+        }
+
+        taken := 0;
+        for i: 1..deposit_per_interact {
+            _ := i;
+            if !try_take_one_colored_bill(player) {
+                break;
+            }
+            taken += 1;
+        }
+
+        if taken <= 0 {
+            Notifier.notify(player, "No colored bills to deposit!");
+            return;
+        }
+
+        stored_colored_bills += taken;
+        Notifier.notify(player, "Deposited Colored Bills x%", {taken});
+    }
+
+    ao_update :: method(dt: float) {
+        // Server authoritative conversion + collection.
+        if Game.is_server() {
+            update_conversion(dt);
+            try_auto_collect();
+        }
+    }
+
+    ao_late_update :: method(dt: float) {
+        _ := dt;
+        draw_world_status();
+    }
+
+    update_conversion :: method(dt: float) {
+        if stored_colored_bills <= 0 {
+            convert_timer = 0;
+            return;
+        }
+
+        if seconds_per_finished_bill <= 0 {
+            seconds_per_finished_bill = 1.0;
+        }
+
+        convert_timer += dt;
+
+        // Convert as many as possible this frame (handles hitching).
+        while true {
+            if stored_colored_bills <= 0 break;
+            if convert_timer < seconds_per_finished_bill break;
+
+            stored_colored_bills -= 1;
+            stored_finished_bills += 1;
+            convert_timer -= seconds_per_finished_bill;
+        }
+    }
+
+    try_auto_collect :: method() {
+        if stored_finished_bills <= 0 {
+            return;
+        }
+
+        if get_time() - last_collect_time < collect_cooldown {
+            return;
+        }
+
+        player := find_owner_in_collect_radius();
+        if player == null {
+            return;
+        }
+
+        bills_defn := ItemManager.TryFindItem("finished_bills");
+        if bills_defn == null {
+            // Back-compat / alternate naming if the project ever used this id.
+            bills_defn = ItemManager.TryFindItem("FinishedBills");
+        }
+        if bills_defn == null {
+            log_warning("Finished_Bill_Press: couldn't find Finished Bills item definition", {});
+            return;
+        }
+
+        inv := player.default_inventory;
+        if inv == null || inv.self == null || inv.capacity <= 0 {
+            return;
+        }
+
+        room := Items.calculate_room_in_inventory_for_item(bills_defn, inv);
+        if room <= 0 {
+            return;
+        }
+
+        // Only ever grant a single stack per collect attempt.
+        // (The engine will panic if we try to create a stack larger than the definition's stack size.)
+        MAX_STACK :: 64;
+
+        to_give := stored_finished_bills;
+        if to_give > room {
+            to_give = room;
+        }
+        if to_give > MAX_STACK {
+            to_give = MAX_STACK;
+        }
+        if to_give <= 0 {
+            return;
+        }
+
+        // Spawn a magnetized world drop and lock it to this player.
+        rng := rng_seed_time();
+        for i: 1..to_give {
+            _ := i;
+            spawn_pos := ItemDrops.random_point_on_circle_edge(player.entity.world_position, loot_spawn_radius, ref rng);
+            drop := ItemDrops.spawn_from_definition(spawn_pos, bills_defn, 1);
+            if drop != null {
+                drop->set_exclusive(player);
+            }
+        }
+        stored_finished_bills -= to_give;
+        last_collect_time = get_time();
+    }
+
+    spawn_pickup_text :: method(player: Player, bill_count: s64) {
+        if player == null return;
+        if player.entity == null return;
+        if player.entity.self == null return;
+        if bill_count <= 0 return;
+
+        gm := get_game_manager();
+        if gm == null {
+            return;
+        }
+
+        dn := new(DamageNumbers);
+        dn.Text = format_string("x% Finished Bills", {bill_count});
+        dn.Position = player.entity.world_position + v2{0, 1.75};
+        dn.LastPosition = dn.Position;
+        dn.Color = {1, 1, 1, 1};
+        dn.T = 0.0;
+        dn.SpaceText = false;
+        dn.DoingFading = false;
+
+        ts := UI.default_text_settings();
+        ts.size = 0.35;
+        ts.halign = .CENTER;
+        ts.valign = .CENTER;
+        ts.do_outline = true;
+        ts.outline_thickness = 2;
+        ts.outline_color = {0, 0, 0, 1};
+        ts.color = {1, 1, 1, 1};
+        dn.TextSettings = ts;
+
+        gm.damage_numbers->append(dn);
+    }
+
+    find_closest_player_in_collect_radius :: method() -> Player {
+        // Backwards compat: keep old behavior if something still calls this.
+        origin := entity.world_position;
+        best: Player;
+        best_d2 := collect_radius * collect_radius;
+
+        foreach p: component_iterator(Player) {
+            if p == null continue;
+            if p.entity == null continue;
+            if p.entity.self == null continue;
+            if !p.entity->get_world_enabled() continue;
+
+            delta := p.entity.world_position - origin;
+            d2 := length_squared(delta);
+            if d2 > best_d2 continue;
+
+            best = p;
+            best_d2 = d2;
+        }
+
+        return best;
+    }
+
+    // Only auto-collect for the owning player.
+    find_owner_in_collect_radius :: method() -> Player {
+        pb := get_parent_player_base(entity);
+        if pb == null {
+            return null;
+        }
+
+        owner := pb->get_owner();
+        if owner == null return null;
+        if owner.entity == null return null;
+        if owner.entity.self == null return null;
+        if !owner.entity->get_world_enabled() return null;
+
+        origin := entity.world_position;
+        delta := owner.entity.world_position - origin;
+        if length_squared(delta) > collect_radius * collect_radius {
+            return null;
+        }
+
+        return owner;
+    }
+
+    try_take_one_colored_bill :: method(player: Player) -> bool {
+        if player == null return false;
+
+        inv := player.default_inventory;
+        if inv == null return false;
+        if inv.self == null return false;
+        if inv.capacity <= 0 return false;
+
+        for i: 0..inv.capacity-1 {
+            item := inv->get_item(i);
+            if item == null continue;
+            if item.self == null continue;
+
+            defn := item->get_definition();
+            if defn == null continue;
+
+            id := defn->get_id();
+            if id == "colored_bills" || id == "ColoredBills" {
+                // Remove exactly 1 colored bill from this stack (engine will destroy stack if it hits 0).
+                Items.destroy_item_instance(item, 1);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    draw_world_status :: method() {
+        UI.push_world_draw_context();
+        defer UI.pop_draw_context();
+
+        // Ensure we draw above most sprites nearby.
+        UI.push_layer(5);
+        defer UI.pop_layer();
+
+        UI.push_z(entity.world_position.y - 0.002);
+        defer UI.pop_z();
+
+        pos := entity.world_position + ui_offset;
+
+        // Panel rect in world units (meters).
+        // We keep the CONTENT width stable, but stretch the BACKGROUND horizontally
+        // so the icons/counts don't shift when we widen the panel.
+        panel_bg := Rect{pos, pos}->grow(0.24, 0.90, 0.24, 0.90);       // wider background
+        panel_content := Rect{pos, pos}->grow(0.24, 0.75, 0.24, 0.75);  // stable content width
+        UI.quad(panel_bg, core_globals.white_sprite, {0, 0, 0, 0.6});
+
+        // Extra inner padding so contents don't hug the panel background.
+        content := panel_content->inset(0.06);
+        icons_row := content->cut_top(0.30);
+        bar_row := content;
+
+        row_pad :: 0.02;
+        icons_row = icons_row->inset(row_pad);
+        bar_row = bar_row->inset(row_pad);
+
+        // Icons row split.
+        // Add a small gap so the counts don't overlap.
+        icons_gap :: 0.16;
+        usable_w := max(0.0, icons_row->width() - icons_gap);
+        half_w := usable_w * 0.5;
+
+        colored_side := icons_row->cut_left(half_w);
+        _ := icons_row->cut_left(icons_gap); // gap
+        finished_side := icons_row;
+
+        ts := UI.default_text_settings();
+        ts.size = 0.34;
+        ts.halign = .LEFT;
+        ts.valign = .CENTER;
+        ts.do_outline = true;
+        ts.outline_thickness = 2;
+        ts.outline_color = {0, 0, 0, 1};
+        ts.color = {1, 1, 1, 1};
+        // More breathing room between the icon and the "xNN" text.
+        ts.offset = {0.05, 0};
+
+        // Colored Bills (input)
+        {
+            r := colored_side;
+            icon_rect := r->cut_left(0.26)->inset(0.01);
+            text_rect := r;
+
+            #static colored_icon := get_asset(Texture_Asset, "Items/ColoredBills.png");
+            if colored_icon != null {
+                UI.quad(icon_rect->fit_aspect(colored_icon->get_aspect()), colored_icon);
+            }
+            UI.text(text_rect, ts, "x%", {stored_colored_bills});
+        }
+
+        // Finished Bills (output)
+        {
+            r := finished_side;
+            icon_rect := r->cut_left(0.26)->inset(0.01);
+            text_rect := r;
+
+            #static finished_icon := get_asset(Texture_Asset, "Items/FinishedBills.png");
+            if finished_icon != null {
+                UI.quad(icon_rect->fit_aspect(finished_icon->get_aspect()), finished_icon);
+            }
+            UI.text(text_rect, ts, "x%", {stored_finished_bills});
+        }
+
+        // Timer bar (progress toward next finished bill)
+        bar := bar_row->inset(0.04);
+        UI.quad(bar, core_globals.white_sprite, {0, 0, 0, 0.7});
+
+        progress := 0.0;
+        if stored_colored_bills > 0 && seconds_per_finished_bill > 0 {
+            progress = clamp(convert_timer / seconds_per_finished_bill, 0.0, 1.0);
+        }
+
+        fill := bar->subrect(0, 0, progress, 1);
+        UI.quad(fill, core_globals.white_sprite, {0.2, 0.85, 0.25, 1});
+    }
+}
+

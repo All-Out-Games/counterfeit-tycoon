@@ -1,0 +1,481 @@
+import "core:ao"
+
+// Item drop + pickup system:
+// - Spawns an in-world icon representing an Item_Definition (+ count)
+// - When a player is within attract radius, the item lerps toward them
+// - When close enough, it transfers the item into the player's inventory and destroys itself
+//
+// Notes:
+// - Server authoritative: attraction + pickup happen only on server.
+// - Visuals are synced automatically via entity transforms.
+//
+// If you want "exclusive" drops (only visible/pickup-able by one player), call `->set_exclusive(player)`.
+
+Item_Drop_Magnet :: class : Component {
+    // NOTE: We intentionally do NOT hold an Item_Instance reference for world drops.
+    // In some situations the native `items_can_move_item_to_inventory()` call can crash
+    // when given a stale/invalid instance pointer. Instead, we store the definition + count
+    // and create a fresh instance at pickup time.
+    defn: Item_Definition;
+    count: s64;
+
+    // Visuals
+    visual_root: Entity;
+    sprite: Sprite_Renderer;
+    starburst: Sprite_Renderer;
+    shadow: Sprite_Renderer;
+
+    // Behavior tuning (defaults set in ao_start)
+    attract_radius: float @ao_serialize;
+    pickup_radius: float @ao_serialize;
+    attract_strength: float @ao_serialize; // Lerp strength per second (t = strength * dt)
+
+    // Optional: exclusive pickup by player user id
+    exclusive_to_player: string;
+
+    // Server chooses an attraction target; replicated for consistent client smoothing.
+    target_player_user_id: string;
+
+    // Client-side smoothing state (cosmetic).
+    smoothed_world_position: v2;
+    smoothed_initialized: bool;
+
+    // Lifetime / state
+    spawn_time: float;
+    despawn_start_time: float;
+    claimed: bool;
+    time_claimed: float;
+
+    DESPAWN_SECONDS :: 60.0;
+
+    ao_start :: method() {
+        spawn_time = get_time();
+        despawn_start_time = spawn_time;
+
+        smoothed_world_position = entity.world_position;
+        smoothed_initialized = true;
+
+        if attract_radius <= 0 {
+            attract_radius = 1.8;
+        }
+        if pickup_radius <= 0 {
+            pickup_radius = 0.35;
+        }
+        if attract_strength <= 0 {
+            attract_strength = 10.0;
+        }
+    }
+
+    find_player_by_user_id :: method(user_id: string) -> Player {
+        if user_id.count <= 0 {
+            return null;
+        }
+
+        foreach p: component_iterator(Player) {
+            if p == null continue;
+            if p.self == null continue;
+            if p->get_user_id() == user_id {
+                return p;
+            }
+        }
+        return null;
+    }
+
+    // Find the best player to attract to (closest in range).
+    find_target_player :: method() -> Player {
+        if defn == null {
+            return null;
+        }
+
+        origin := entity.world_position;
+        best: Player;
+        best_d2 := attract_radius * attract_radius;
+
+        foreach p: component_iterator(Player) {
+            if p == null continue;
+            if p.self == null continue;
+            if !p.enabled continue;
+            if p.entity == null continue;
+            if p.entity.self == null continue;
+            if !p.entity->get_world_enabled() continue;
+            if p.default_inventory == null continue;
+            if p.default_inventory.self == null continue;
+            if p.default_inventory.capacity <= 0 continue;
+
+            if exclusive_to_player.count > 0 {
+                if p->get_user_id() != exclusive_to_player {
+                    continue;
+                }
+            }
+
+            delta := p.entity.world_position - origin;
+            d2 := length_squared(delta);
+            if d2 > best_d2 continue;
+
+            best = p;
+            best_d2 = d2;
+        }
+
+        return best;
+    }
+
+    try_claim :: method(player: Player) -> bool {
+        if claimed return false;
+        if defn == null return false;
+        if player == null return false;
+        if player.self == null return false;
+        if player.entity == null return false;
+        if player.entity.self == null return false;
+        if !player.entity->get_world_enabled() return false;
+
+        if exclusive_to_player.count > 0 && player->get_user_id() != exclusive_to_player {
+            return false;
+        }
+
+        ITEMDROPS_COIN_CURRENCY :: "Coins";
+
+        // Special-case: Coin world drops deposit directly into Economy currency.
+        // This avoids inventory room checks and lets us spawn "coin showers".
+        if defn->get_id() == "coin" {
+            if !Game.is_server() {
+                return false;
+            }
+
+            safe_count := count;
+            if safe_count <= 0 {
+                safe_count = 1;
+            }
+
+            Economy.deposit_currency(player, ITEMDROPS_COIN_CURRENCY, safe_count);
+
+            // Pickup feedback
+            gm := get_game_manager();
+            if gm != null {
+                dn := new(DamageNumbers);
+                dn.Text = format_string("+% Coins", {safe_count});
+                dn.Position = player.entity.world_position + v2{0, 1.75};
+                dn.LastPosition = dn.Position;
+                dn.Color = {1, 1, 0.3, 1};
+                dn.T = 0.0;
+                dn.SpaceText = false;
+                dn.DoingFading = false;
+
+                ts := UI.default_text_settings();
+                ts.size = 0.35;
+                ts.halign = .CENTER;
+                ts.valign = .CENTER;
+                ts.do_outline = true;
+                ts.outline_thickness = 2;
+                ts.outline_color = {0, 0, 0, 1};
+                ts.color = {1, 1, 1, 1};
+                dn.TextSettings = ts;
+
+                gm.damage_numbers->append(dn);
+            }
+
+            count = 0;
+            claimed = true;
+            time_claimed = get_time();
+            Notifier.notify(player, "Picked up Coins x%", {safe_count});
+            entity->queue_for_destruction(1);
+            return true;
+        }
+
+        // Non-currency drops require inventory.
+        if player.default_inventory == null return false;
+        if player.default_inventory.self == null return false;
+        if player.default_inventory.capacity <= 0 return false;
+
+        // Create a fresh instance at pickup time to avoid holding a potentially stale pointer.
+        //
+        // NOTE: We intentionally avoid calling `Items.can_move_item_to_inventory` here.
+        // It's a direct native call and we've seen it hard-crash in some edge cases. Instead, we:
+        // - Query room in the inventory for this definition
+        // - Move an instance directly (which is robust for stacking / partial room)
+        safe_count := count;
+        if safe_count <= 0 {
+            safe_count = 1;
+        }
+
+        room := Items.calculate_room_in_inventory_for_item(defn, player.default_inventory);
+        if room <= 0 {
+            return false;
+        }
+
+        give_count := safe_count;
+        if give_count > room {
+            give_count = room;
+        }
+
+        pickup_item := Items.create_item_instance(defn, give_count);
+        if pickup_item == null {
+            return false;
+        }
+        if pickup_item.self == null {
+            return false;
+        }
+
+        item_name := "item";
+        if defn != null {
+            item_name = defn->get_name();
+        }
+
+        Items.move_item_to_inventory(pickup_item, player.default_inventory);
+
+        // Pickup feedback: use floating combat text style, but in white and with a leading '+'.
+        gm := get_game_manager();
+        if gm != null {
+            dn := new(DamageNumbers);
+            dn.Text = format_string("+%", {item_name});
+            dn.Position = player.entity.world_position + v2{0, 1.75};
+            dn.LastPosition = dn.Position;
+            dn.Color = {1, 1, 1, 1};
+            dn.T = 0.0;
+            dn.SpaceText = false;
+            dn.DoingFading = false;
+
+            ts := UI.default_text_settings();
+            ts.size = 0.35;
+            ts.halign = .CENTER;
+            ts.valign = .CENTER;
+            ts.do_outline = true;
+            ts.outline_thickness = 2;
+            ts.outline_color = {0, 0, 0, 1};
+            ts.color = {1, 1, 1, 1};
+            dn.TextSettings = ts;
+
+            gm.damage_numbers->append(dn);
+        }
+
+        // Reduce remaining count for this world drop (supports partial pickup if inventory has limited room).
+        count -= give_count;
+        if count <= 0 {
+            claimed = true;
+            time_claimed = get_time();
+
+            // Small pickup feedback
+            Notifier.notify(player, "Picked up % x%", {item_name, give_count});
+
+            // Let the pickup animation play before destroying.
+            entity->queue_for_destruction(1);
+        } else {
+            // Partial pickup: keep the drop around for later.
+            // Avoid spamming by only notifying on successful transfer.
+            Notifier.notify(player, "Picked up % x% (remaining: %)", {item_name, give_count, count});
+        }
+        return true;
+    }
+
+    set_exclusive :: method(player: Player) {
+        exclusive_to_player = {};
+        if player != null {
+            exclusive_to_player = player->get_user_id();
+        }
+    }
+
+    ao_update :: method(dt: float) {
+        // Cosmetic spin (safe to do on all peers)
+        if starburst != null {
+            rotation := (get_time() - spawn_time) * 30;
+            starburst.entity->set_local_rotation(rotation);
+        }
+
+        if !smoothed_initialized {
+            smoothed_world_position = entity.world_position;
+            smoothed_initialized = true;
+        }
+
+        if claimed {
+            if visual_root != null {
+                t := Ease.out_quart(Ease.T(get_time() - time_claimed, 1));
+                visual_root->set_local_scale({lerp(1.0, 0.5, t), lerp(1.0, 1.5, t)});
+                visual_root->set_local_position(lerp(v2{}, v2{0, 2}, t));
+            }
+
+            if sprite != null {
+                sprite.color.w = lerp(sprite.color.w, 0, Ease.T(get_time() - time_claimed, 1));
+            }
+            if starburst != null {
+                starburst.color.w = lerp(starburst.color.w, 0, Ease.T(get_time() - time_claimed, 1));
+            }
+            if shadow != null {
+                shadow.color.w = lerp(shadow.color.w, 0, Ease.T(get_time() - time_claimed, 1));
+            }
+            return;
+        }
+
+        if defn == null {
+            // Nothing to give; just destroy.
+            if Game.is_server() {
+                entity->destroy();
+            }
+            return;
+        }
+
+        // Despawn after some time to avoid world clutter.
+        if Game.is_server() {
+            if get_time() - despawn_start_time >= DESPAWN_SECONDS {
+                entity->destroy();
+                return;
+            }
+        }
+
+        // Server picks target, clients follow for smooth visuals.
+        target: Player;
+        if Game.is_server() {
+            target = find_target_player();
+            target_player_user_id = {};
+            if target != null {
+                target_player_user_id = target->get_user_id();
+            }
+        } else {
+            target = find_player_by_user_id(target_player_user_id);
+            if target == null {
+                // Fallback: purely cosmetic, in case replication is behind.
+                target = find_target_player();
+            }
+        }
+
+        if target == null {
+            // Settle visuals back to authoritative transform when idle.
+            if !Game.is_server() && visual_root != null {
+                settle_t := clamp(15.0 * dt, 0.0, 1.0);
+                smoothed_world_position = lerp(smoothed_world_position, entity.world_position, settle_t);
+                visual_root->set_local_position(smoothed_world_position - entity.world_position);
+            } else if Game.is_server() && visual_root != null {
+                visual_root->set_local_position(v2{});
+            }
+            return;
+        }
+
+        origin := smoothed_world_position;
+        if Game.is_server() {
+            origin = entity.world_position;
+        }
+        dest := target.entity.world_position;
+        to_target := dest - origin;
+        dist := length(to_target);
+
+        // Try pickup if close enough.
+        if Game.is_server() {
+            server_dist := length(dest - entity.world_position);
+            if server_dist <= pickup_radius {
+                _ := try_claim(target);
+                return;
+            }
+        }
+
+        // Attract via lerp.
+        t := clamp(attract_strength * dt, 0.0, 1.0);
+        new_pos := lerp(origin, dest, t);
+        if Game.is_server() {
+            entity->set_local_position(new_pos);
+            smoothed_world_position = new_pos;
+            if visual_root != null {
+                visual_root->set_local_position(v2{});
+            }
+        } else {
+            smoothed_world_position = new_pos;
+            if visual_root != null {
+                visual_root->set_local_position(smoothed_world_position - entity.world_position);
+            }
+        }
+    }
+}
+
+ItemDrops :: struct {
+    random_point_on_circle_edge :: proc(center: v2, radius: float, rng: ref u64) -> v2 {
+        if radius < 0.0 {
+            radius = -radius;
+        }
+        if radius == 0.0 {
+            return center;
+        }
+
+        // Random angle in [0, 2PI)
+        angle := rng_range_float(ref rng, 0.0, 1.0) * (PI * 2.0);
+        offset := v2{cos(angle) * radius, sin(angle) * radius};
+        return center + offset;
+    }
+
+    // Spawns a magnet pickup for an item definition.
+    spawn_from_definition :: proc(position: v2, defn: Item_Definition, count: s64 = 1) -> Item_Drop_Magnet {
+        assert(defn != null, "ItemDrops.spawn_from_definition: defn was null", {});
+        if count <= 0 {
+            count = 1;
+        }
+
+        dropped_entity := Scene.create_entity();
+        dropped_entity->set_local_position(position);
+
+        VISUAL_SCALE :: 0.5;
+        DEPTH_OFFSET :: VISUAL_SCALE * 0.7;
+
+        visual_root := Scene.create_entity();
+        visual_root->set_parent(dropped_entity, false);
+        visual_root->set_local_scale({VISUAL_SCALE, VISUAL_SCALE});
+
+        // Item icon
+        icon_entity := Scene.create_entity();
+        icon_entity->set_parent(visual_root, false);
+        sprite := icon_entity->add_component(Sprite_Renderer);
+        icon := defn->get_icon();
+        if icon != null {
+            sprite->set_texture(icon);
+            PIXELS_PER_UNIT :: 240.0;
+            icon_scale := PIXELS_PER_UNIT / max(icon->get_width(), icon->get_height()).(float);
+            icon_entity->set_local_scale({icon_scale, icon_scale});
+            sprite.depth_offset = -DEPTH_OFFSET / icon_entity.local_scale.y;
+        }
+
+        // Starburst behind the icon, colored by tier
+        starburst_entity := Scene.create_entity();
+        starburst_entity->set_parent(visual_root, false);
+        starburst_sprite := starburst_entity->add_component(Sprite_Renderer);
+        #static starburst_texture := get_asset(Texture_Asset, "$AO/ui/starburst.png");
+        starburst_sprite->set_texture(starburst_texture);
+        starburst_sprite.color = get_tier_color(defn.tier);
+        rarity_scale := 0.75 + defn.tier.(float) * 0.125;
+        starburst_entity->set_local_scale({rarity_scale, rarity_scale});
+        starburst_sprite.depth_offset = (-DEPTH_OFFSET + 0.002) / starburst_entity.local_scale.y;
+
+        // Shadow
+        shadow_entity := Scene.create_entity();
+        shadow_entity->set_parent(visual_root, false);
+        shadow_entity->set_local_position({0, -0.5});
+        shadow_entity->set_local_scale({0.2, 0.05});
+        shadow_sprite := shadow_entity->add_component(Sprite_Renderer);
+        #static circle_sprite := get_asset(Texture_Asset, "$AO/circle.png");
+        shadow_sprite->set_texture(circle_sprite);
+        shadow_sprite.depth_offset = (-DEPTH_OFFSET + 0.001) / shadow_entity.local_scale.y;
+        shadow_sprite.color = {0, 0, 0, 0.5};
+
+        // Component
+        dropped := dropped_entity->add_component(Item_Drop_Magnet);
+        dropped.defn = defn;
+        dropped.count = count;
+        dropped.visual_root = visual_root;
+        dropped.sprite = sprite;
+        dropped.starburst = starburst_sprite;
+        dropped.shadow = shadow_sprite;
+
+        return dropped;
+    }
+
+    // Convenience: remove an item from its inventory (if any) and spawn it as a world drop.
+    // Useful when dropping from a player's hotbar/inventory.
+    spawn_from_inventory_item :: proc(position: v2, item: Item_Instance) -> Item_Drop_Magnet {
+        assert(item != null, "ItemDrops.spawn_from_inventory_item: item was null", {});
+        // NOTE: Item instance counts / custom data are not readable from CSL currently.
+        // We convert to a definition-based drop (count=1) to avoid holding the instance pointer.
+        defn := item->get_definition();
+        assert(defn != null, "ItemDrops.spawn_from_inventory_item: item had no definition", {});
+        if item.inventory != null {
+            Items.remove_item_from_inventory(item, item.inventory);
+        }
+        // Destroy the original instance; the world drop will recreate on pickup.
+        Items.destroy_item_instance(item);
+        return ItemDrops.spawn_from_definition(position, defn, 1);
+    }
+}
+

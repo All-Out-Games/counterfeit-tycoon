@@ -1,0 +1,493 @@
+import "core:ao"
+
+// Truck:
+// - Owned via its parent entity's PlayerBase (same pattern as Paper_Mill / Vault).
+// - On interact, takes ALL Finished Bills from the owner's Vault, drives to the closest Bank,
+//   sells them for Coins, then returns "home" (the truck's initial world position at game start).
+// - While moving, no players can interact with the truck.
+//
+// Setup:
+// - Add `Truck` to an entity that has a `Movement_Agent` component.
+// - The Truck entity should be a CHILD of a PlayerBase entity (so it can resolve ownership).
+// - Ensure at least one `Bank` exists in the scene.
+Truck_State :: enum {
+    IDLE;
+    TO_BANK;
+    RETURN_HOME;
+}
+
+find_connected_player_by_user_id :: proc(user_id: string) -> Player {
+    if user_id.count <= 0 return null;
+
+    foreach p: component_iterator(Player) {
+        if p == null continue;
+        if p.self == null continue;
+        if p->get_user_id() == user_id {
+            return p;
+        }
+    }
+    return null;
+}
+
+find_vault_for_base :: proc(base: PlayerBase) -> Vault {
+    if base == null return null;
+    if base.entity == null || base.entity.self == null return null;
+
+    foreach v: component_iterator(Vault) {
+        if v == null continue;
+        if v.entity == null || v.entity.self == null continue;
+
+        pb := get_parent_player_base(v.entity);
+        if pb == base {
+            return v;
+        }
+    }
+    return null;
+}
+
+find_closest_bank_to_position :: proc(pos: v2) -> Bank {
+    best: Bank;
+    best_d2 := 0.0;
+    found: bool = false;
+
+    foreach b: component_iterator(Bank) {
+        if b == null continue;
+        if b.entity == null || b.entity.self == null continue;
+        if !b.entity->get_world_enabled() continue;
+
+        d2 := length_squared(b.entity.world_position - pos);
+        if !found || d2 < best_d2 {
+            found = true;
+            best = b;
+            best_d2 = d2;
+        }
+    }
+
+    return best;
+}
+
+find_first_child_entity :: proc(parent: Entity) -> Entity {
+    if parent == null return null;
+    if parent.self == null return null;
+
+    // The scene format stores parent pointers on the child. We scan entities to find the first child.
+    foreach e: entity_iterator() {
+        if e == null continue;
+        if e.self == null continue;
+        if e.parent != parent continue;
+        if !e->get_world_enabled() continue;
+        return e;
+    }
+    return null;
+}
+
+get_bank_destination_world_pos :: proc(bank: Bank) -> v2 {
+    if bank == null return {};
+    if bank.entity == null || bank.entity.self == null return {};
+
+    child := find_first_child_entity(bank.entity);
+    if child != null && child.self != null {
+        return child.world_position;
+    }
+    return bank.entity.world_position;
+}
+
+Truck :: class : Interactable {
+    // Tuning
+    move_speed: float @ao_serialize;
+    arrive_radius: float @ao_serialize;
+    max_drive_seconds: float @ao_serialize; // Safety timeout to prevent soft-locks.
+    
+    // Spine visuals
+    // Optional: assign a child entity that has the Spine_Animator.
+    // If unset, we'll try to find Spine_Animator on the Truck entity itself.
+    spine_entity: Entity @ao_serialize;
+
+    // Runtime / synced
+    state: Truck_State;
+    carried_finished_bills: s64;
+    owner_user_id: string;
+
+    // Runtime
+    agent: Movement_Agent;
+    home_world_pos: v2;
+    target_world_pos: v2;
+    drive_start_time: float;
+    
+    spine: Spine_Animator;
+    spine_sm: State_Machine;
+    spine_base_scale: v2;
+    spine_scale_initialized: bool;
+    
+    last_world_pos: v2;
+    last_world_pos_initialized: bool;
+
+    ao_start :: method() {
+        this->set_listener(this);
+
+        // Defaults (only if not set in editor)
+        if move_speed <= 0 {
+            move_speed = 4.0;
+        }
+        if arrive_radius <= 0 {
+            arrive_radius = 0.6;
+        }
+        if max_drive_seconds <= 0 {
+            max_drive_seconds = 90.0;
+        }
+
+        // Interactable prompt
+        this->set_text("Send truck to bank");
+        this->set_hold_text("Dispatching...");
+
+        // Interactable defaults if not set
+        if radius <= 0 {
+            radius = 1.5;
+        }
+        if prompt_offset.x == 0 && prompt_offset.y == 0 {
+            prompt_offset = {0, 1.2};
+        }
+
+        // Home position is wherever the truck started the game.
+        home_world_pos = entity.world_position;
+        target_world_pos = home_world_pos;
+        
+        last_world_pos = entity.world_position;
+        last_world_pos_initialized = true;
+
+        state = .IDLE;
+        carried_finished_bills = 0;
+        owner_user_id = {};
+        drive_start_time = 0;
+
+        agent = entity->get_component(Movement_Agent);
+        if agent == null {
+            log_warning("Truck: missing Movement_Agent on Truck entity", {});
+        }
+        
+        resolve_spine();
+        setup_spine_state_machine();
+        update_spine_state(); // start in Idle
+    }
+
+    is_moving :: method() -> bool {
+        return state != .IDLE;
+    }
+
+    can_use :: method(player: Player) -> bool {
+        if player == null return false;
+        if is_moving() return false; // No interaction while in motion.
+
+        if !is_owner_of_parent_base(entity, player) return false;
+
+        if agent == null return false;
+
+        base := get_parent_player_base(entity);
+        if base == null return false;
+
+        vault := find_vault_for_base(base);
+        if vault == null return false;
+        if vault.stored_finished_bills <= 0 return false;
+
+        bank := find_closest_bank_to_position(entity.world_position);
+        if bank == null return false;
+
+        return true;
+    }
+
+    on_interact :: method(player: Player) {
+        if player == null return;
+
+        // Server authoritative.
+        if !Game.is_server() {
+            return;
+        }
+
+        // Safety: block if already moving.
+        if is_moving() {
+            return;
+        }
+
+        if !is_owner_of_parent_base(entity, player) {
+            Notifier.notify(player, "This truck belongs to someone else.");
+            return;
+        }
+
+        if agent == null {
+            agent = entity->get_component(Movement_Agent);
+            if agent == null {
+                Notifier.notify(player, "Truck can't move (missing Movement Agent).");
+                return;
+            }
+        }
+
+        base := get_parent_player_base(entity);
+        if base == null {
+            Notifier.notify(player, "Truck has no owner base.");
+            return;
+        }
+
+        vault := find_vault_for_base(base);
+        if vault == null {
+            Notifier.notify(player, "No vault found for your base.");
+            return;
+        }
+
+        bills := vault.stored_finished_bills;
+        if bills <= 0 {
+            Notifier.notify(player, "No finished bills in your vault.");
+            return;
+        }
+
+        bank := find_closest_bank_to_position(entity.world_position);
+        if bank == null || bank.entity == null || bank.entity.self == null {
+            Notifier.notify(player, "No bank found.");
+            return;
+        }
+
+        // Capture "home" at dispatch time so returning works even if the truck was repositioned
+        // after spawning (e.g., based on PlayerSpawn index).
+        home_world_pos = entity.world_position;
+        target_world_pos = home_world_pos;
+        last_world_pos = entity.world_position;
+        last_world_pos_initialized = true;
+
+        // Take ALL bills from the vault.
+        vault.stored_finished_bills = 0;
+        carried_finished_bills = bills;
+        owner_user_id = base.owner_user_id;
+
+        // Drive to bank.
+        target_world_pos = get_bank_destination_world_pos(bank);
+        state = .TO_BANK;
+        drive_start_time = get_time();
+
+        this->set_text("Truck in transit");
+        Notifier.notify(player, "Truck dispatched with % Finished Bills.", {bills});
+    }
+
+    ao_update :: method(dt: float) {
+        _ := dt;
+        
+        // Visuals/animation should run on all peers (server + clients).
+        update_visuals();
+
+        // Movement target should be set on BOTH client and server (for smooth local motion),
+        // but gameplay state changes remain server-authoritative.
+        if state != .IDLE {
+            if agent == null {
+                agent = entity->get_component(Movement_Agent);
+            }
+            if agent != null {
+                switch state {
+                    case .TO_BANK: {
+                        _ := agent->set_path_target(target_world_pos, move_speed);
+                    }
+                    case .RETURN_HOME: {
+                        _ := agent->set_path_target(home_world_pos, move_speed);
+                    }
+                }
+            }
+        }
+
+        // From here on, only the server drives state transitions + economy.
+        if !Game.is_server() {
+            return;
+        }
+
+        if state == .IDLE {
+            return;
+        }
+
+        if agent == null {
+            agent = entity->get_component(Movement_Agent);
+            if agent == null {
+                // Can't do anything without an agent; keep blocked until fixed.
+                return;
+            }
+        }
+
+        // Timeout safety: if we get stuck, put bills back and return home.
+        if drive_start_time > 0 && max_drive_seconds > 0 {
+            if get_time() - drive_start_time > max_drive_seconds {
+                abort_and_return_to_vault();
+                return;
+            }
+        }
+
+        switch state {
+            case .TO_BANK: {
+                if has_arrived(target_world_pos) {
+                    on_arrive_at_bank();
+                }
+            }
+            case .RETURN_HOME: {
+                if has_arrived(home_world_pos) {
+                    state = .IDLE;
+                    drive_start_time = 0;
+                    this->set_text("Send truck to bank");
+                }
+            }
+        }
+    }
+    
+    resolve_spine :: method() {
+        spine = null;
+        
+        target_entity := entity;
+        if spine_entity != null && spine_entity.self != null {
+            target_entity = spine_entity;
+        }
+        
+        if target_entity != null && target_entity.self != null {
+            spine = target_entity->get_component(Spine_Animator);
+        }
+        
+        if spine != null {
+            spine->awaken();
+            
+            // Ensure the skeleton is set to the truck rig so "Idle"/"Driving" exist.
+            #static truck_spine_asset := get_asset(Spine_Asset, "Animations/010WD_Truck_spine/010WD_Truck.spine");
+            if truck_spine_asset != null {
+                spine.instance->set_skeleton(truck_spine_asset);
+            }
+        }
+        
+        // Cache initial scale for flip logic.
+        if !spine_scale_initialized {
+            if target_entity != null && target_entity.self != null {
+                spine_base_scale = target_entity.local_scale;
+                if spine_base_scale.x == 0 {
+                    spine_base_scale.x = 1;
+                }
+                if spine_base_scale.y == 0 {
+                    spine_base_scale.y = 1;
+                }
+                spine_scale_initialized = true;
+            }
+        }
+    }
+    
+    setup_spine_state_machine :: method() {
+        if spine == null return;
+        if spine.instance == null return;
+        if spine_sm != null return;
+        
+        spine_sm = State_Machine.create();
+        
+        is_driving := spine_sm->create_variable("is_driving", .BOOL);
+        layer := spine_sm->create_layer("main", 0);
+        
+        idle_state := layer->create_state("Idle", true);
+        drive_state := layer->create_state("Driving", true);
+        layer->set_initial_state(idle_state);
+        
+        idle_to_drive := layer->create_transition(idle_state, drive_state, false);
+        idle_to_drive->create_bool_condition(is_driving, true);
+        
+        drive_to_idle := layer->create_transition(drive_state, idle_state, false);
+        drive_to_idle->create_bool_condition(is_driving, false);
+        
+        spine.instance->set_state_machine(spine_sm, true); // transfer ownership to spine instance
+    }
+    
+    update_spine_state :: method() {
+        if spine == null return;
+        if spine.instance == null return;
+        if spine.instance.state_machine == null return;
+        
+        spine.instance.state_machine->set_bool("is_driving", state != .IDLE);
+    }
+    
+    update_visuals :: method() {
+        // Track motion direction using replicated transform delta (works on clients too).
+        cur := entity.world_position;
+        if !last_world_pos_initialized {
+            last_world_pos = cur;
+            last_world_pos_initialized = true;
+        }
+        
+        delta := cur - last_world_pos;
+        last_world_pos = cur;
+        
+        // Flip spine X scale based on horizontal travel.
+        if spine_scale_initialized {
+            target_entity := entity;
+            if spine_entity != null && spine_entity.self != null {
+                target_entity = spine_entity;
+            }
+            
+            if target_entity != null && target_entity.self != null {
+                if delta.x > 0.001 {
+                    target_entity->set_local_scale({abs(spine_base_scale.x), spine_base_scale.y});
+                }
+                else if delta.x < -0.001 {
+                    target_entity->set_local_scale({-abs(spine_base_scale.x), spine_base_scale.y});
+                }
+            }
+        }
+        
+        // Keep spine state machine in sync with truck state.
+        update_spine_state();
+    }
+
+    has_arrived :: method(target: v2) -> bool {
+        if arrive_radius <= 0 {
+            arrive_radius = 0.6;
+        }
+        delta := entity.world_position - target;
+        return length_squared(delta) <= arrive_radius * arrive_radius;
+    }
+
+    on_arrive_at_bank :: method() {
+        // Sell for the owner (if connected). If owner isn't connected, return the bills to the vault.
+        base := get_parent_player_base(entity);
+        vault := find_vault_for_base(base);
+
+        owner := find_connected_player_by_user_id(owner_user_id);
+        if owner == null && base != null {
+            owner = base->get_owner();
+        }
+
+        if owner != null && carried_finished_bills > 0 {
+            // Use the same per-item rate as the Sell Shop UI.
+            coins := carried_finished_bills * SELL_FINISHED_VALUE;
+            if coins > 0 {
+                give_coins_to_player(owner, coins);
+                Notifier.notify(owner, "Truck delivery complete: % Finished Bills sold for % Coins.", {carried_finished_bills, coins});
+            }
+        }
+        else if vault != null && carried_finished_bills > 0 {
+            vault.stored_finished_bills += carried_finished_bills;
+        }
+
+        carried_finished_bills = 0;
+
+        // Return home.
+        target_world_pos = home_world_pos;
+        state = .RETURN_HOME;
+        drive_start_time = get_time(); // reuse for return timeout too
+        this->set_text("Truck returning");
+    }
+
+    abort_and_return_to_vault :: method() {
+        // Best-effort: return any carried bills to the owner's vault.
+        base := get_parent_player_base(entity);
+        vault := find_vault_for_base(base);
+        if vault != null && carried_finished_bills > 0 {
+            vault.stored_finished_bills += carried_finished_bills;
+        }
+
+        owner := find_connected_player_by_user_id(owner_user_id);
+        if owner != null {
+            Notifier.notify(owner, "Truck got stuck and returned the bills to your vault.");
+        }
+
+        carried_finished_bills = 0;
+        target_world_pos = home_world_pos;
+        state = .RETURN_HOME;
+        drive_start_time = get_time();
+        this->set_text("Truck returning");
+    }
+}
+
