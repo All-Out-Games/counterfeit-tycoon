@@ -1,5 +1,55 @@
 import "core:ao"
 
+// Upgrade tuning:
+// Harvester level is per-player (saved on Player) and scales these base editor values.
+HARVESTER_MIN_LEVEL :: 1;
+HARVESTER_MAX_LEVEL :: 10;
+HARVESTER_SPEED_MULT_PER_LEVEL :: 0.16; // +16% move speed per level above 1
+
+// Fixed capacity per level (hard numbers).
+// L1..L10: 10, 15, 25, 40, 60, 85, 120, 160, 200, 250
+harvester_capacity_by_level :: proc() -> [10]s64 {
+    return {10, 15, 25, 40, 60, 85, 120, 160, 200, 250};
+}
+
+harvester_capacity_for_level :: proc(level: s64) -> s64 {
+    if level < HARVESTER_MIN_LEVEL {
+        level = HARVESTER_MIN_LEVEL;
+    }
+    if level > HARVESTER_MAX_LEVEL {
+        level = HARVESTER_MAX_LEVEL;
+    }
+    caps := harvester_capacity_by_level();
+    idx := level - 1;
+    if idx < 0 || idx >= caps.count {
+        return 10;
+    }
+    cap := caps[idx];
+    if cap < 1 {
+        cap = 1;
+    }
+    return cap;
+}
+
+// Guaranteed bonus wood granted per tree chopped, based on Harvester level.
+// This is added directly to carried_wood when arriving at a tree (server-authoritative),
+// so it does not depend on drops spawning/being collected.
+harvester_guaranteed_wood_per_tree_for_level :: proc(level: s64) -> s64 {
+    if level < HARVESTER_MIN_LEVEL {
+        level = HARVESTER_MIN_LEVEL;
+    }
+    if level > HARVESTER_MAX_LEVEL {
+        level = HARVESTER_MAX_LEVEL;
+    }
+
+    // Simple scaling: Level 1 grants 1, Level 10 grants 10.
+    bonus := level;
+    if bonus < 0 {
+        bonus = 0;
+    }
+    return bonus;
+}
+
 // Harvester:
 // - Owned via its parent entity's PlayerBase (same pattern as Paper_Mill / Vault / Truck).
 // - On interact by the owner:
@@ -96,6 +146,8 @@ Harvester :: class : Interactable {
 
     // Runtime
     agent: Movement_Agent;
+    base_move_speed: float;
+    base_max_wood_capacity: s64;
     home_world_pos: v2;
     target_world_pos: v2;
     drive_start_time: float;
@@ -144,6 +196,10 @@ Harvester :: class : Interactable {
             prompt_offset = ui_offset;
         }
 
+        // Cache base values (level 1) from editor/defaults.
+        base_move_speed = move_speed;
+        base_max_wood_capacity = max_wood_capacity;
+
         // Home is wherever the harvester started the game.
         home_world_pos = entity.world_position;
         target_world_pos = home_world_pos;
@@ -172,12 +228,21 @@ Harvester :: class : Interactable {
     }
 
     is_moving :: method() -> bool {
-        return state == .TO_TREE || state == .RETURN_HOME;
+        // Treat "RETURN_HOME but already arrived" as not moving so the player can collect.
+        if state == .RETURN_HOME {
+            return !is_at_home();
+        }
+        return state == .TO_TREE;
     }
 
     is_at_home :: method() -> bool {
+        HOME_ARRIVE_RADIUS_MIN :: 0.2;
+        r := arrive_radius;
+        if r < HOME_ARRIVE_RADIUS_MIN {
+            r = HOME_ARRIVE_RADIUS_MIN;
+        }
         delta := entity.world_position - home_world_pos;
-        return length_squared(delta) <= arrive_radius * arrive_radius;
+        return length_squared(delta) <= r * r;
     }
 
     can_use :: method(player: Player) -> bool {
@@ -191,13 +256,14 @@ Harvester :: class : Interactable {
     on_interact :: method(player: Player) {
         if player == null return;
 
-        // Server-authoritative safety check (in case client-side can_use is bypassed).
-        if Game.is_server() && !is_owner_of_parent_base(entity, player) {
-            Notifier.notify(player, "This harvester belongs to someone else.");
+        // Server-authoritative: do not predict state changes on clients.
+        if !Game.is_server() {
             return;
         }
-        // Client-side early-out for non-owners (avoid local prediction for other players).
-        if !Game.is_server() && !is_owner_of_parent_base(entity, player) {
+
+        // Safety: verify ownership on the server.
+        if !is_owner_of_parent_base(entity, player) {
+            Notifier.notify(player, "This harvester belongs to someone else.");
             return;
         }
 
@@ -208,12 +274,10 @@ Harvester :: class : Interactable {
 
         // If we're carrying wood, pay it out to the owner.
         if carried_wood > 0 {
-            if Game.is_server() {
-                payout_wood_to_player(player);
-                carried_wood = 0;
-                state = .IDLE_AT_HOME;
-                refresh_prompt_text();
-            }
+            payout_wood_to_player(player);
+            carried_wood = 0;
+            state = .IDLE_AT_HOME;
+            refresh_prompt_text();
             return;
         }
 
@@ -253,9 +317,7 @@ Harvester :: class : Interactable {
         last_collect_time = get_time();
 
         refresh_prompt_text();
-        if Game.is_server() {
-            Notifier.notify(player, "Harvester dispatched.");
-        }
+        Notifier.notify(player, "Harvester dispatched.");
     }
 
     ao_update :: method(dt: float) {
@@ -269,6 +331,8 @@ Harvester :: class : Interactable {
         if agent == null {
             agent = entity->get_component(Movement_Agent);
         }
+
+        eff_move_speed := get_effective_move_speed();
 
         if agent != null {
             switch state {
@@ -291,10 +355,10 @@ Harvester :: class : Interactable {
                         }
                     }
 
-                    _ := agent->set_path_target(target_world_pos, move_speed);
+                    _ := agent->set_path_target(target_world_pos, eff_move_speed);
                 }
                 case .RETURN_HOME: {
-                    _ := agent->set_path_target(home_world_pos, move_speed);
+                    _ := agent->set_path_target(home_world_pos, eff_move_speed);
                 }
             }
         }
@@ -304,15 +368,25 @@ Harvester :: class : Interactable {
             return;
         }
 
+        eff_capacity := get_effective_max_wood_capacity();
+
+        // If we're effectively at home, force the idle state even if some earlier return path
+        // would have skipped the normal state machine transition.
+        if state == .RETURN_HOME && has_arrived_home() {
+            state = .IDLE_AT_HOME;
+            drive_start_time = 0;
+            refresh_prompt_text();
+        }
+
         // Always keep capacity sane.
-        if max_wood_capacity <= 0 {
-            max_wood_capacity = 10;
+        if eff_capacity <= 0 {
+            eff_capacity = 1;
         }
         if carried_wood < 0 {
             carried_wood = 0;
         }
-        if carried_wood > max_wood_capacity {
-            carried_wood = max_wood_capacity;
+        if carried_wood > eff_capacity {
+            carried_wood = eff_capacity;
         }
 
         // Timeout safety: if we get stuck, return home (keep carried wood).
@@ -328,7 +402,7 @@ Harvester :: class : Interactable {
         // Working states: collect wood drops near us.
         if state == .TO_TREE || state == .COLLECTING_AT_TREE {
             collect_nearby_wood_drops();
-            if carried_wood >= max_wood_capacity {
+            if carried_wood >= eff_capacity {
                 begin_return_home();
                 return;
             }
@@ -350,13 +424,14 @@ Harvester :: class : Interactable {
                     harvest_start_time = get_time();
                 }
 
-                DONE_AFTER_SECONDS :: 3.0;
-                NO_PICKUP_GRACE :: 0.75;
+                // As Harvester level increases, reduce the idle time between trees.
+                // Keep a safe minimum so we don't leave before drops can spawn.
+                done_after_seconds, no_pickup_grace := get_between_tree_wait_seconds();
 
                 time_since_start := get_time() - harvest_start_time;
                 time_since_collect := get_time() - last_collect_time;
 
-                if time_since_start >= DONE_AFTER_SECONDS && time_since_collect >= NO_PICKUP_GRACE {
+                if time_since_start >= done_after_seconds && time_since_collect >= no_pickup_grace {
                     // Seek another tree (or return home if none).
                     tree := find_closest_treecutting_tree_to_position(entity.world_position);
                     if tree == null {
@@ -374,7 +449,7 @@ Harvester :: class : Interactable {
                 }
             }
             case .RETURN_HOME: {
-                if has_arrived(home_world_pos) {
+                if has_arrived_home() {
                     state = .IDLE_AT_HOME;
                     drive_start_time = 0;
                     refresh_prompt_text();
@@ -508,9 +583,138 @@ Harvester :: class : Interactable {
         }
     }
 
+    // === Manager (Woodchipper) server hooks ===
+    // These allow a server-authoritative "manager" component to control the Harvester
+    // without requiring a Player to interact, while still enforcing ownership.
+
+    server_is_ready_for_manager :: method(requesting_owner_user_id: string) -> bool {
+        if !Game.is_server() return false;
+        if requesting_owner_user_id.count == 0 return false;
+
+        pb := get_parent_player_base(entity);
+        if pb == null return false;
+        if pb.owner_user_id.count == 0 return false;
+        if pb.owner_user_id != requesting_owner_user_id return false;
+
+        // Only "ready" when we're home and not in a moving state.
+        if !is_at_home() return false;
+        if is_moving() return false;
+        return true;
+    }
+
+    // Collect up to max_to_collect wood directly from the Harvester's internal storage.
+    // This does NOT spawn item drops; it transfers counts for a manager to deposit elsewhere.
+    server_collect_wood_for_manager :: method(requesting_owner_user_id: string, max_to_collect: s64) -> s64 {
+        if !Game.is_server() {
+            return 0;
+        }
+        if requesting_owner_user_id.count == 0 {
+            return 0;
+        }
+        if max_to_collect <= 0 {
+            return 0;
+        }
+
+        // Enforce same base ownership.
+        pb := get_parent_player_base(entity);
+        if pb == null return 0;
+        if pb.owner_user_id.count == 0 return 0;
+        if pb.owner_user_id != requesting_owner_user_id return 0;
+
+        // Only allow collection when we're home and not moving.
+        if !is_at_home() return 0;
+        if is_moving() return 0;
+
+        if carried_wood <= 0 {
+            return 0;
+        }
+
+        take := carried_wood;
+        if take > max_to_collect {
+            take = max_to_collect;
+        }
+        if take <= 0 {
+            return 0;
+        }
+
+        carried_wood -= take;
+        if carried_wood < 0 {
+            carried_wood = 0;
+        }
+
+        // If we were returning home and arrived, normalize to idle.
+        if state != .IDLE_AT_HOME && is_at_home() && !is_moving() {
+            state = .IDLE_AT_HOME;
+            drive_start_time = 0;
+        }
+
+        refresh_prompt_text();
+        return take;
+    }
+
+    // Dispatch the Harvester to gather wood, if it's idle at home and currently empty.
+    // Returns true if a dispatch happened.
+    server_dispatch_for_manager :: method(requesting_owner_user_id: string) -> bool {
+        if !Game.is_server() {
+            return false;
+        }
+        if requesting_owner_user_id.count == 0 {
+            return false;
+        }
+
+        // Enforce same base ownership.
+        pb := get_parent_player_base(entity);
+        if pb == null return false;
+        if pb.owner_user_id.count == 0 return false;
+        if pb.owner_user_id != requesting_owner_user_id return false;
+
+        // Only dispatch from home, while idle, and when empty.
+        if is_moving() return false;
+        if !is_at_home() return false;
+        if state != .IDLE_AT_HOME return false;
+        if carried_wood > 0 return false;
+
+        if agent == null {
+            agent = entity->get_component(Movement_Agent);
+        }
+        if agent == null {
+            return false;
+        }
+
+        // Cache owner id for exclusivity checks while collecting drops.
+        owner_user_id = requesting_owner_user_id;
+
+        tree := find_closest_treecutting_tree_to_position(entity.world_position);
+        if tree == null {
+            return false;
+        }
+
+        // Dispatch.
+        home_world_pos = entity.world_position;
+        target_tree_entity_id = tree.entity.id;
+        target_world_pos = tree.entity.world_position;
+        state = .TO_TREE;
+        drive_start_time = get_time();
+        harvest_start_time = 0;
+        last_collect_time = get_time();
+
+        refresh_prompt_text();
+        return true;
+    }
+
     has_arrived :: method(target: v2) -> bool {
         delta := entity.world_position - target;
         return length_squared(delta) <= arrive_radius * arrive_radius;
+    }
+
+    has_arrived_home :: method() -> bool {
+        HOME_ARRIVE_RADIUS_MIN :: 0.2;
+        r := arrive_radius;
+        if r < HOME_ARRIVE_RADIUS_MIN {
+            r = HOME_ARRIVE_RADIUS_MIN;
+        }
+        delta := entity.world_position - home_world_pos;
+        return length_squared(delta) <= r * r;
     }
 
     begin_return_home :: method() {
@@ -535,6 +739,24 @@ Harvester :: class : Interactable {
         if tree != null {
             owner := harvester_find_connected_player_by_user_id(owner_user_id);
             tree->on_interact(owner); // player param is ignored by Treecutting_Tree today
+
+            // Grant guaranteed bonus wood based on Harvester level.
+            // Do this server-side only, and clamp to current effective capacity.
+            if Game.is_server() {
+                lvl := get_effective_level();
+                bonus := harvester_guaranteed_wood_per_tree_for_level(lvl);
+                if bonus > 0 {
+                    cap := get_effective_max_wood_capacity();
+                    room := cap - carried_wood;
+                    if room > 0 {
+                        if bonus > room {
+                            bonus = room;
+                        }
+                        carried_wood += bonus;
+                        last_collect_time = get_time();
+                    }
+                }
+            }
         }
         else {
             // No tree to harvest, just go home.
@@ -553,7 +775,8 @@ Harvester :: class : Interactable {
         if collect_radius <= 0 {
             collect_radius = 1.8;
         }
-        if carried_wood >= max_wood_capacity {
+        eff_capacity := get_effective_max_wood_capacity();
+        if carried_wood >= eff_capacity {
             return;
         }
 
@@ -580,7 +803,7 @@ Harvester :: class : Interactable {
             d2 := length_squared(d.entity.world_position - origin);
             if d2 > max_d2 continue;
 
-            room := max_wood_capacity - carried_wood;
+            room := eff_capacity - carried_wood;
             if room <= 0 {
                 break;
             }
@@ -604,7 +827,7 @@ Harvester :: class : Interactable {
                 d.entity->queue_for_destruction(1);
             }
 
-            if carried_wood >= max_wood_capacity {
+            if carried_wood >= eff_capacity {
                 break;
             }
         }
@@ -684,6 +907,73 @@ Harvester :: class : Interactable {
         ts.offset = {0.05, 0};
 
         UI.text(text_rect, ts, "x%", {carried_wood});
+    }
+
+    clamp_level :: method(level: s64) -> s64 {
+        if level < HARVESTER_MIN_LEVEL {
+            level = HARVESTER_MIN_LEVEL;
+        }
+        if level > HARVESTER_MAX_LEVEL {
+            level = HARVESTER_MAX_LEVEL;
+        }
+        return level;
+    }
+
+    get_effective_level :: method() -> s64 {
+        pb := get_parent_player_base(entity);
+        if pb != null {
+            owner := pb->get_owner();
+            if owner != null {
+                return clamp_level(owner.harvester_level);
+            }
+        }
+        return HARVESTER_MIN_LEVEL;
+    }
+
+    get_effective_move_speed :: method() -> float {
+        lvl := get_effective_level();
+        if base_move_speed <= 0 {
+            base_move_speed = 4.0;
+        }
+        t := (lvl - 1).(float);
+        mult := 1.0 + t * HARVESTER_SPEED_MULT_PER_LEVEL;
+        speed := base_move_speed * mult;
+        if speed < 0.1 {
+            speed = 0.1;
+        }
+        return speed;
+    }
+
+    get_effective_max_wood_capacity :: method() -> s64 {
+        lvl := get_effective_level();
+        return harvester_capacity_for_level(lvl);
+    }
+
+    // Returns:
+    // - done_after_seconds: minimum time we wait at a tree before we can leave
+    // - no_pickup_grace:    additional condition requiring "no pickups recently"
+    get_between_tree_wait_seconds :: method() -> float, float {
+        lvl := get_effective_level();
+
+        // Level 1 baseline
+        BASE_DONE_AFTER :: 3.0;
+        BASE_NO_PICKUP  :: 0.75;
+
+        // Level 10 minimums (still >= ~1s to allow tree fall + drop spawn)
+        MIN_DONE_AFTER :: 1.2;
+        MIN_NO_PICKUP  :: 0.20;
+
+        denom := (HARVESTER_MAX_LEVEL - 1).(float);
+        t: float = 0.0;
+        if denom > 0 {
+            t = (lvl - 1).(float) / denom;
+        }
+        if t < 0 t = 0;
+        if t > 1 t = 1;
+
+        done_after := lerp(BASE_DONE_AFTER, MIN_DONE_AFTER, t);
+        no_pickup := lerp(BASE_NO_PICKUP, MIN_NO_PICKUP, t);
+        return done_after, no_pickup;
     }
 }
 

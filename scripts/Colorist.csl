@@ -1,0 +1,637 @@
+import "core:ao"
+
+// Colorist:
+// - Spawned via prefab and assigned to a specific owner + lane (Lane 1 = lane_index 0).
+// - Paths between the owning PlayerBase's Blank_Bill_Press and Colored_Bill_Press.
+// - "Collects" blank bills from the Blank_Bill_Press's stored output (server-only) into internal storage.
+// - Deposits carried blank bills into the Colored_Bill_Press's stored input (server-only).
+// - Despawns automatically if its owning player disconnects.
+//
+// Setup:
+// - Add `Colorist` to an entity that has a `Movement_Agent` component.
+// - The Colorist entity should be parented under the owning PlayerBase entity.
+// - A server-side spawner should call `server_init(owner_user_id, lane_index)` after instantiation.
+
+Colorist_State :: enum {
+    TO_SOURCE;
+    WAIT_AT_SOURCE;
+    TO_DEST;
+    WAIT_AT_DEST;
+    PAUSE_BEFORE_TO_DEST;
+    PAUSE_BEFORE_TO_SOURCE;
+}
+
+colorist_find_blank_bill_press_for_base_and_lane :: proc(base: PlayerBase, lane_index: s64) -> Blank_Bill_Press {
+    if base == null return null;
+    if base.entity == null || base.entity.self == null return null;
+
+    foreach p: component_iterator(Blank_Bill_Press) {
+        if p == null continue;
+        if p.entity == null || p.entity.self == null continue;
+        if !p.entity->get_world_enabled() continue;
+        if p.lane_index != lane_index continue;
+
+        pb := get_parent_player_base(p.entity);
+        if pb == base {
+            return p;
+        }
+    }
+    return null;
+}
+
+colorist_find_colored_bill_press_for_base_and_lane :: proc(base: PlayerBase, lane_index: s64) -> Colored_Bill_Press {
+    if base == null return null;
+    if base.entity == null || base.entity.self == null return null;
+
+    foreach p: component_iterator(Colored_Bill_Press) {
+        if p == null continue;
+        if p.entity == null || p.entity.self == null continue;
+        if !p.entity->get_world_enabled() continue;
+        if p.lane_index != lane_index continue;
+
+        pb := get_parent_player_base(p.entity);
+        if pb == base {
+            return p;
+        }
+    }
+    return null;
+}
+
+Colorist :: class : Component {
+    // Tuning
+    move_speed: float @ao_serialize;
+    arrive_radius: float @ao_serialize;
+    max_drive_seconds: float @ao_serialize; // Safety timeout to prevent soft-locks.
+
+    max_blank_bills_capacity: s64 @ao_serialize;
+    collect_interval: float @ao_serialize;  // seconds between collect attempts while waiting at source press
+    deposit_interval: float @ao_serialize;  // seconds between deposit attempts while waiting at dest press
+    path_wait_seconds: float @ao_serialize; // downtime between travel legs
+
+    // Spine visuals
+    // Optional: assign the Spine_Animator directly (preferred), or assign an entity that contains it.
+    // If unset, we'll try to find Spine_Animator on the Colorist entity itself.
+    spine_animator: Spine_Animator @ao_serialize;
+    spine_entity: Entity @ao_serialize;
+
+    // World UI
+    ui_offset: v2 @ao_serialize;
+
+    // Synced / runtime
+    owner_user_id: string;
+    lane_index: s64;
+    state: Colorist_State;
+    carried_blank_bills: s64;
+
+    // Runtime
+    agent: Movement_Agent;
+    drive_start_time: float;
+    last_action_time: float;
+    pause_until_time: float;
+    break_variant: s64; // 1 or 2, controls Idle_Break_1 vs Idle_Break_2
+
+    spine: Spine_Animator;
+    spine_sm: State_Machine;
+    spine_base_scale: v2;
+    spine_scale_initialized: bool;
+
+    last_world_pos: v2;
+    last_world_pos_initialized: bool;
+
+    ao_start :: method() {
+        // Defaults (only if not set in editor)
+        if move_speed <= 0 {
+            move_speed = 3.75;
+        }
+        if arrive_radius <= 0 {
+            arrive_radius = 0.6;
+        }
+        if max_drive_seconds <= 0 {
+            max_drive_seconds = 60.0;
+        }
+        if max_blank_bills_capacity <= 0 {
+            max_blank_bills_capacity = 20;
+        }
+        if collect_interval <= 0 {
+            collect_interval = 0.35;
+        }
+        if deposit_interval <= 0 {
+            deposit_interval = 0.2;
+        }
+        if path_wait_seconds <= 0 {
+            path_wait_seconds = 3.0;
+        }
+        if ui_offset.x == 0 && ui_offset.y == 0 {
+            ui_offset = {0, 1.35};
+        }
+        if lane_index < 0 {
+            lane_index = 0;
+        }
+
+        agent = entity->get_component(Movement_Agent);
+        if agent == null {
+            log_warning("Colorist: missing Movement_Agent on Colorist entity", {});
+        }
+
+        last_world_pos = entity.world_position;
+        last_world_pos_initialized = true;
+
+        resolve_spine();
+        setup_spine_state_machine();
+        update_visuals(); // ensure correct initial anim + facing
+
+        // Best-effort default ownership if we were already parented under a PlayerBase.
+        // (Spawner should still call server_init for lane assignment.)
+        pb := get_parent_player_base(entity);
+        if pb != null {
+            owner_user_id = pb.owner_user_id;
+        }
+
+        // Start by heading to the source press.
+        if state != .TO_SOURCE && state != .WAIT_AT_SOURCE && state != .TO_DEST && state != .WAIT_AT_DEST {
+            state = .TO_SOURCE;
+        }
+        if Game.is_server() {
+            drive_start_time = get_time();
+            last_action_time = 0;
+            pause_until_time = 0;
+            break_variant = 0;
+        }
+    }
+
+    target_pos_for_source :: method(press: Blank_Bill_Press) -> v2 {
+        if press == null return entity.world_position;
+        if press.entity == null || press.entity.self == null return entity.world_position;
+        return press.entity.world_position + v2{0, -1.0};
+    }
+
+    target_pos_for_dest :: method(press: Colored_Bill_Press) -> v2 {
+        if press == null return entity.world_position;
+        if press.entity == null || press.entity.self == null return entity.world_position;
+        return press.entity.world_position + v2{0, -1.0};
+    }
+
+    is_moving :: method() -> bool {
+        return state == .TO_SOURCE || state == .TO_DEST;
+    }
+
+    is_pausing :: method() -> bool {
+        return state == .PAUSE_BEFORE_TO_DEST || state == .PAUSE_BEFORE_TO_SOURCE;
+    }
+
+    // Called by the server-side spawner after instantiation.
+    server_init :: method(owner_id: string, lane: s64) {
+        if !Game.is_server() {
+            return;
+        }
+        owner_user_id = owner_id;
+        lane_index = lane;
+        if lane_index < 0 {
+            lane_index = 0;
+        }
+        // Reset the loop.
+        state = .TO_SOURCE;
+        drive_start_time = get_time();
+        last_action_time = 0;
+        pause_until_time = 0;
+        break_variant = 0;
+    }
+
+    server_begin_pause :: method(next_state: Colorist_State) {
+        if !Game.is_server() return;
+
+        if path_wait_seconds <= 0 {
+            // No downtime configured; transition immediately.
+            state = next_state;
+            drive_start_time = get_time();
+            last_action_time = 0;
+            pause_until_time = 0;
+            break_variant = 0;
+            return;
+        }
+
+        rng := rng_seed_time();
+        choice := rng_range_int(ref rng, 1, 2);
+
+        break_variant = choice;
+        pause_until_time = get_time() + path_wait_seconds;
+        last_action_time = get_time();
+        drive_start_time = 0;
+
+        if next_state == .TO_DEST {
+            state = .PAUSE_BEFORE_TO_DEST;
+        }
+        else {
+            state = .PAUSE_BEFORE_TO_SOURCE;
+        }
+    }
+
+    resolve_spine :: method() {
+        spine = null;
+        target_entity := entity;
+
+        if spine_animator != null {
+            spine = spine_animator;
+            if spine_animator.entity != null && spine_animator.entity.self != null {
+                target_entity = spine_animator.entity;
+            }
+        }
+        else if spine_entity != null && spine_entity.self != null {
+            spine = spine_entity->get_component(Spine_Animator);
+            target_entity = spine_entity;
+        }
+        else if target_entity != null && target_entity.self != null {
+            spine = target_entity->get_component(Spine_Animator);
+        }
+
+        if spine != null {
+            spine->awaken();
+        }
+
+        // Cache initial scale for flip logic.
+        if !spine_scale_initialized {
+            if target_entity != null && target_entity.self != null {
+                spine_base_scale = target_entity.local_scale;
+                if spine_base_scale.x == 0 {
+                    spine_base_scale.x = 1;
+                }
+                if spine_base_scale.y == 0 {
+                    spine_base_scale.y = 1;
+                }
+                spine_scale_initialized = true;
+            }
+        }
+    }
+
+    setup_spine_state_machine :: method() {
+        if spine == null return;
+        if spine.instance == null return;
+        if spine_sm != null return;
+
+        spine_sm = State_Machine.create();
+
+        mode_var := spine_sm->create_variable("anim_mode", .INT);
+        layer := spine_sm->create_layer("main", 0);
+
+        // Note: state names must match animation names in the Spine rig.
+        // anim_mode mapping:
+        // 0 = Idle
+        // 1 = Run
+        // 2 = Idle_Break_1
+        // 3 = Idle_Break_2
+        idle_state := layer->create_state("Idle", true);
+        run_state := layer->create_state("Run", true);
+        break1_state := layer->create_state("Idle_Break_1", true);
+        break2_state := layer->create_state("Idle_Break_2", true);
+        layer->set_initial_state(idle_state);
+
+        // Idle transitions
+        idle_to_run := layer->create_transition(idle_state, run_state, false);
+        idle_to_run->create_int_condition(mode_var, 1, .EQUAL);
+
+        idle_to_b1 := layer->create_transition(idle_state, break1_state, false);
+        idle_to_b1->create_int_condition(mode_var, 2, .EQUAL);
+
+        idle_to_b2 := layer->create_transition(idle_state, break2_state, false);
+        idle_to_b2->create_int_condition(mode_var, 3, .EQUAL);
+
+        // Run transitions
+        run_to_idle := layer->create_transition(run_state, idle_state, false);
+        run_to_idle->create_int_condition(mode_var, 0, .EQUAL);
+
+        run_to_b1 := layer->create_transition(run_state, break1_state, false);
+        run_to_b1->create_int_condition(mode_var, 2, .EQUAL);
+
+        run_to_b2 := layer->create_transition(run_state, break2_state, false);
+        run_to_b2->create_int_condition(mode_var, 3, .EQUAL);
+
+        // Break1 transitions
+        b1_to_idle := layer->create_transition(break1_state, idle_state, false);
+        b1_to_idle->create_int_condition(mode_var, 0, .EQUAL);
+
+        b1_to_run := layer->create_transition(break1_state, run_state, false);
+        b1_to_run->create_int_condition(mode_var, 1, .EQUAL);
+
+        b1_to_b2 := layer->create_transition(break1_state, break2_state, false);
+        b1_to_b2->create_int_condition(mode_var, 3, .EQUAL);
+
+        // Break2 transitions
+        b2_to_idle := layer->create_transition(break2_state, idle_state, false);
+        b2_to_idle->create_int_condition(mode_var, 0, .EQUAL);
+
+        b2_to_run := layer->create_transition(break2_state, run_state, false);
+        b2_to_run->create_int_condition(mode_var, 1, .EQUAL);
+
+        b2_to_b1 := layer->create_transition(break2_state, break1_state, false);
+        b2_to_b1->create_int_condition(mode_var, 2, .EQUAL);
+
+        spine.instance->set_state_machine(spine_sm, true); // transfer ownership to spine instance
+    }
+
+    update_spine_state :: method() {
+        if spine == null return;
+        if spine.instance == null return;
+        if spine.instance.state_machine == null return;
+
+        mode := 0;
+        if is_moving() {
+            mode = 1;
+        }
+        else if is_pausing() {
+            mode = (break_variant == 1) ? 2 : 3;
+        }
+        spine.instance.state_machine->set_int("anim_mode", mode);
+    }
+
+    update_visuals :: method() {
+        // If the animator was assigned after start, resolve lazily.
+        if spine == null {
+            resolve_spine();
+            setup_spine_state_machine();
+        }
+
+        // Track motion direction using replicated transform delta (works on clients too).
+        cur := entity.world_position;
+        if !last_world_pos_initialized {
+            last_world_pos = cur;
+            last_world_pos_initialized = true;
+        }
+        delta := cur - last_world_pos;
+        last_world_pos = cur;
+
+        // Flip spine X scale based on horizontal travel.
+        if spine_scale_initialized {
+            target_entity := entity;
+            if spine_entity != null && spine_entity.self != null {
+                target_entity = spine_entity;
+            }
+
+            if target_entity != null && target_entity.self != null {
+                if delta.x > 0.001 {
+                    target_entity->set_local_scale({abs(spine_base_scale.x), spine_base_scale.y});
+                }
+                else if delta.x < -0.001 {
+                    target_entity->set_local_scale({-abs(spine_base_scale.x), spine_base_scale.y});
+                }
+            }
+        }
+
+        // Keep spine state machine in sync with operator state.
+        update_spine_state();
+
+        // Match the owning player's depth sorting (layer + depth_offset).
+        apply_depth_sort_from_owner();
+    }
+
+    apply_depth_sort_from_owner :: method() {
+        if spine == null return;
+        pb := get_parent_player_base(entity);
+        if pb == null return;
+        owner := pb->get_owner();
+        if owner == null return;
+        if owner.self == null return;
+        if owner.animator == null return;
+
+        spine.layer = owner.animator.layer;
+        spine.depth_offset = owner.animator.depth_offset;
+    }
+
+    has_arrived :: method(target: v2) -> bool {
+        delta := entity.world_position - target;
+        return length_squared(delta) <= arrive_radius * arrive_radius;
+    }
+
+    server_should_despawn :: method() -> bool {
+        if owner_user_id.count == 0 {
+            return true;
+        }
+
+        pb := get_parent_player_base(entity);
+        if pb == null {
+            // Not parented under a base anymore.
+            return true;
+        }
+        if pb.owner_user_id.count == 0 {
+            return true;
+        }
+        if pb.owner_user_id != owner_user_id {
+            // Ownership mismatch.
+            return true;
+        }
+
+        owner := pb->get_owner();
+        if owner == null {
+            // Owner disconnected.
+            return true;
+        }
+        return false;
+    }
+
+    ao_update :: method(dt: float) {
+        _ := dt;
+
+        // Visuals/animation should run on all peers (server + clients).
+        update_visuals();
+
+        // Resolve movement agent lazily (in case added after start).
+        if agent == null {
+            agent = entity->get_component(Movement_Agent);
+        }
+
+        // Find our base + stations.
+        pb := get_parent_player_base(entity);
+        source := colorist_find_blank_bill_press_for_base_and_lane(pb, lane_index);
+        dest := colorist_find_colored_bill_press_for_base_and_lane(pb, lane_index);
+
+        // Client+server: drive the movement target for smoother replicated motion.
+        if agent != null {
+            switch state {
+                case .TO_SOURCE: {
+                    if source != null {
+                        _ := agent->set_path_target(target_pos_for_source(source), move_speed);
+                    }
+                }
+                case .TO_DEST: {
+                    if dest != null {
+                        _ := agent->set_path_target(target_pos_for_dest(dest), move_speed);
+                    }
+                }
+            }
+        }
+
+        // Server-authoritative logic (inventory/state changes).
+        if !Game.is_server() {
+            return;
+        }
+
+        // Despawn safety (owner left / lost base).
+        if server_should_despawn() {
+            entity->destroy();
+            return;
+        }
+
+        // Clamp carried amount.
+        if carried_blank_bills < 0 {
+            carried_blank_bills = 0;
+        }
+        if carried_blank_bills > max_blank_bills_capacity {
+            carried_blank_bills = max_blank_bills_capacity;
+        }
+
+        // Timeout safety: if we get stuck, reset state.
+        if (state == .TO_SOURCE || state == .TO_DEST) && drive_start_time > 0 && max_drive_seconds > 0 {
+            if get_time() - drive_start_time > max_drive_seconds {
+                // Reset toward source as the "home" station.
+                state = .TO_SOURCE;
+                drive_start_time = get_time();
+                last_action_time = 0;
+                pause_until_time = 0;
+                break_variant = 0;
+            }
+        }
+
+        switch state {
+            case .TO_SOURCE: {
+                if source == null {
+                    // Can't do anything without a source press; wait in place.
+                    state = .WAIT_AT_SOURCE;
+                    drive_start_time = 0;
+                    last_action_time = 0;
+                    return;
+                }
+                if has_arrived(target_pos_for_source(source)) {
+                    state = .WAIT_AT_SOURCE;
+                    drive_start_time = 0;
+                    last_action_time = 0;
+                }
+            }
+            case .WAIT_AT_SOURCE: {
+                if source == null {
+                    // Stations can be destroyed/disabled if base is changing.
+                    return;
+                }
+
+                // If we have room, try to collect blank bills from the source output.
+                if carried_blank_bills < max_blank_bills_capacity {
+                    if last_action_time <= 0 || get_time() - last_action_time >= collect_interval {
+                        room := max_blank_bills_capacity - carried_blank_bills;
+                        taken := source->server_collect_blank_bills_for_manager(owner_user_id, room);
+                        if taken > 0 {
+                            carried_blank_bills += taken;
+                        }
+                        last_action_time = get_time();
+                    }
+                }
+
+                // Decide whether to head to dest:
+                // - If we have any blank bills and either we're full or the source has nothing left right now.
+                if carried_blank_bills > 0 {
+                    source_empty_now := source.stored_blank_bills <= 0;
+                    if carried_blank_bills >= max_blank_bills_capacity || source_empty_now {
+                        server_begin_pause(.TO_DEST);
+                    }
+                }
+            }
+            case .TO_DEST: {
+                if dest == null {
+                    // Can't deposit without a dest press; go back to source and wait.
+                    state = .TO_SOURCE;
+                    drive_start_time = get_time();
+                    last_action_time = 0;
+                    return;
+                }
+                if has_arrived(target_pos_for_dest(dest)) {
+                    state = .WAIT_AT_DEST;
+                    drive_start_time = 0;
+                    last_action_time = 0;
+                }
+            }
+            case .WAIT_AT_DEST: {
+                if dest == null {
+                    return;
+                }
+
+                if carried_blank_bills <= 0 {
+                    // Nothing to deposit; go back.
+                    state = .TO_SOURCE;
+                    drive_start_time = get_time();
+                    last_action_time = 0;
+                    return;
+                }
+
+                if last_action_time <= 0 || get_time() - last_action_time >= deposit_interval {
+                    deposited := dest->server_deposit_blank_bills_from_manager(owner_user_id, carried_blank_bills);
+                    if deposited > 0 {
+                        carried_blank_bills -= deposited;
+                        if carried_blank_bills < 0 {
+                            carried_blank_bills = 0;
+                        }
+                    }
+                    last_action_time = get_time();
+                }
+
+                if carried_blank_bills <= 0 {
+                    server_begin_pause(.TO_SOURCE);
+                }
+            }
+            case .PAUSE_BEFORE_TO_DEST: {
+                if pause_until_time > 0 && get_time() >= pause_until_time {
+                    state = .TO_DEST;
+                    drive_start_time = get_time();
+                    last_action_time = 0;
+                    pause_until_time = 0;
+                    break_variant = 0;
+                }
+            }
+            case .PAUSE_BEFORE_TO_SOURCE: {
+                if pause_until_time > 0 && get_time() >= pause_until_time {
+                    state = .TO_SOURCE;
+                    drive_start_time = get_time();
+                    last_action_time = 0;
+                    pause_until_time = 0;
+                    break_variant = 0;
+                }
+            }
+        }
+    }
+
+    ao_late_update :: method(dt: float) {
+        _ := dt;
+        draw_carried_ui();
+    }
+
+    draw_carried_ui :: method() {
+        UI.push_world_draw_context();
+        defer UI.pop_draw_context();
+
+        UI.push_layer(5);
+        defer UI.pop_layer();
+
+        UI.push_z(entity.world_position.y - 0.002);
+        defer UI.pop_z();
+
+        pos := entity.world_position + ui_offset;
+
+        rect := Rect{pos, pos}->grow(0.18, 0.55, 0.18, 0.55);
+        icon_rect := rect->cut_left(0.22)->inset(0.01);
+        text_rect := rect;
+
+        #static bills_icon := get_asset(Texture_Asset, "Items/BlankBills.png");
+        if bills_icon != null {
+            UI.quad(icon_rect->fit_aspect(bills_icon->get_aspect()), bills_icon);
+        }
+
+        ts := UI.default_text_settings();
+        ts.size = 0.34;
+        ts.halign = .LEFT;
+        ts.valign = .CENTER;
+        ts.do_outline = true;
+        ts.outline_thickness = 2;
+        ts.outline_color = {0, 0, 0, 1};
+        ts.color = {1, 1, 1, 1};
+        ts.offset = {0.05, 0};
+
+        UI.text(text_rect, ts, "x%", {carried_blank_bills});
+    }
+}
+

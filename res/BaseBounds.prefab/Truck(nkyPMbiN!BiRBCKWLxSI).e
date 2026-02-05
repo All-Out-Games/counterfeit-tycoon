@@ -29,7 +29,7 @@
       "Y": 1
     },
     "move_speed": 200,
-    "arrive_radius": 1,
+    "arrive_radius": 0.0500000007450581,
     "spine_entity": "174655900011532:1770200961229161800"
   }
 },

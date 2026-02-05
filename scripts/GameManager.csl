@@ -16,6 +16,35 @@ Spawn_Base_Userdata :: class {
     spawn_index: s64;
 }
 
+Spawn_PressOperator_Userdata :: class {
+    base_entity: Entity;
+    owner_user_id: string;
+    lane_index: s64;
+}
+
+Spawn_Colorist_Userdata :: class {
+    base_entity: Entity;
+    owner_user_id: string;
+    lane_index: s64;
+}
+
+Spawn_Stamper_Userdata :: class {
+    base_entity: Entity;
+    owner_user_id: string;
+    lane_index: s64;
+}
+
+Spawn_Courier_Userdata :: class {
+    base_entity: Entity;
+    owner_user_id: string;
+    lane_index: s64;
+}
+
+Spawn_Woodchipper_Userdata :: class {
+    base_entity: Entity;
+    owner_user_id: string;
+}
+
 find_truck_for_base :: proc(base: PlayerBase) -> Truck {
     if base == null return null;
     if base.entity == null || base.entity.self == null return null;
@@ -61,15 +90,40 @@ GameManager :: class : Component {
     player_base_prefab_path: string @ao_serialize; // e.g. "Plots/PlayerBase.prefab"
     PlayerSpawns: [6]Entity @ao_serialize;
 
+    // Managers (moving agents) spawned per-player based on unlock state.
+    // Prefab path in /res, like: "Managers/PressOperator.prefab"
+    press_operator_prefab_path: string @ao_serialize;
+    // Prefab path in /res, like: "Managers/Colorist.prefab"
+    colorist_prefab_path: string @ao_serialize;
+    // Prefab path in /res, like: "Managers/Stamper.prefab"
+    stamper_prefab_path: string @ao_serialize;
+    // Prefab path in /res, like: "Managers/Courier.prefab"
+    courier_prefab_path: string @ao_serialize;
+    // Prefab path in /res, like: "Managers/Woodchipper.prefab"
+    woodchipper_prefab_path: string @ao_serialize;
+
     // Runtime
     cached_player_base_prefab: Prefab_Asset;
     needs_base_reconcile: bool;
     warned_missing_base_prefab: bool;
 
+    cached_press_operator_prefab: Prefab_Asset;
+    warned_missing_press_operator_prefab: bool;
+    cached_colorist_prefab: Prefab_Asset;
+    warned_missing_colorist_prefab: bool;
+    cached_stamper_prefab: Prefab_Asset;
+    warned_missing_stamper_prefab: bool;
+    cached_courier_prefab: Prefab_Asset;
+    warned_missing_courier_prefab: bool;
+    cached_woodchipper_prefab: Prefab_Asset;
+    warned_missing_woodchipper_prefab: bool;
+    last_managers_reconcile_time: float;
+
     ao_start :: proc(using this: GameManager) {
         // Called when this component is created
         if Game.is_server() {
             needs_base_reconcile = true;
+            last_managers_reconcile_time = -99999.0;
         }
     }
 
@@ -84,6 +138,17 @@ GameManager :: class : Component {
         if needs_base_reconcile {
             needs_base_reconcile = false;
             this->server_reconcile_player_bases();
+        }
+
+        // Reconcile managers periodically (covers unlock-at-runtime and unlocks loaded on join).
+        MANAGERS_RECONCILE_INTERVAL :: 0.5;
+        if get_time() - last_managers_reconcile_time >= MANAGERS_RECONCILE_INTERVAL {
+            last_managers_reconcile_time = get_time();
+            this->server_reconcile_press_operators_lane1();
+            this->server_reconcile_colorists_lane1();
+            this->server_reconcile_stampers_lane1();
+            this->server_reconcile_couriers_lane1();
+            this->server_reconcile_woodchippers();
         }
     }
 
@@ -108,6 +173,141 @@ GameManager :: class : Component {
                     vault->server_try_load_from_save();
                     Save.set_int(player, VAULT_SAVE_KEY_FINISHED_BILLS, vault.stored_finished_bills);
                 }
+
+                // Persist station storage per lane (sorted by lane_index for determinism).
+                {
+                    mills: [..]Paper_Mill;
+                    blanks: [..]Blank_Bill_Press;
+                    coloreds: [..]Colored_Bill_Press;
+                    finisheds: [..]Finished_Bill_Press;
+
+                    foreach m: component_iterator(Paper_Mill) {
+                        if m == null continue;
+                        if m.entity == null || m.entity.self == null continue;
+                        if get_parent_player_base(m.entity) != pb continue;
+                        mills->append(m);
+                    }
+                    foreach b: component_iterator(Blank_Bill_Press) {
+                        if b == null continue;
+                        if b.entity == null || b.entity.self == null continue;
+                        if get_parent_player_base(b.entity) != pb continue;
+                        blanks->append(b);
+                    }
+                    foreach c: component_iterator(Colored_Bill_Press) {
+                        if c == null continue;
+                        if c.entity == null || c.entity.self == null continue;
+                        if get_parent_player_base(c.entity) != pb continue;
+                        coloreds->append(c);
+                    }
+                    foreach f: component_iterator(Finished_Bill_Press) {
+                        if f == null continue;
+                        if f.entity == null || f.entity.self == null continue;
+                        if get_parent_player_base(f.entity) != pb continue;
+                        finisheds->append(f);
+                    }
+
+                    // Selection sort by lane_index (ascending)
+                    for i: 0..mills.count-1 {
+                        best := i;
+                        for j: i+1..mills.count-1 {
+                            if mills[j].lane_index < mills[best].lane_index {
+                                best = j;
+                            }
+                        }
+                        if best != i {
+                            tmp := mills[i];
+                            mills[i] = mills[best];
+                            mills[best] = tmp;
+                        }
+                    }
+                    for i: 0..blanks.count-1 {
+                        best := i;
+                        for j: i+1..blanks.count-1 {
+                            if blanks[j].lane_index < blanks[best].lane_index {
+                                best = j;
+                            }
+                        }
+                        if best != i {
+                            tmp := blanks[i];
+                            blanks[i] = blanks[best];
+                            blanks[best] = tmp;
+                        }
+                    }
+                    for i: 0..coloreds.count-1 {
+                        best := i;
+                        for j: i+1..coloreds.count-1 {
+                            if coloreds[j].lane_index < coloreds[best].lane_index {
+                                best = j;
+                            }
+                        }
+                        if best != i {
+                            tmp := coloreds[i];
+                            coloreds[i] = coloreds[best];
+                            coloreds[best] = tmp;
+                        }
+                    }
+                    for i: 0..finisheds.count-1 {
+                        best := i;
+                        for j: i+1..finisheds.count-1 {
+                            if finisheds[j].lane_index < finisheds[best].lane_index {
+                                best = j;
+                            }
+                        }
+                        if best != i {
+                            tmp := finisheds[i];
+                            finisheds[i] = finisheds[best];
+                            finisheds[best] = tmp;
+                        }
+                    }
+
+                    for i: 0..mills.count-1 {
+                        mill := mills[i];
+                        if mill == null continue;
+                        mill->server_try_load_from_save();
+                        lane := mill.lane_index;
+                        if lane < 0 lane = 0;
+                        if mill.stored_wood < 0 mill.stored_wood = 0;
+                        if mill.stored_paper < 0 mill.stored_paper = 0;
+                        Save.set_int(player, paper_mill_save_key_wood(lane), mill.stored_wood);
+                        Save.set_int(player, paper_mill_save_key_paper(lane), mill.stored_paper);
+                    }
+
+                    for i: 0..blanks.count-1 {
+                        press := blanks[i];
+                        if press == null continue;
+                        press->server_try_load_from_save();
+                        lane := press.lane_index;
+                        if lane < 0 lane = 0;
+                        if press.stored_paper < 0 press.stored_paper = 0;
+                        if press.stored_blank_bills < 0 press.stored_blank_bills = 0;
+                        Save.set_int(player, blank_bill_press_save_key_paper(lane), press.stored_paper);
+                        Save.set_int(player, blank_bill_press_save_key_blank_bills(lane), press.stored_blank_bills);
+                    }
+
+                    for i: 0..coloreds.count-1 {
+                        press := coloreds[i];
+                        if press == null continue;
+                        press->server_try_load_from_save();
+                        lane := press.lane_index;
+                        if lane < 0 lane = 0;
+                        if press.stored_blank_bills < 0 press.stored_blank_bills = 0;
+                        if press.stored_colored_bills < 0 press.stored_colored_bills = 0;
+                        Save.set_int(player, colored_bill_press_save_key_blank_bills(lane), press.stored_blank_bills);
+                        Save.set_int(player, colored_bill_press_save_key_colored_bills(lane), press.stored_colored_bills);
+                    }
+
+                    for i: 0..finisheds.count-1 {
+                        press := finisheds[i];
+                        if press == null continue;
+                        press->server_try_load_from_save();
+                        lane := press.lane_index;
+                        if lane < 0 lane = 0;
+                        if press.stored_colored_bills < 0 press.stored_colored_bills = 0;
+                        if press.stored_finished_bills < 0 press.stored_finished_bills = 0;
+                        Save.set_int(player, finished_bill_press_save_key_colored_bills(lane), press.stored_colored_bills);
+                        Save.set_int(player, finished_bill_press_save_key_finished_bills(lane), press.stored_finished_bills);
+                    }
+                }
             }
         }
 
@@ -131,6 +331,543 @@ GameManager :: class : Component {
             return;
         }
         cached_player_base_prefab = get_asset(Prefab_Asset, player_base_prefab_path);
+    }
+
+    ensure_press_operator_prefab_loaded :: method() {
+        if cached_press_operator_prefab != null {
+            return;
+        }
+        if press_operator_prefab_path.count == 0 {
+            return;
+        }
+        cached_press_operator_prefab = get_asset(Prefab_Asset, press_operator_prefab_path);
+    }
+
+    ensure_colorist_prefab_loaded :: method() {
+        if cached_colorist_prefab != null {
+            return;
+        }
+        if colorist_prefab_path.count == 0 {
+            return;
+        }
+        cached_colorist_prefab = get_asset(Prefab_Asset, colorist_prefab_path);
+    }
+
+    ensure_stamper_prefab_loaded :: method() {
+        if cached_stamper_prefab != null {
+            return;
+        }
+        if stamper_prefab_path.count == 0 {
+            return;
+        }
+        cached_stamper_prefab = get_asset(Prefab_Asset, stamper_prefab_path);
+    }
+
+    ensure_courier_prefab_loaded :: method() {
+        if cached_courier_prefab != null {
+            return;
+        }
+        if courier_prefab_path.count == 0 {
+            return;
+        }
+        cached_courier_prefab = get_asset(Prefab_Asset, courier_prefab_path);
+    }
+
+    ensure_woodchipper_prefab_loaded :: method() {
+        if cached_woodchipper_prefab != null {
+            return;
+        }
+        if woodchipper_prefab_path.count == 0 {
+            return;
+        }
+        cached_woodchipper_prefab = get_asset(Prefab_Asset, woodchipper_prefab_path);
+    }
+
+    find_press_operator_for_base :: method(base: PlayerBase, lane_index: s64) -> PressOperator {
+        if base == null return null;
+        if base.entity == null || base.entity.self == null return null;
+
+        foreach op: component_iterator(PressOperator) {
+            if op == null continue;
+            if op.entity == null || op.entity.self == null continue;
+            if !op.entity->get_world_enabled() continue;
+            if op.lane_index != lane_index continue;
+
+            pb := get_parent_player_base(op.entity);
+            if pb == base {
+                return op;
+            }
+        }
+        return null;
+    }
+
+    server_spawn_press_operator :: method(base: PlayerBase, owner_user_id: string, lane_index: s64) {
+        if !Game.is_server() return;
+        if base == null return;
+        if base.entity == null || base.entity.self == null return;
+        if owner_user_id.count == 0 return;
+
+        ensure_press_operator_prefab_loaded();
+        if cached_press_operator_prefab == null {
+            if !warned_missing_press_operator_prefab {
+                warned_missing_press_operator_prefab = true;
+                log_warning("GameManager: press_operator_prefab_path is empty or invalid (set it to something like \"Managers/PressOperator.prefab\")", {});
+            }
+            return;
+        }
+
+        spawn_pos := base.entity.world_position;
+
+        ud := new(Spawn_PressOperator_Userdata);
+        ud.base_entity = base.entity;
+        ud.owner_user_id = owner_user_id;
+        ud.lane_index = lane_index;
+
+        _ := Scene.instantiate(
+            cached_press_operator_prefab,
+            spawn_pos,
+            ud,
+            proc(spawned_entity: Entity, userdata: Object) {
+                ud := userdata.(Spawn_PressOperator_Userdata);
+                if ud == null return;
+                if spawned_entity == null return;
+                if spawned_entity.self == null return;
+
+                // Parent under the base so it is destroyed when the base is destroyed.
+                if ud.base_entity != null && ud.base_entity.self != null {
+                    spawned_entity->set_parent(ud.base_entity, true);
+                }
+
+                op := spawned_entity->get_component(PressOperator);
+                if op != null {
+                    op->server_init(ud.owner_user_id, ud.lane_index);
+                }
+                else {
+                    log_warning("GameManager: PressOperator prefab is missing PressOperator component on its root entity", {});
+                }
+            }
+        );
+    }
+
+    server_reconcile_press_operators_lane1 :: method() {
+        if !Game.is_server() return;
+
+        // Lane 1 is lane_index = 0.
+        // PressOperator is bit 1 (lowest bit) in the lane mask.
+        PRESS_OPERATOR_BIT :: 1;
+        LANE_INDEX :: 0;
+
+        foreach p: component_iterator(Player) {
+            if p == null continue;
+            if p.base_entity == null || p.base_entity.self == null continue;
+
+            pb := p.base_entity->get_component(PlayerBase);
+            if pb == null continue;
+
+            mask := p.managers_lane_masks[LANE_INDEX];
+            unlocked := (mask & PRESS_OPERATOR_BIT) != 0;
+
+            existing := find_press_operator_for_base(pb, LANE_INDEX);
+
+            if unlocked {
+                if existing == null {
+                    server_spawn_press_operator(pb, p->get_user_id(), LANE_INDEX);
+                }
+            }
+            else {
+                if existing != null && existing.entity != null && existing.entity.self != null {
+                    existing.entity->destroy();
+                }
+            }
+        }
+    }
+
+    find_colorist_for_base :: method(base: PlayerBase, lane_index: s64) -> Colorist {
+        if base == null return null;
+        if base.entity == null || base.entity.self == null return null;
+
+        foreach c: component_iterator(Colorist) {
+            if c == null continue;
+            if c.entity == null || c.entity.self == null continue;
+            if !c.entity->get_world_enabled() continue;
+            if c.lane_index != lane_index continue;
+
+            pb := get_parent_player_base(c.entity);
+            if pb == base {
+                return c;
+            }
+        }
+        return null;
+    }
+
+    server_spawn_colorist :: method(base: PlayerBase, owner_user_id: string, lane_index: s64) {
+        if !Game.is_server() return;
+        if base == null return;
+        if base.entity == null || base.entity.self == null return;
+        if owner_user_id.count == 0 return;
+
+        ensure_colorist_prefab_loaded();
+        if cached_colorist_prefab == null {
+            if !warned_missing_colorist_prefab {
+                warned_missing_colorist_prefab = true;
+                log_warning("GameManager: colorist_prefab_path is empty or invalid (set it to something like \"Managers/Colorist.prefab\")", {});
+            }
+            return;
+        }
+
+        spawn_pos := base.entity.world_position;
+
+        ud := new(Spawn_Colorist_Userdata);
+        ud.base_entity = base.entity;
+        ud.owner_user_id = owner_user_id;
+        ud.lane_index = lane_index;
+
+        _ := Scene.instantiate(
+            cached_colorist_prefab,
+            spawn_pos,
+            ud,
+            proc(spawned_entity: Entity, userdata: Object) {
+                ud := userdata.(Spawn_Colorist_Userdata);
+                if ud == null return;
+                if spawned_entity == null return;
+                if spawned_entity.self == null return;
+
+                // Parent under the base so it is destroyed when the base is destroyed.
+                if ud.base_entity != null && ud.base_entity.self != null {
+                    spawned_entity->set_parent(ud.base_entity, true);
+                }
+
+                c := spawned_entity->get_component(Colorist);
+                if c != null {
+                    c->server_init(ud.owner_user_id, ud.lane_index);
+                }
+                else {
+                    log_warning("GameManager: Colorist prefab is missing Colorist component on its root entity", {});
+                }
+            }
+        );
+    }
+
+    server_reconcile_colorists_lane1 :: method() {
+        if !Game.is_server() return;
+
+        // Lane 1 is lane_index = 0.
+        // Colorist is bit 2 in the lane mask.
+        COLORIST_BIT :: 2;
+        LANE_INDEX :: 0;
+
+        foreach p: component_iterator(Player) {
+            if p == null continue;
+            if p.base_entity == null || p.base_entity.self == null continue;
+
+            pb := p.base_entity->get_component(PlayerBase);
+            if pb == null continue;
+
+            mask := p.managers_lane_masks[LANE_INDEX];
+            unlocked := (mask & COLORIST_BIT) != 0;
+
+            existing := find_colorist_for_base(pb, LANE_INDEX);
+
+            if unlocked {
+                if existing == null {
+                    server_spawn_colorist(pb, p->get_user_id(), LANE_INDEX);
+                }
+            }
+            else {
+                if existing != null && existing.entity != null && existing.entity.self != null {
+                    existing.entity->destroy();
+                }
+            }
+        }
+    }
+
+    find_stamper_for_base :: method(base: PlayerBase, lane_index: s64) -> Stamper {
+        if base == null return null;
+        if base.entity == null || base.entity.self == null return null;
+
+        foreach s: component_iterator(Stamper) {
+            if s == null continue;
+            if s.entity == null || s.entity.self == null continue;
+            if !s.entity->get_world_enabled() continue;
+            if s.lane_index != lane_index continue;
+
+            pb := get_parent_player_base(s.entity);
+            if pb == base {
+                return s;
+            }
+        }
+        return null;
+    }
+
+    server_spawn_stamper :: method(base: PlayerBase, owner_user_id: string, lane_index: s64) {
+        if !Game.is_server() return;
+        if base == null return;
+        if base.entity == null || base.entity.self == null return;
+        if owner_user_id.count == 0 return;
+
+        ensure_stamper_prefab_loaded();
+        if cached_stamper_prefab == null {
+            if !warned_missing_stamper_prefab {
+                warned_missing_stamper_prefab = true;
+                log_warning("GameManager: stamper_prefab_path is empty or invalid (set it to something like \"Stamper.prefab\")", {});
+            }
+            return;
+        }
+
+        spawn_pos := base.entity.world_position;
+
+        ud := new(Spawn_Stamper_Userdata);
+        ud.base_entity = base.entity;
+        ud.owner_user_id = owner_user_id;
+        ud.lane_index = lane_index;
+
+        _ := Scene.instantiate(
+            cached_stamper_prefab,
+            spawn_pos,
+            ud,
+            proc(spawned_entity: Entity, userdata: Object) {
+                ud := userdata.(Spawn_Stamper_Userdata);
+                if ud == null return;
+                if spawned_entity == null return;
+                if spawned_entity.self == null return;
+
+                // Parent under the base so it is destroyed when the base is destroyed.
+                if ud.base_entity != null && ud.base_entity.self != null {
+                    spawned_entity->set_parent(ud.base_entity, true);
+                }
+
+                s := spawned_entity->get_component(Stamper);
+                if s != null {
+                    s->server_init(ud.owner_user_id, ud.lane_index);
+                }
+                else {
+                    log_warning("GameManager: Stamper prefab is missing Stamper component on its root entity", {});
+                }
+            }
+        );
+    }
+
+    server_reconcile_stampers_lane1 :: method() {
+        if !Game.is_server() return;
+
+        // Lane 1 is lane_index = 0.
+        // Stamper is bit 4 in the lane mask.
+        STAMPER_BIT :: 4;
+        LANE_INDEX :: 0;
+
+        foreach p: component_iterator(Player) {
+            if p == null continue;
+            if p.base_entity == null || p.base_entity.self == null continue;
+
+            pb := p.base_entity->get_component(PlayerBase);
+            if pb == null continue;
+
+            mask := p.managers_lane_masks[LANE_INDEX];
+            unlocked := (mask & STAMPER_BIT) != 0;
+
+            existing := find_stamper_for_base(pb, LANE_INDEX);
+
+            if unlocked {
+                if existing == null {
+                    server_spawn_stamper(pb, p->get_user_id(), LANE_INDEX);
+                }
+            }
+            else {
+                if existing != null && existing.entity != null && existing.entity.self != null {
+                    existing.entity->destroy();
+                }
+            }
+        }
+    }
+
+    find_courier_for_base :: method(base: PlayerBase, lane_index: s64) -> Courier {
+        if base == null return null;
+        if base.entity == null || base.entity.self == null return null;
+
+        foreach c: component_iterator(Courier) {
+            if c == null continue;
+            if c.entity == null || c.entity.self == null continue;
+            if !c.entity->get_world_enabled() continue;
+            if c.lane_index != lane_index continue;
+
+            pb := get_parent_player_base(c.entity);
+            if pb == base {
+                return c;
+            }
+        }
+        return null;
+    }
+
+    server_spawn_courier :: method(base: PlayerBase, owner_user_id: string, lane_index: s64) {
+        if !Game.is_server() return;
+        if base == null return;
+        if base.entity == null || base.entity.self == null return;
+        if owner_user_id.count == 0 return;
+
+        ensure_courier_prefab_loaded();
+        if cached_courier_prefab == null {
+            if !warned_missing_courier_prefab {
+                warned_missing_courier_prefab = true;
+                log_warning("GameManager: courier_prefab_path is empty or invalid (set it to something like \"Courier.prefab\")", {});
+            }
+            return;
+        }
+
+        spawn_pos := base.entity.world_position;
+
+        ud := new(Spawn_Courier_Userdata);
+        ud.base_entity = base.entity;
+        ud.owner_user_id = owner_user_id;
+        ud.lane_index = lane_index;
+
+        _ := Scene.instantiate(
+            cached_courier_prefab,
+            spawn_pos,
+            ud,
+            proc(spawned_entity: Entity, userdata: Object) {
+                ud := userdata.(Spawn_Courier_Userdata);
+                if ud == null return;
+                if spawned_entity == null return;
+                if spawned_entity.self == null return;
+
+                // Parent under the base so it is destroyed when the base is destroyed.
+                if ud.base_entity != null && ud.base_entity.self != null {
+                    spawned_entity->set_parent(ud.base_entity, true);
+                }
+
+                c := spawned_entity->get_component(Courier);
+                if c != null {
+                    c->server_init(ud.owner_user_id, ud.lane_index);
+                }
+                else {
+                    log_warning("GameManager: Courier prefab is missing Courier component on its root entity", {});
+                }
+            }
+        );
+    }
+
+    server_reconcile_couriers_lane1 :: method() {
+        if !Game.is_server() return;
+
+        // Lane 1 is lane_index = 0.
+        // Courier is bit 8 in the lane mask.
+        COURIER_BIT :: 8;
+        LANE_INDEX :: 0;
+
+        foreach p: component_iterator(Player) {
+            if p == null continue;
+            if p.base_entity == null || p.base_entity.self == null continue;
+
+            pb := p.base_entity->get_component(PlayerBase);
+            if pb == null continue;
+
+            mask := p.managers_lane_masks[LANE_INDEX];
+            unlocked := (mask & COURIER_BIT) != 0;
+
+            existing := find_courier_for_base(pb, LANE_INDEX);
+
+            if unlocked {
+                if existing == null {
+                    server_spawn_courier(pb, p->get_user_id(), LANE_INDEX);
+                }
+            }
+            else {
+                if existing != null && existing.entity != null && existing.entity.self != null {
+                    existing.entity->destroy();
+                }
+            }
+        }
+    }
+
+    find_woodchipper_for_base :: method(base: PlayerBase) -> Woodchipper {
+        if base == null return null;
+        if base.entity == null || base.entity.self == null return null;
+
+        foreach w: component_iterator(Woodchipper) {
+            if w == null continue;
+            if w.entity == null || w.entity.self == null continue;
+            if !w.entity->get_world_enabled() continue;
+
+            pb := get_parent_player_base(w.entity);
+            if pb == base {
+                return w;
+            }
+        }
+        return null;
+    }
+
+    server_spawn_woodchipper :: method(base: PlayerBase, owner_user_id: string) {
+        if !Game.is_server() return;
+        if base == null return;
+        if base.entity == null || base.entity.self == null return;
+        if owner_user_id.count == 0 return;
+
+        ensure_woodchipper_prefab_loaded();
+        if cached_woodchipper_prefab == null {
+            if !warned_missing_woodchipper_prefab {
+                warned_missing_woodchipper_prefab = true;
+                log_warning("GameManager: woodchipper_prefab_path is empty or invalid (set it to something like \"Woodchipper.prefab\")", {});
+            }
+            return;
+        }
+
+        spawn_pos := base.entity.world_position;
+
+        ud := new(Spawn_Woodchipper_Userdata);
+        ud.base_entity = base.entity;
+        ud.owner_user_id = owner_user_id;
+
+        _ := Scene.instantiate(
+            cached_woodchipper_prefab,
+            spawn_pos,
+            ud,
+            proc(spawned_entity: Entity, userdata: Object) {
+                ud := userdata.(Spawn_Woodchipper_Userdata);
+                if ud == null return;
+                if spawned_entity == null return;
+                if spawned_entity.self == null return;
+
+                // Parent under the base so it is destroyed when the base is destroyed.
+                if ud.base_entity != null && ud.base_entity.self != null {
+                    spawned_entity->set_parent(ud.base_entity, true);
+                }
+
+                w := spawned_entity->get_component(Woodchipper);
+                if w != null {
+                    w->server_init(ud.owner_user_id);
+                }
+                else {
+                    log_warning("GameManager: Woodchipper prefab is missing Woodchipper component on its root entity", {});
+                }
+            }
+        );
+    }
+
+    server_reconcile_woodchippers :: method() {
+        if !Game.is_server() return;
+
+        foreach p: component_iterator(Player) {
+            if p == null continue;
+            if p.base_entity == null || p.base_entity.self == null continue;
+
+            pb := p.base_entity->get_component(PlayerBase);
+            if pb == null continue;
+
+            unlocked := p.harvester_manager_unlocked;
+
+            existing := find_woodchipper_for_base(pb);
+
+            if unlocked {
+                if existing == null {
+                    server_spawn_woodchipper(pb, p->get_user_id());
+                }
+            }
+            else {
+                if existing != null && existing.entity != null && existing.entity.self != null {
+                    existing.entity->destroy();
+                }
+            }
+        }
     }
 
     get_spawn_position :: method(spawn_index: s64) -> v2, bool {

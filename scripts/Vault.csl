@@ -63,6 +63,69 @@ Vault :: class : Interactable {
         server_try_load_from_save();
     }
 
+    // Server-only: allow a non-player "manager" (e.g., Courier) to deposit finished bills directly
+    // into this vault, as long as it belongs to the same PlayerBase owner.
+    // Returns the amount actually deposited (clamped by vault capacity).
+    server_deposit_finished_bills_from_manager :: method(requesting_owner_user_id: string, amount: s64) -> s64 {
+        if !Game.is_server() {
+            return 0;
+        }
+        if requesting_owner_user_id.count == 0 {
+            return 0;
+        }
+        if amount <= 0 {
+            return 0;
+        }
+
+        pb := get_parent_player_base(entity);
+        if pb == null {
+            return 0;
+        }
+        if pb.owner_user_id.count == 0 {
+            return 0;
+        }
+        if pb.owner_user_id != requesting_owner_user_id {
+            return 0;
+        }
+
+        // Ensure we don't overwrite an existing save with a default 0.
+        server_try_load_from_save();
+
+        cap := max_capacity;
+        if cap <= 0 {
+            cap = 5000;
+        }
+
+        room := cap - stored_finished_bills;
+        if room <= 0 {
+            return 0;
+        }
+
+        to_add := amount;
+        if to_add > room {
+            to_add = room;
+        }
+        if to_add <= 0 {
+            return 0;
+        }
+
+        stored_finished_bills += to_add;
+        if stored_finished_bills > cap {
+            stored_finished_bills = cap;
+        }
+        if stored_finished_bills < 0 {
+            stored_finished_bills = 0;
+        }
+
+        // Persist immediately so disconnects/crashes don't lose progress.
+        owner := pb->get_owner();
+        if owner != null {
+            Save.set_int(owner, VAULT_SAVE_KEY_FINISHED_BILLS, stored_finished_bills);
+        }
+
+        return to_add;
+    }
+
     can_use :: method(player: Player) -> bool {
         // Only the owning player (from our parent entity's PlayerBase) may use this vault.
         return is_owner_of_parent_base(entity, player);

@@ -125,6 +125,16 @@ Player :: class : Player_Base {
     sell_shop_open: bool;
     sell_shop_movement_locked: bool;
 
+    // Managers UI state + unlocks (per-player, multiplayer safe)
+    managers_open: bool;
+    managers_selected_lane: s64;          // 0-based
+    managers_lane_masks: [4]s64;          // 4 lanes, 4 bits used per lane
+
+    // Harvester upgrades UI + unlocks (per-player, multiplayer safe)
+    harvester_upgrades_open: bool;
+    harvester_level: s64;                 // 1..10
+    harvester_manager_unlocked: bool;     // one-time unlock
+
     // PlayerBase ownership state (per-player, multiplayer safe)
     base_entity: Entity;
     base_spawn_index: s64;
@@ -150,12 +160,49 @@ Player :: class : Player_Base {
         sell_shop_open = false;
         sell_shop_movement_locked = false;
 
+        managers_open = false;
+        managers_selected_lane = 0; // Lane 1 auto-selected
+        for i: 0..3 {
+            managers_lane_masks[i] = 0;
+        }
+
+        harvester_upgrades_open = false;
+        harvester_level = 1;
+        harvester_manager_unlocked = false;
+
         base_entity = null;
         base_spawn_index = -1;
 
         // One-time migration: convert any legacy Coin items into Coin currency.
         if Game.is_server() {
             migrate_legacy_coin_items_to_currency(this);
+
+            // Load per-player Managers unlock masks (server authoritative, replicates to clients).
+            for lane: 0..3 {
+                key := format_string("managers_lane_%_mask", {lane});
+                mask := Save.get_int(this, key, 0);
+                if mask < 0 {
+                    mask = 0;
+                }
+                // Only 4 managers exist currently (lowest 4 bits).
+                mask = mask & 15;
+                managers_lane_masks[lane] = mask;
+            }
+
+            // Load Harvester upgrades (server authoritative, replicates to clients).
+            {
+                lvl := Save.get_int(this, "harvester_level", 1);
+                if lvl < 1 {
+                    lvl = 1;
+                }
+                if lvl > 10 {
+                    lvl = 10;
+                }
+                harvester_level = lvl;
+
+                unlocked_int := Save.get_int(this, "harvester_manager_unlocked", 0);
+                harvester_manager_unlocked = unlocked_int != 0;
+            }
 
             // Joining player: ask the GameManager to assign bases (or warp to 0,0 if full).
             gm := get_game_manager();
@@ -223,6 +270,12 @@ Player :: class : Player_Base {
 
         // Draw sell shop button + modal UI.
         draw_sell_shop_ui(this);
+
+        // Draw managers button + modal UI.
+        draw_managers_ui(this);
+
+        // Draw harvester upgrades button + modal UI.
+        draw_harvester_upgrades_ui(this);
     }
 
     ao_end :: method() {

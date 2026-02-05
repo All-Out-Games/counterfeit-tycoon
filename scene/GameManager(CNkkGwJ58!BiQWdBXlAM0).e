@@ -28,6 +28,11 @@
       "156859080315392:1770192534607421700",
       "156890166279194:1770192549326652100",
       "156912730812484:1770192560010978000"
-    ]
+    ],
+    "press_operator_prefab_path": "PressOperator.prefab",
+    "colorist_prefab_path": "Colorist.prefab",
+    "stamper_prefab_path": "Stamper.prefab",
+    "courier_prefab_path": "Courier.prefab",
+    "woodchipper_prefab_path": "Woodchipper.prefab"
   }
 }

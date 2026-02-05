@@ -1,5 +1,11 @@
 [
   {
+    "id": "Buttons/tractor.png",
+    "texture": {
+      "resample_multiplier": 1
+    }
+  },
+  {
     "id": "road_mid_horiz_9c25c798ef417b3f.png",
     "texture": {
       "pixels_per_unit": 120,
