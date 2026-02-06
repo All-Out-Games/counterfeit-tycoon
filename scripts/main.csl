@@ -121,6 +121,8 @@ Player :: class : Player_Base {
     MaxHealth: float;
     CurrentHealth: float;
 
+    base_state_machine: State_Machine;
+
     // UI state (per-player, multiplayer safe)
     sell_shop_open: bool;
     sell_shop_movement_locked: bool;
@@ -226,6 +228,9 @@ Player :: class : Player_Base {
             camera.size = new_size;
             camera.follow_player = true;
         }
+
+        // Configure the main player spine state machine on the base animator.
+        this->setup_player_spine_state_machine();
     }
 
     ao_update :: method(dt: float) {
@@ -246,6 +251,22 @@ Player :: class : Player_Base {
                 }
             }
         }
+
+        // Compute a shared "is_moving" flag from the movement agent's velocity.
+        is_moving := false;
+        if #alive(agent) {
+            vel := agent.velocity;
+            speed_sq := vel.x * vel.x + vel.y * vel.y;
+            if speed_sq > 0.0001 {
+                is_moving = true;
+            }
+        }
+
+     // Drive the base player state machine's "moving" variable, if present.
+        if base_state_machine != null {
+            base_state_machine->set_bool("moving", is_moving);
+        }
+
     }
 
     ao_late_update :: method(dt: float) {
@@ -310,6 +331,345 @@ Player :: class : Player_Base {
 
     ao_on_holding_interactable :: method(interactable: Interactable) {
         // Called once per frame while the player is holding on the interactable
+    }
+
+   // Configure the base player spine state machine for this player's main animator.
+    // This mirrors the C# setup that adds weapon IK, carrying, carpet, and additive
+    // gameplay layers on top of the core idle/run locomotion.
+    setup_player_spine_state_machine :: proc(player: Player) {
+        // Already configured?
+        if player.base_state_machine != null {
+            return;
+        }
+
+        // Require a valid base animator and spine instance.
+        if player.animator == null || player.animator.instance == null {
+            return;
+        }
+
+        sm := State_Machine.create();
+        player.base_state_machine = sm;
+
+        // Base locomotion layer ("main" track 0) and additive gameplay layer ("game_layer" track 10).
+        ao_layer := sm->create_layer("main", 0);
+        game_layer := sm->create_layer("game_layer", 10);
+
+        // --- Base Locomotion States on main layer --- //
+        ao_idle_state := ao_layer->create_state("Idle", true, 0.0);
+        ao_run_state  := ao_layer->create_state("Run_Fast", true, 0.0);
+
+        // Carrying variants.
+        idle_carry := ao_layer->create_state("021MBR/Idle_Hold", true, 0.0);
+        run_carry  := ao_layer->create_state("021MBR/Walk_Holding", true, 0.0);
+
+        // Weapon IK locomotion variants (1h / 2h).
+        aim_run_1h_fast := ao_layer->create_state("redsun/Run_Fast_mIK", true, 0.0);
+        aim_run_2h_fast := ao_layer->create_state("redsun/Run_Fast_mIK_twohands", true, 0.0);
+        aim_idle_1h     := ao_layer->create_state("redsun/Idle_mIK", true, 0.0);
+        aim_idle_2h     := ao_layer->create_state("redsun/Idle_mIK_twohands", true, 0.0);
+
+        // Carpet locomotion.
+        carpet_idle := ao_layer->create_state("021MBR/Carpet_Idle", true, 0.0);
+        carpet_move := ao_layer->create_state("021MBR/Carpet_Move", true, 0.0);
+
+        // --- Additive gameplay layer states --- //
+        empty := game_layer->create_state("__CLEAR_TRACK__", true, 0.0);
+        shoot := game_layer->create_state("redsun/Shoot_Gun_mIK_AL", false, 0.0);
+        shoot_fast_state := game_layer->create_state("redsun/Shoot_Gun_mIK_AL_twohands_rapid", true, 0.0);
+
+        // Optional weapon equip states (not directly wired by transitions here, but
+        // created to mirror the C# setup).
+        pull_out_1h_weapon := game_layer->create_state("redsun/Pull_Out_Weapon", false, 0.0);
+        aim_idle_1h_hand   := game_layer->create_state("redsun/Idle_mIK", true, 0.0);
+        pull_out_2h_weapon := game_layer->create_state("redsun/Pull_Out_Weapon_twohands", false, 0.0);
+        aim_idle_2h_hands  := game_layer->create_state("redsun/Idle_mIK_twohands", true, 0.0);
+
+        // Initial states.
+        ao_layer->set_initial_state(ao_idle_state);
+        game_layer->set_initial_state(empty);
+
+        // --- State machine variables --- //
+        moving_bool := sm->create_variable("moving", State_Machine_Variable.Kind.BOOL);
+        mIK_bool := sm->create_variable("mIK", State_Machine_Variable.Kind.BOOL);
+
+        carrying_moving_bool := sm->create_variable("carryingMoving", State_Machine_Variable.Kind.BOOL);
+
+        use_1h_ik := sm->create_variable("use_ik", State_Machine_Variable.Kind.BOOL);
+        use_2h_ik := sm->create_variable("use_2h_ik", State_Machine_Variable.Kind.BOOL);
+
+        has_carpet := sm->create_variable("hasCarpet", State_Machine_Variable.Kind.BOOL);
+
+        cancel_all := sm->create_variable("cancel_all", State_Machine_Variable.Kind.TRIGGER);
+
+        // --- Base Idle <-> Run locomotion on main layer --- //
+        {
+            t := ao_layer->create_transition(ao_idle_state, ao_run_state, false);
+            t->create_bool_condition(moving_bool, true);
+
+            t = ao_layer->create_transition(ao_run_state, ao_idle_state, false);
+            t->create_bool_condition(moving_bool, false);
+        }
+
+        // --- Entry / Cancel-All --- //
+        {
+            to_idle_from_cancel := ao_layer->create_global_transition(ao_idle_state, false);
+            to_idle_from_cancel->create_trigger_condition(cancel_all);
+
+            to_empty_from_cancel := game_layer->create_global_transition(empty, false);
+            to_empty_from_cancel->create_trigger_condition(cancel_all);
+        }
+
+        // --- Aim entry from base Idle/Run --- //
+        {
+            t := ao_layer->create_transition(ao_idle_state, aim_idle_1h, false);
+            t->create_bool_condition(use_1h_ik, true);
+
+            t = ao_layer->create_transition(ao_idle_state, aim_idle_2h, false);
+            t->create_bool_condition(use_2h_ik, true);
+
+            t = ao_layer->create_transition(ao_run_state, aim_run_1h_fast, false);
+            t->create_bool_condition(use_1h_ik, true);
+
+            t = ao_layer->create_transition(ao_run_state, aim_run_2h_fast, false);
+            t->create_bool_condition(use_2h_ik, true);
+        }
+
+        // --- Aim Idle <-> Run (1h / 2h) --- //
+        {
+            t := ao_layer->create_transition(aim_run_1h_fast, aim_idle_1h, false);
+            t->create_bool_condition(moving_bool, false);
+
+            t = ao_layer->create_transition(aim_idle_1h, aim_run_1h_fast, false);
+            t->create_bool_condition(moving_bool, true);
+
+            t = ao_layer->create_transition(aim_run_2h_fast, aim_idle_2h, false);
+            t->create_bool_condition(moving_bool, false);
+
+            t = ao_layer->create_transition(aim_idle_2h, aim_run_2h_fast, false);
+            t->create_bool_condition(moving_bool, true);
+        }
+
+        // --- Exit aim back to base Idle/Run --- //
+        {
+            t := ao_layer->create_transition(aim_idle_1h, ao_idle_state, false);
+            t->create_bool_condition(use_1h_ik, false);
+
+            t = ao_layer->create_transition(aim_idle_2h, ao_idle_state, false);
+            t->create_bool_condition(use_2h_ik, false);
+
+            t = ao_layer->create_transition(aim_run_1h_fast, ao_run_state, false);
+            t->create_bool_condition(use_1h_ik, false);
+
+            t = ao_layer->create_transition(aim_run_2h_fast, ao_run_state, false);
+            t->create_bool_condition(use_2h_ik, false);
+        }
+
+        // --- 1h <-> 2h swap while aiming --- //
+        {
+            t := ao_layer->create_transition(aim_idle_1h, aim_idle_2h, false);
+            t->create_bool_condition(use_2h_ik, true);
+
+            t = ao_layer->create_transition(aim_idle_2h, aim_idle_1h, false);
+            t->create_bool_condition(use_2h_ik, false);
+
+            t = ao_layer->create_transition(aim_run_1h_fast, aim_run_2h_fast, false);
+            t->create_bool_condition(use_2h_ik, true);
+
+            t = ao_layer->create_transition(aim_run_2h_fast, aim_run_1h_fast, false);
+            t->create_bool_condition(use_2h_ik, false);
+        }
+
+        // --- Carrying locomotion --- //
+        {
+            // Enter/exit carrying from base Idle/Run.
+            t := ao_layer->create_transition(ao_idle_state, idle_carry, false);
+            t->create_bool_condition(carrying_moving_bool, true);
+
+            t = ao_layer->create_transition(ao_run_state, run_carry, false);
+            t->create_bool_condition(carrying_moving_bool, true);
+
+            t = ao_layer->create_transition(idle_carry, ao_idle_state, false);
+            t->create_bool_condition(carrying_moving_bool, false);
+
+            t = ao_layer->create_transition(run_carry, ao_run_state, false);
+            t->create_bool_condition(carrying_moving_bool, false);
+
+            // Idle_carry <-> Run_carry based on movement.
+            t = ao_layer->create_transition(idle_carry, run_carry, false);
+            t->create_bool_condition(moving_bool, true);
+
+            t = ao_layer->create_transition(run_carry, idle_carry, false);
+            t->create_bool_condition(moving_bool, false);
+        }
+
+        // --- Carpet locomotion --- //
+        {
+            t := ao_layer->create_transition(ao_idle_state, carpet_idle, false);
+            t->create_bool_condition(has_carpet, true);
+
+            t = ao_layer->create_transition(carpet_idle, ao_idle_state, false);
+            t->create_bool_condition(has_carpet, false);
+
+            t = ao_layer->create_transition(ao_run_state, carpet_move, false);
+            t->create_bool_condition(has_carpet, true);
+
+            t = ao_layer->create_transition(carpet_move, ao_run_state, false);
+            t->create_bool_condition(has_carpet, false);
+
+            t = ao_layer->create_transition(carpet_idle, carpet_move, false);
+            t->create_bool_condition(moving_bool, true);
+
+            t = ao_layer->create_transition(carpet_move, carpet_idle, false);
+            t->create_bool_condition(moving_bool, false);
+        }
+
+        // --- Additive layer: shoot and simple triggered states --- //
+        {
+            // Primary shoot (one-shot additive) driven by a trigger variable.
+            shoot_var := sm->create_variable("shoot", State_Machine_Variable.Kind.TRIGGER);
+            to_shoot := game_layer->create_global_transition(shoot, true);
+            to_shoot->create_trigger_condition(shoot_var);
+
+            // Return to empty after the shoot animation finishes.
+            game_layer->create_transition(shoot, empty, true);
+
+            // Simple additive one-shots implemented as global transitions with trigger variables.
+
+            // Punch 2
+            punch2_state := game_layer->create_state("016ARP/Punch_mIK_AL", false, 0.0);
+            punch2_var := sm->create_variable("punch2", State_Machine_Variable.Kind.TRIGGER);
+            t := game_layer->create_global_transition(punch2_state, true);
+            t->create_trigger_condition(punch2_var);
+            game_layer->create_transition(punch2_state, empty, true);
+
+            // Small flinch
+            new_flinch_state := game_layer->create_state("016ARP/Flinch", false, 0.0);
+            new_flinch_var := sm->create_variable("new_flinch", State_Machine_Variable.Kind.TRIGGER);
+            t = game_layer->create_global_transition(new_flinch_state, true);
+            t->create_trigger_condition(new_flinch_var);
+            game_layer->create_transition(new_flinch_state, empty, true);
+
+            // Use item
+            use_item_state := game_layer->create_state("Collect_Item", false, 0.0);
+            use_item_var := sm->create_variable("use_item", State_Machine_Variable.Kind.TRIGGER);
+            t = game_layer->create_global_transition(use_item_state, true);
+            t->create_trigger_condition(use_item_var);
+            game_layer->create_transition(use_item_state, empty, true);
+
+            // Cry (additive one-shot, returns to empty)
+            cry_state := game_layer->create_state("Emote/crying_loop", false, 0.0);
+            cry_var := sm->create_variable("cry", State_Machine_Variable.Kind.TRIGGER);
+            t = game_layer->create_global_transition(cry_state, true);
+            t->create_trigger_condition(cry_var);
+            game_layer->create_transition(cry_state, empty, true);
+
+            // KO (death) – no automatic return to empty.
+            ko_state := game_layer->create_state("Death_No_HP", false, 0.0);
+            ko_var := sm->create_variable("KO", State_Machine_Variable.Kind.TRIGGER);
+            t = game_layer->create_global_transition(ko_state, true);
+            t->create_trigger_condition(ko_var);
+
+            // Spawn – one-shot that returns to empty.
+            spawn_state := game_layer->create_state("016ARP/Spawn_In", false, 0.0);
+            spawn_var := sm->create_variable("Spawn", State_Machine_Variable.Kind.TRIGGER);
+            t = game_layer->create_global_transition(spawn_state, true);
+            t->create_trigger_condition(spawn_var);
+            game_layer->create_transition(spawn_state, empty, true);
+
+            // Flinch (big)
+            flinch_big_state := game_layer->create_state("Flinch_Big", false, 0.0);
+            flinch_big_var := sm->create_variable("flinch_big", State_Machine_Variable.Kind.TRIGGER);
+            t = game_layer->create_global_transition(flinch_big_state, true);
+            t->create_trigger_condition(flinch_big_var);
+            game_layer->create_transition(flinch_big_state, empty, true);
+
+            // Handless – looping additive state with no automatic return.
+            handless_state := game_layer->create_state("Handless", true, 0.0);
+            handless_var := sm->create_variable("handless", State_Machine_Variable.Kind.TRIGGER);
+            t = game_layer->create_global_transition(handless_state, true);
+            t->create_trigger_condition(handless_var);
+
+            // Melee attack
+            melee_state := game_layer->create_state("Attack_Melee_1_mIK_AL2", false, 0.0);
+            melee_var := sm->create_variable("melee_AL", State_Machine_Variable.Kind.TRIGGER);
+            t = game_layer->create_global_transition(melee_state, true);
+            t->create_trigger_condition(melee_var);
+            game_layer->create_transition(melee_state, empty, true);
+
+            // Weapon equipping / unequipping and basic shooting on the additive layer.
+
+            // 1h pull out
+            pull_out_1h_var := sm->create_variable("pull_out_1h_weapon", State_Machine_Variable.Kind.TRIGGER);
+            t = game_layer->create_global_transition(pull_out_1h_weapon, true);
+            t->create_trigger_condition(pull_out_1h_var);
+            game_layer->create_transition(pull_out_1h_weapon, empty, true);
+
+            // 2h pull out
+            pull_out_2h_var := sm->create_variable("pull_out_2h_weapon", State_Machine_Variable.Kind.TRIGGER);
+            t = game_layer->create_global_transition(pull_out_2h_weapon, true);
+            t->create_trigger_condition(pull_out_2h_var);
+            game_layer->create_transition(pull_out_2h_weapon, empty, true);
+
+            // 1h put away
+            put_away_1h_state := game_layer->create_state("redsun/Pull_Away_Weapon", false, 0.0);
+            put_away_1h_var := sm->create_variable("put_away_1h_weapon", State_Machine_Variable.Kind.TRIGGER);
+            t = game_layer->create_global_transition(put_away_1h_state, true);
+            t->create_trigger_condition(put_away_1h_var);
+            game_layer->create_transition(put_away_1h_state, empty, true);
+
+            // 2h put away
+            put_away_2h_state := game_layer->create_state("redsun/Pull_Away_Weapon_twohands", false, 0.0);
+            put_away_2h_var := sm->create_variable("put_away_2h_weapon", State_Machine_Variable.Kind.TRIGGER);
+            t = game_layer->create_global_transition(put_away_2h_state, true);
+            t->create_trigger_condition(put_away_2h_var);
+            game_layer->create_transition(put_away_2h_state, empty, true);
+
+            // Basic weapon shooting (1h / 2h) as additive one-shots.
+            shoot_1h_state := game_layer->create_state("redsun/Shoot_Gun_mIK_AL", false, 0.0);
+            shoot_1h_var := sm->create_variable("shoot_1h_weapon", State_Machine_Variable.Kind.TRIGGER);
+            t = game_layer->create_global_transition(shoot_1h_state, true);
+            t->create_trigger_condition(shoot_1h_var);
+            game_layer->create_transition(shoot_1h_state, empty, true);
+
+            shoot_2h_state := game_layer->create_state("redsun/Shoot_Gun_mIK_AL_twohands", false, 0.0);
+            shoot_2h_var := sm->create_variable("shoot_2h_weapon", State_Machine_Variable.Kind.TRIGGER);
+            t = game_layer->create_global_transition(shoot_2h_state, true);
+            t->create_trigger_condition(shoot_2h_var);
+            game_layer->create_transition(shoot_2h_state, empty, true);
+
+            // Rapid fire two-hand shooting – enter/exit via trigger variables.
+            shoot_fast_start := sm->create_variable("shoot_fast_start", State_Machine_Variable.Kind.TRIGGER);
+            shoot_fast_end   := sm->create_variable("shoot_fast_end", State_Machine_Variable.Kind.TRIGGER);
+
+            t = game_layer->create_transition(empty, shoot_fast_state, false);
+            t->create_trigger_condition(shoot_fast_start);
+
+            t = game_layer->create_transition(shoot_fast_state, empty, false);
+            t->create_trigger_condition(shoot_fast_end);
+        }
+
+        // Layer-specific looped states on the base layer, entered via trigger-driven global transitions.
+        {
+            cry_loop_state := ao_layer->create_state("Emote/crying_loop", true, 0.0);
+            cry_loop_var := sm->create_variable("cry_loop", State_Machine_Variable.Kind.TRIGGER);
+            t := ao_layer->create_global_transition(cry_loop_state, false);
+            t->create_trigger_condition(cry_loop_var);
+
+            victory_loop_state := ao_layer->create_state("Emote/Celebrate", true, 0.0);
+            victory_loop_var := sm->create_variable("victory_loop", State_Machine_Variable.Kind.TRIGGER);
+            t = ao_layer->create_global_transition(victory_loop_state, false);
+            t->create_trigger_condition(victory_loop_var);
+
+            // Non-looping jumpscare emote that returns to idle upon completion.
+            jumpscare_state := ao_layer->create_state("Emote/Jumpscare", false, 0.0);
+            jumpscare_var := sm->create_variable("jumpscare", State_Machine_Variable.Kind.TRIGGER);
+            t = ao_layer->create_global_transition(jumpscare_state, false);
+            t->create_trigger_condition(jumpscare_var);
+            ao_layer->create_transition(jumpscare_state, ao_idle_state, true);
+        }
+
+        // Finally, bind this state machine to the base animator.
+        player.animator.instance->set_state_machine(sm, true);
     }
 
     // Draws a health bar just above the player's position on screen and returns the bar rect.

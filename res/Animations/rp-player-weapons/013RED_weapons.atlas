@@ -1,0 +1,716 @@
+013RED_weapons.png
+	size: 4096, 4096
+	filter: Linear, Linear
+013RED/Blunderbuss/blunderbuss combined
+	bounds: 1599, 3699, 360, 116
+	offsets: 1, 1, 362, 118
+013RED/Buzzsaw gun/Buzzsaw
+	bounds: 2005, 2251, 125, 124
+	offsets: 1, 1, 127, 126
+013RED/Buzzsaw gun/Buzzsaw gun
+	bounds: 1965, 3612, 319, 182
+	offsets: 1, 1, 321, 184
+013RED/Buzzsaw gun/Buzzsaw gun front
+	bounds: 2239, 3159, 310, 182
+	offsets: 1, 1, 312, 184
+	rotate: 90
+013RED/Fire Breath/FireBreath_1
+	bounds: 832, 2557, 265, 190
+	offsets: 18, 12, 345, 209
+013RED/Fire Breath/FireBreath_2
+	bounds: 2237, 2902, 251, 179
+	offsets: 25, 17, 345, 209
+	rotate: 90
+013RED/Fire Breath/FireBreath_3
+	bounds: 1764, 3098, 290, 159
+	offsets: 27, 17, 345, 209
+013RED/Fire Breath/FireBreath_4
+	bounds: 3298, 3721, 333, 189
+	offsets: 6, 7, 345, 209
+013RED/Katana
+	bounds: 3076, 3263, 190, 266
+	offsets: 1, 1, 192, 268
+013RED/Mega Blade/buzzsaw
+	bounds: 2692, 3087, 255, 257
+	offsets: 1, 1, 257, 259
+	rotate: 90
+013RED/Mega Blade/mega blade
+	bounds: 3273, 3479, 327, 236
+	offsets: 1, 1, 329, 238
+013RED/Mega Blade/mega blade_dark
+	bounds: 2472, 3600, 327, 236
+	offsets: 1, 1, 329, 238
+013RED/Missile Barrage/missile barrage
+	bounds: 6, 3649, 470, 211
+	offsets: 1, 1, 472, 213
+013RED/Mythic Revolver
+	bounds: 2047, 2534, 185, 107
+	offsets: 1, 1, 187, 109
+	rotate: 90
+013RED/Octo Siphoner/octo siphoner
+	bounds: 3298, 3916, 344, 174
+	offsets: 1, 1, 346, 176
+013RED/Octo Siphoner/octo siphoner pack
+	bounds: 1609, 2691, 189, 236
+	offsets: 1, 1, 191, 238
+	rotate: 90
+013RED/Octo Siphoner/octo siphoner pack_dark
+	bounds: 3617, 2780, 144, 190
+	offsets: 1, 1, 146, 192
+	rotate: 90
+013RED/Octo Siphoner/octo siphoner_dark
+	bounds: 3932, 3346, 305, 154
+	offsets: 1, 1, 307, 156
+	rotate: 90
+013RED/Solar Siphoner/Solar Siphoner
+	bounds: 1921, 3438, 312, 168
+	offsets: 1, 1, 314, 170
+013RED/Solar Siphoner/Solar Siphoner glow
+	bounds: 2470, 3426, 318, 168
+	offsets: 1, 1, 320, 170
+013RED/Void Splitter/void spitter
+	bounds: 1620, 2886, 289, 206
+	offsets: 1, 1, 291, 208
+013RED/Void Splitter/void spitter_dark
+	bounds: 867, 3002, 289, 184
+	offsets: 1, 1, 291, 186
+013RED/WaterBlaster
+	bounds: 2936, 3864, 356, 226
+013RED/Wind Blaster/Wind Blaster front
+	bounds: 3698, 2476, 85, 148
+	offsets: 1, 1, 87, 150
+013RED/Wind Blaster/Wind Blaster handle
+	bounds: 1486, 2277, 59, 104
+	offsets: 1, 1, 61, 106
+013RED/Wind Blaster/Wind Blaster inflated
+	bounds: 2427, 3258, 162, 259
+	rotate: 90
+013RED/Wind Blaster/Wind Blaster not inflated
+	bounds: 3410, 2664, 190, 145
+013RED/Wind Blaster/Wind Blaster stretchy part
+	bounds: 3789, 2431, 133, 139
+	offsets: 1, 1, 135, 141
+	rotate: 90
+013RED/assault_rifle
+	bounds: 433, 2666, 272, 115
+	rotate: 90
+013RED/fart_gun
+	bounds: 2325, 2379, 138, 148
+	offsets: 1, 1, 140, 150
+	rotate: 90
+013RED/flamethrower
+	bounds: 2955, 2895, 198, 91
+	offsets: 1, 1, 200, 93
+	rotate: 90
+013RED/freeze gun/base
+	bounds: 3606, 2630, 187, 144
+	offsets: 1, 1, 189, 146
+013RED/freeze gun/freeze ray - Cold/ray end A
+	bounds: 3181, 2643, 127, 170
+	offsets: 1, 1, 129, 172
+	rotate: 90
+013RED/freeze gun/freeze ray - Cold/ray end B
+	bounds: 3052, 2843, 153, 194
+	offsets: 1, 1, 155, 196
+013RED/freeze gun/freeze ray - Cold/ray end C
+	bounds: 1905, 2630, 136, 214
+	offsets: 1, 1, 138, 216
+013RED/freeze gun/freeze ray - Cold/ray mid A
+	bounds: 482, 3403, 457, 90
+	offsets: 449, 365, 1193, 693
+	rotate: 90
+013RED/freeze gun/freeze ray - Cold/ray mid B
+	bounds: 6, 3463, 443, 84
+	offsets: 458, 371, 1193, 693
+013RED/freeze gun/freeze ray - Cold/ray mid C
+	bounds: 1074, 3802, 438, 75
+	offsets: 458, 375, 1193, 693
+013RED/freeze gun/freeze ray - Cold/ray start A
+	bounds: 1684, 2301, 98, 100
+	offsets: 1, 1, 100, 102
+	rotate: 90
+013RED/freeze gun/freeze ray - Cold/ray start B
+	bounds: 3911, 2170, 116, 118
+	offsets: 1, 1, 118, 120
+	rotate: 90
+013RED/freeze gun/freeze ray - Cold/ray start C
+	bounds: 1551, 2094, 86, 88
+	offsets: 1, 1, 88, 90
+	rotate: 90
+013RED/freeze gun/freeze ray/ray end A
+	bounds: 3357, 2531, 127, 170
+	offsets: 1, 1, 129, 172
+	rotate: 90
+013RED/freeze gun/freeze ray/ray end B
+	bounds: 2667, 2928, 153, 194
+	offsets: 1, 1, 155, 196
+	rotate: 90
+013RED/freeze gun/freeze ray/ray end C
+	bounds: 3075, 3043, 136, 214
+	offsets: 1, 1, 138, 216
+013RED/freeze gun/freeze ray/ray mid A
+	bounds: 6, 3553, 457, 90
+	offsets: 449, 365, 1193, 693
+013RED/freeze gun/freeze ray/ray mid B
+	bounds: 6, 3373, 443, 84
+	offsets: 458, 371, 1193, 693
+013RED/freeze gun/freeze ray/ray mid C
+	bounds: 1518, 3439, 438, 75
+	offsets: 458, 375, 1193, 693
+	rotate: 90
+013RED/freeze gun/freeze ray/ray start A
+	bounds: 1790, 2250, 98, 100
+	offsets: 1, 1, 100, 102
+	rotate: 90
+013RED/freeze gun/freeze ray/ray start B
+	bounds: 2953, 2570, 116, 118
+	offsets: 1, 1, 118, 120
+	rotate: 90
+013RED/freeze gun/freeze ray/ray start C
+	bounds: 1454, 2080, 86, 88
+	offsets: 1, 1, 88, 90
+	rotate: 90
+013RED/glaciator
+	bounds: 1074, 3570, 437, 226
+	offsets: 1, 1, 439, 228
+013RED/grenade
+	bounds: 1657, 2104, 87, 92
+	offsets: 1, 1, 89, 94
+	rotate: 90
+013RED/ice_bazooka
+	bounds: 565, 2788, 285, 210
+	offsets: 1, 1, 287, 212
+013RED/lightcone
+	bounds: 1451, 3212, 181, 307
+	rotate: 90
+013RED/lightning_gun
+	bounds: 2544, 2647, 162, 113
+	offsets: 1, 1, 164, 115
+013RED/minigun/minigunback
+	bounds: 3533, 2630, 28, 19
+	offsets: 1, 1, 30, 21
+	rotate: 90
+013RED/minigun/minigunbarrel1
+	bounds: 3698, 2337, 133, 68
+	offsets: 1, 1, 135, 70
+	rotate: 90
+013RED/minigun/minigunbarrel2
+	bounds: 3772, 2357, 133, 68
+	offsets: 1, 1, 135, 70
+013RED/minigun/minigunbarrel3
+	bounds: 3772, 2283, 133, 68
+	offsets: 1, 1, 135, 70
+013RED/minigun/minigunbarrelstationary
+	bounds: 1931, 2355, 133, 68
+	offsets: 1, 1, 135, 70
+	rotate: 90
+013RED/minigun/minigunbase
+	bounds: 2035, 2381, 147, 118
+	offsets: 1, 1, 149, 120
+	rotate: 90
+013RED/minigun/minigunbullets1
+	bounds: 3357, 2664, 41, 25
+	offsets: 1, 1, 43, 27
+013RED/minigun/miniguntrigger
+	bounds: 2653, 2578, 52, 63
+	offsets: 1, 1, 54, 65
+013RED/muzzle_flashes/Plasma Burst/long-projectile
+	bounds: 2104, 3800, 362, 162
+	offsets: 1, 1, 364, 163
+013RED/muzzle_flashes/Plasma Burst/short-projectile
+	bounds: 3799, 2570, 186, 174
+	offsets: 1, 1, 188, 176
+013RED/muzzle_flashes/base_muzzle_flash1
+	bounds: 1844, 2494, 130, 185
+	offsets: 1, 1, 132, 187
+	rotate: 90
+017RAIN/muzzle_flashes/Base Muzzle Flash/Copy of base_muzzle_flash1
+	bounds: 1844, 2494, 130, 185
+	offsets: 1, 1, 132, 187
+	rotate: 90
+013RED/muzzle_flashes/base_muzzle_flash2
+	bounds: 1372, 2526, 143, 222
+	offsets: 1, 1, 145, 224
+	rotate: 90
+017RAIN/muzzle_flashes/Base Muzzle Flash/Copy of base_muzzle_flash2
+	bounds: 1372, 2526, 143, 222
+	offsets: 1, 1, 145, 224
+	rotate: 90
+013RED/muzzle_flashes/button_muzzle_flash1
+	bounds: 2622, 2766, 181, 156
+	offsets: 1, 1, 183, 158
+017RAIN/muzzle_flashes/button_muzzle_flash1
+	bounds: 2622, 2766, 181, 156
+	offsets: 1, 1, 183, 158
+013RED/muzzle_flashes/button_muzzle_flash2
+	bounds: 3917, 3122, 218, 159
+	offsets: 1, 1, 220, 161
+	rotate: 90
+017RAIN/muzzle_flashes/button_muzzle_flash2
+	bounds: 3917, 3122, 218, 159
+	offsets: 1, 1, 220, 161
+	rotate: 90
+013RED/muzzle_flashes/harpoon_muzzle_flash1
+	bounds: 2422, 2981, 118, 239
+	offsets: 1, 1, 120, 240
+	rotate: 90
+017RAIN/muzzle_flashes/harpoon_muzzle_flash1
+	bounds: 2422, 2981, 118, 239
+	offsets: 1, 1, 120, 240
+	rotate: 90
+013RED/muzzle_flashes/harpoon_muzzle_flash2
+	bounds: 832, 2428, 123, 262
+	offsets: 1, 1, 125, 263
+	rotate: 90
+017RAIN/muzzle_flashes/harpoon_muzzle_flash2
+	bounds: 832, 2428, 123, 262
+	offsets: 1, 1, 125, 263
+	rotate: 90
+013RED/muzzle_flashes/missile_muzzle_flash1
+	bounds: 2160, 2436, 159, 142
+	offsets: 1, 1, 161, 144
+017RAIN/muzzle_flashes/Missile Muzzle Flash/Copy of missile_muzzle_flash1
+	bounds: 2160, 2436, 159, 142
+	offsets: 1, 1, 161, 144
+013RED/muzzle_flashes/missile_muzzle_flash2
+	bounds: 2497, 2497, 144, 150
+	offsets: 1, 1, 146, 152
+	rotate: 90
+017RAIN/muzzle_flashes/Missile Muzzle Flash/Copy of missile_muzzle_flash2
+	bounds: 2497, 2497, 144, 150
+	offsets: 1, 1, 146, 152
+	rotate: 90
+013RED/muzzle_flashes/muzzle_flash_3
+	bounds: 3357, 2695, 46, 75
+	offsets: 1, 1, 48, 76
+013RED/pistol
+	bounds: 1764, 3272, 146, 121
+	offsets: 1, 1, 148, 123
+013RED/plasma-rifle
+	bounds: 3648, 3943, 335, 147
+	offsets: 2, 15, 338, 164
+013RED/rail_gun
+	bounds: 3272, 3321, 263, 152
+	offsets: 1, 1, 265, 154
+013RED/revolver
+	bounds: 3648, 3657, 334, 280
+	offsets: 1, 1, 336, 282
+013RED/rocket burst/rocket_launch_burst_1
+	bounds: 1916, 3263, 309, 169
+013RED/rocket burst/rocket_launch_burst_2
+	bounds: 1438, 2675, 284, 165
+	rotate: 90
+013RED/rocket burst/rocket_launch_burst_3
+	bounds: 2794, 3348, 276, 181
+013RED/rocket burst/rocket_launch_burst_4
+	bounds: 2290, 3475, 319, 174
+	rotate: 90
+013RED/rocket burst/rocket_launch_burst_5
+	bounds: 1599, 3399, 311, 83
+013RED/rocket_laucher/rocket_laucher
+	bounds: 2060, 2967, 290, 171
+	offsets: 1, 1, 292, 173
+	rotate: 90
+013RED/rocket_laucher/rocket_launcher_bullet
+	bounds: 2867, 2898, 183, 76
+	rotate: 90
+013RED/rocketlauncher
+	bounds: 1658, 3821, 440, 269
+	offsets: 1, 1, 442, 271
+013RED/shotgun2
+	bounds: 2047, 2725, 236, 116
+	offsets: 1, 1, 238, 118
+	rotate: 90
+013RED/shrink ray/base back
+	bounds: 1599, 3488, 316, 205
+	offsets: 8, 9, 333, 224
+013RED/shrink ray/shrink ray/ray end A
+	bounds: 2368, 2689, 127, 170
+	offsets: 1, 1, 129, 172
+	rotate: 90
+013RED/shrink ray/shrink ray/ray end B
+	bounds: 2422, 2822, 153, 194
+	offsets: 1, 1, 155, 196
+	rotate: 90
+013RED/shrink ray/shrink ray/ray end C
+	bounds: 3499, 3009, 136, 214
+	offsets: 1, 1, 138, 216
+	rotate: 90
+013RED/shrink ray/shrink ray/ray mid A
+	bounds: 436, 2944, 423, 123
+	offsets: 16, 2, 441, 126
+	rotate: 90
+013RED/shrink ray/shrink ray/ray mid B
+	bounds: 2104, 3968, 418, 122
+	offsets: 21, 2, 441, 126
+013RED/shrink ray/shrink ray/ray mid C
+	bounds: 6, 2820, 421, 120
+	offsets: 4, 2, 427, 124
+013RED/shrink ray/shrink ray/ray start A
+	bounds: 1684, 2197, 98, 100
+	offsets: 1, 1, 100, 102
+	rotate: 90
+013RED/shrink ray/shrink ray/ray start B
+	bounds: 1560, 2283, 116, 118
+	offsets: 1, 1, 118, 120
+	rotate: 90
+013RED/shrink ray/shrink ray/ray start C
+	bounds: 3194, 2551, 86, 88
+	offsets: 1, 1, 88, 90
+	rotate: 90
+013RED/smg
+	bounds: 2427, 3105, 252, 147
+	offsets: 1, 1, 254, 149
+013RED/storms eye/storms_eye_bag
+	bounds: 1600, 2405, 184, 158
+	offsets: 1, 1, 186, 160
+013RED/storms eye/storms_eye_handle
+	bounds: 3418, 3023, 102, 60
+	offsets: 1, 1, 104, 62
+	rotate: 90
+013RED/storms eye/storms_eye_horn1
+	bounds: 1263, 2222, 82, 101
+	offsets: 1, 1, 84, 103
+013RED/storms eye/storms_eye_horn2
+	bounds: 2160, 2584, 164, 118
+	offsets: 1, 1, 166, 120
+013RED/storms eye/storms_eye_horn3
+	bounds: 3077, 2530, 107, 111
+	offsets: 1, 1, 109, 113
+	rotate: 90
+013RED/storms eye/storms_eye_merged
+	bounds: 3606, 3389, 320, 262
+	offsets: 1, 1, 322, 264
+013RED/sunny_side_shotty
+	bounds: 2936, 3696, 331, 162
+	offsets: 1, 1, 333, 164
+013RED/test gun
+	bounds: 2805, 3535, 323, 155
+	offsets: 1, 1, 325, 157
+013RED/water_gun
+	bounds: 2996, 2692, 179, 145
+	offsets: 1, 1, 181, 147
+017RAIN/Rivet_cannon
+	bounds: 1103, 2457, 263, 253
+	offsets: 1, 1, 265, 255
+017RAIN/blood_zweihander
+	bounds: 1154, 3883, 207, 498
+	offsets: 1, 1, 209, 500
+	rotate: 90
+017RAIN/crossbow/crossbow arrow
+	bounds: 1851, 2650, 230, 48
+	offsets: 1, 1, 232, 50
+	rotate: 90
+017RAIN/crossbow/crossbow default
+	bounds: 1147, 2716, 243, 285
+	offsets: 1, 1, 245, 287
+	rotate: 90
+017RAIN/crossbow/crossbow default 2
+	bounds: 856, 2753, 243, 285
+	offsets: 1, 1, 245, 287
+	rotate: 90
+017RAIN/junkstorm_smg
+	bounds: 2809, 2711, 181, 178
+	offsets: 1, 0, 182, 178
+017RAIN/lava_gun
+	bounds: 1609, 2569, 229, 116
+	offsets: 1, 1, 231, 118
+017RAIN/lightning_pistol
+	bounds: 565, 3004, 291, 296
+	offsets: 1, 1, 293, 298
+	rotate: 90
+017RAIN/muzzle_flashes/lava splash/lava_splash0000
+	bounds: 3541, 3151, 232, 236
+	offsets: 1, 1, 234, 238
+	rotate: 90
+017RAIN/muzzle_flashes/lava splash/lava_splash0001
+	bounds: 2528, 3842, 248, 402
+	offsets: 1, 1, 250, 403
+	rotate: 90
+017RAIN/muzzle_flashes/lava splash/lava_splash0002
+	bounds: 583, 3700, 485, 242
+	offsets: 1, 1, 487, 244
+017RAIN/muzzle_flashes/lava splash/lava_splash0003
+	bounds: 6, 3866, 571, 224
+	offsets: 1, 1, 573, 226
+017RAIN/muzzle_flashes/rust metal particles/junk_piece_a
+	bounds: 1364, 2267, 116, 114
+	offsets: 1, 1, 118, 116
+017RAIN/muzzle_flashes/rust metal particles/junk_piece_b
+	bounds: 1931, 2244, 67, 105
+	offsets: 1, 1, 69, 107
+017RAIN/muzzle_flashes/rust metal particles/junk_piece_d
+	bounds: 2712, 2576, 151, 129
+	offsets: 1, 1, 153, 131
+017RAIN/muzzle_flashes/rust metal particles/junk_piece_e
+	bounds: 3934, 2432, 129, 139
+	offsets: 1, 1, 131, 141
+	rotate: 90
+017RAIN/sporesprayer
+	bounds: 1017, 3348, 428, 216
+	offsets: 1, 1, 430, 218
+017RAIN/stormpiercer
+	bounds: 583, 3948, 565, 142
+	offsets: 1, 1, 567, 144
+100_buttons/vfx/blue_button
+	bounds: 2169, 2708, 193, 188
+100_buttons/vfx/electrocute/electricity_sparks1
+	bounds: 1100, 2328, 123, 157
+	rotate: 90
+100_buttons/vfx/electrocute/electricity_sparks2
+	bounds: 3988, 3710, 125, 70
+	rotate: 90
+100_buttons/vfx/electrocute/electricity_sparks3
+	bounds: 3991, 2567, 147, 92
+	rotate: 90
+100_buttons/vfx/electrocute/electrocute_aura1
+	bounds: 578, 3301, 393, 433
+	rotate: 90
+100_buttons/vfx/electrocute/electrocute_aura2
+	bounds: 6, 2946, 424, 421
+100_buttons/vfx/feathers1
+	bounds: 2169, 2903, 58, 61
+	rotate: 90
+100_buttons/vfx/feathers2
+	bounds: 2712, 2711, 49, 69
+	rotate: 90
+100_buttons/vfx/feathers3
+	bounds: 2877, 3756, 80, 53
+	rotate: 90
+100_buttons/vfx/red_button
+	bounds: 3418, 2815, 193, 188
+100_buttons/vfx/smoke_particle
+	bounds: 1351, 2164, 97, 97
+100_buttons/vfx/smoke_particle2
+	bounds: 3194, 2467, 84, 78
+100_buttons/vfx/smoke_particle3
+	bounds: 2556, 2429, 62, 66
+	rotate: 90
+100_buttons/vfx/yellow_button
+	bounds: 3211, 2776, 193, 188
+100_buttons/weapons/foam_hand
+	bounds: 3813, 2750, 158, 189
+	rotate: 90
+2.0.1_additions/eyes/crying/lid_watery_L
+	bounds: 1263, 2329, 122, 95
+	offsets: 1, 1, 124, 97
+	rotate: 90
+2.0.1_additions/eyes/crying/lid_watery_R
+	bounds: 1620, 3139, 136, 67
+	offsets: 1, 0, 138, 68
+2.0.1_additions/eyes/crying/lighteye_watery_L
+	bounds: 2869, 2583, 122, 78
+	offsets: 1, 1, 124, 80
+	rotate: 90
+2.0.1_additions/eyes/crying/lighteye_watery_R
+	bounds: 2869, 2583, 122, 78
+	offsets: 1, 1, 124, 80
+	rotate: 90
+2.0.1_additions/eyes/crying/tear_watery_L
+	bounds: 3541, 3394, 79, 56
+	offsets: 1, 1, 81, 58
+	rotate: 90
+2.0.1_additions/eyes/crying/tear_watery_R
+	bounds: 1017, 3630, 64, 51
+	offsets: 1, 1, 66, 53
+	rotate: 90
+2.0.1_additions/eyes/lid_rage_L
+	bounds: 2330, 2523, 161, 160
+	offsets: 1, 1, 163, 162
+2.0.1_additions/eyes/lid_rage_R
+	bounds: 3533, 2466, 158, 159
+	offsets: 1, 1, 160, 161
+	rotate: 90
+2.0.1_additions/mouths/mouth_cheesy_grin
+	bounds: 3783, 3148, 235, 128
+	offsets: 1, 1, 237, 130
+	rotate: 90
+2.0.1_additions/mouths/mouth_closed_teeth_pain
+	bounds: 1324, 3215, 127, 56
+	rotate: 90
+2.0.1_additions/mouths/mouth_concentration
+	bounds: 4008, 2720, 188, 70
+	offsets: 1, 1, 190, 72
+	rotate: 90
+2.0.1_additions/mouths/mouth_grimace
+	bounds: 1241, 2985, 201, 77
+	offsets: 1, 1, 203, 79
+	rotate: 90
+2.0.1_additions/mouths/mouth_open_scream1
+	bounds: 1386, 3223, 119, 59
+	rotate: 90
+2.0.1_additions/mouths/mouth_open_scream2
+	bounds: 2869, 2469, 108, 76
+	rotate: 90
+2.0.1_additions/mouths/mouth_rage
+	bounds: 3989, 3841, 249, 89
+	offsets: 1, 1, 251, 91
+	rotate: 90
+2.0.1_additions/mouths/mouth_slack_jawed
+	bounds: 2159, 2324, 146, 106
+	offsets: 1, 1, 148, 108
+2.0.1_additions/mouths/mouth_smug
+	bounds: 1162, 2968, 218, 73
+	offsets: 1, 2, 220, 76
+	rotate: 90
+2.0.1_additions/mouths/mouth_starstruck
+	bounds: 1372, 2387, 182, 133
+	offsets: 1, 1, 184, 135
+2.0.1_additions/mouths/punched_mouth
+	bounds: 2955, 3099, 243, 114
+	offsets: 1, 1, 245, 116
+	rotate: 90
+2.0.1_additions/puffy_cheek
+	bounds: 3934, 2292, 134, 135
+	offsets: 1, 1, 136, 137
+	rotate: 90
+2.0.1_additions/puffy_cheek_sick
+	bounds: 1790, 2354, 134, 135
+	offsets: 1, 1, 136, 137
+	rotate: 90
+2.0.1_additions/revolver spin
+	bounds: 1551, 2186, 100, 91
+	offsets: 1, 1, 102, 93
+base_colours/crewchsia/body_base
+	bounds: 3272, 3131, 184, 221
+	offsets: 84, 62, 358, 359
+	rotate: 90
+base_colours/crewchsia/eyeball_L
+	bounds: 3062, 2443, 82, 81
+	offsets: 1, 1, 84, 83
+base_colours/crewchsia/eyeball_R
+	bounds: 2741, 2490, 80, 80
+	offsets: 1, 1, 82, 82
+base_colours/crewchsia/eyelids/lid_angry
+	bounds: 2741, 2427, 75, 57
+	offsets: 1, 1, 77, 59
+base_colours/crewchsia/eyelids/lid_blink
+	bounds: 2653, 2489, 82, 81
+	offsets: 1, 1, 84, 83
+base_colours/crewchsia/eyelids/lid_happy
+	bounds: 2239, 3526, 80, 44
+	offsets: 1, 1, 82, 46
+	rotate: 90
+base_colours/crewchsia/eyelids/lid_sad
+	bounds: 1790, 2162, 82, 95
+	offsets: 1, 1, 84, 97
+	rotate: 90
+base_colours/crewchsia/finger_L
+	bounds: 1921, 3656, 38, 37
+base_colours/crewchsia/hand_L_fist
+	bounds: 2901, 2383, 72, 70
+	offsets: 1, 1, 74, 72
+base_colours/crewchsia/hand_L_palm
+	bounds: 2979, 2383, 72, 70
+	offsets: 1, 1, 74, 72
+base_colours/crewchsia/hand_R_fist
+	bounds: 2479, 2423, 71, 68
+	offsets: 1, 1, 73, 70
+base_colours/crewchsia/leg_L
+	bounds: 3617, 2939, 64, 86
+	offsets: 37, 28, 138, 143
+	rotate: 90
+base_colours/crewchsia/leg_R
+	bounds: 2692, 3354, 66, 92
+	offsets: 37, 29, 138, 143
+	rotate: 90
+base_colours/crewchsia/mouth_flat
+	bounds: 1372, 2690, 59, 20
+	offsets: 1, 1, 61, 22
+base_colours/crewchsia/mouth_sleep_closed
+	bounds: 1516, 3399, 34, 29
+	offsets: 1, 1, 36, 31
+	rotate: 90
+base_colours/crewchsia/mouth_sleep_open
+	bounds: 3988, 3657, 101, 47
+	offsets: 1, 1, 103, 49
+base_colours/crewchsia/mouth_teethygrin
+	bounds: 3077, 2644, 95, 42
+	offsets: 1, 1, 97, 44
+base_colours/crewchsia/pupil_L
+	bounds: 1620, 3098, 35, 35
+	offsets: 1, 1, 37, 37
+base_colours/crewchsia/pupil_R
+	bounds: 1551, 3399, 34, 34
+	offsets: 1, 1, 36, 36
+base_colours/crewchsia/thumb_L
+	bounds: 2427, 3429, 37, 40
+	offsets: 1, 1, 39, 42
+giant_breath/breath_big
+	bounds: 554, 2533, 272, 249
+giant_breath/breath_middle
+	bounds: 3719, 2930, 212, 166
+	rotate: 90
+giant_breath/breath_small
+	bounds: 2951, 2459, 105, 105
+giant_breath/breath_tiny1
+	bounds: 1074, 3883, 67, 59
+giant_breath/breath_tiny2
+	bounds: 2822, 2396, 73, 67
+giant_breath/breath_tiny3
+	bounds: 2628, 2424, 60, 59
+giant_breath/snow_flake1
+	bounds: 2996, 2845, 44, 50
+	offsets: 1, 1, 46, 52
+	rotate: 90
+giant_breath/snow_flake2
+	bounds: 4036, 3055, 54, 61
+	offsets: 1, 1, 56, 63
+giant_breath/sparkle
+	bounds: 1790, 2504, 44, 59
+	offsets: 1, 1, 46, 60
+hand_pointing
+	bounds: 3217, 2970, 195, 155
+	offsets: 1, 1, 197, 157
+player_skins/TEST SKINS/Engineer Schleem
+	bounds: 3134, 3536, 129, 154
+	offsets: 48, 1, 178, 193
+player_skins/TEST SKINS/antenna
+	bounds: 2805, 3702, 134, 66
+	rotate: 90
+player_skins/TEST SKINS/carrier
+	bounds: 3891, 2914, 202, 139
+	offsets: 83, 36, 358, 358
+	rotate: 90
+player_skins/TEST SKINS/ear_L
+	bounds: 2694, 2434, 41, 49
+	offsets: 1, 1, 43, 51
+player_skins/TEST SKINS/ear_R
+	bounds: 2694, 2381, 41, 47
+	offsets: 1, 1, 43, 49
+player_skins/TEST SKINS/eyebrow
+	bounds: 1017, 3192, 301, 150
+	offsets: 1, 1, 303, 152
+player_skins/TEST SKINS/face
+	bounds: 1324, 2965, 290, 241
+player_skins/TEST SKINS/fast_sneaker_L
+	bounds: 3288, 2552, 85, 60
+	offsets: 21, 23, 136, 141
+	rotate: 90
+player_skins/TEST SKINS/fast_sneaker_R
+	bounds: 3288, 2469, 77, 63
+	offsets: 28, 25, 136, 141
+	rotate: 90
+player_skins/TEST SKINS/glasses
+	bounds: 1451, 3414, 150, 59
+	offsets: 1, 1, 152, 61
+	rotate: 90
+player_skins/TEST SKINS/hair
+	bounds: 2556, 2367, 56, 60
+	offsets: 1, 1, 58, 62
+	rotate: 90
+player_skins/TEST SKINS/moustache
+	bounds: 3217, 3140, 117, 49
+	offsets: 1, 1, 119, 51
+	rotate: 90
+player_skins/TEST SKINS/teddy pack
+	bounds: 867, 3196, 99, 143
+	rotate: 90
+shadow
+	bounds: 1915, 2850, 242, 126
+	offsets: 1, 1, 244, 128
+	rotate: 90
+tranq/TranqLv1
+	bounds: 1486, 2172, 99, 59
+	offsets: 2, 2, 102, 64
+	rotate: 90

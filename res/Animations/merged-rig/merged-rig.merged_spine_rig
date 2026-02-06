@@ -1,0 +1,14 @@
+{
+    "base_rig": "Animations/rp-player/016ARP_player.spine",
+    "rigs_to_merge": [
+        {
+            "rig": "$AO/schleem/playercharacter.spine",
+        },
+	{
+            "rig": "Animations/carpet_rig/playercharacter.spine"
+        }
+        {
+            "rig": "Animations/rp-player-weapons/013RED_weapons.spine"
+        }
+    ]
+}
