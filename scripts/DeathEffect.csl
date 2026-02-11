@@ -1,0 +1,222 @@
+import "core:ao"
+
+DEATH_RESPAWN_DELAY_SECONDS :: 3.0;
+DEATH_FADE_IN_SECONDS       :: 0.6;
+DEATH_FADE_OUT_SECONDS      :: 0.6;
+
+death_is_droppable_resource_id :: proc(item_id: string) -> bool {
+    // "Held resources" for Counterfeit Tycoon.
+    // We intentionally do NOT include weapons or other special items here.
+    switch item_id {
+        case "wood":          return true;
+        case "paper":         return true;
+        case "blank_bills":   return true;
+        case "colored_bills": return true;
+        case "finished_bills": return true;
+    }
+    return false;
+}
+
+server_drop_resources_on_death :: proc(player: Player) {
+    if player == null return;
+    if !Game.is_server() return;
+
+    if player.entity == null || player.entity.self == null {
+        return;
+    }
+
+    inv := player.default_inventory;
+    if inv == null || inv.self == null {
+        return;
+    }
+    if inv.capacity <= 0 {
+        return;
+    }
+
+    origin := player.entity.world_position;
+    rng := rng_seed_time();
+
+    // Drop 25% of each held resource type, as INDIVIDUAL world drops (no clumping).
+    for slot: 0..inv.capacity-1 {
+        item := inv->get_item(slot);
+        if item == null continue;
+        if item.self == null continue;
+
+        defn := item->get_definition();
+        if defn == null continue;
+
+        id := defn->get_id();
+        if !death_is_droppable_resource_id(id) continue;
+
+        qty := item.quantity;
+        if qty <= 0 continue;
+
+        // 25% (ceil), so small stacks still lose something:
+        // 1->1, 2->1, 3->1, 4->1, 5->2, etc.
+        drop_count := (qty + 3) / 4;
+        if drop_count <= 0 continue;
+        if drop_count > qty {
+            drop_count = qty;
+        }
+
+        for i: 0..drop_count-1 {
+            // Re-fetch from the slot because destroying may swap/clear stacks.
+            cur := inv->get_item(slot);
+            if cur == null break;
+            if cur.self == null break;
+
+            cur_defn := cur->get_definition();
+            if cur_defn == null break;
+            if cur_defn != defn break;
+
+            // Remove exactly 1 from the player's stack.
+            Items.destroy_item_instance(cur, 1);
+
+            // Spawn a single-count drop nearby.
+            radius := rng_range_float(ref rng, 0.35, 1.1);
+            drop_pos := ItemDrops.random_point_on_circle_edge(origin, radius, ref rng);
+            dropped := ItemDrops.spawn_from_definition(drop_pos, defn, 1);
+            if dropped != null {
+                dropped.blocked_player_user_id = player->get_user_id();
+            }
+        }
+    }
+}
+
+server_respawn_player_at_owned_base :: proc(player: Player) {
+    if player == null return;
+    if !Game.is_server() return;
+    if player.entity == null || player.entity.self == null return;
+
+    // Resolve spawn position from the player's owned base slot.
+    gm := get_game_manager();
+    spawn_pos := v2{};
+    ok := false;
+    if gm != null {
+        tmp_pos, tmp_ok := gm->get_spawn_position(player.base_spawn_index);
+        spawn_pos = tmp_pos;
+        ok = tmp_ok;
+    }
+    if !ok {
+        if player.base_entity != null && player.base_entity.self != null {
+            spawn_pos = player.base_entity.world_position;
+            ok = true;
+        }
+    }
+    if !ok {
+        spawn_pos = v2{0, 0};
+    }
+
+    // Match the existing base-spawn offsets used on join.
+    offset := v2{};
+    if player.base_spawn_index >= 0 {
+        offset = v2{0, -2};
+        if player.base_spawn_index >= 3 {
+            offset = v2{0, 2};
+        }
+    }
+
+    player.entity->set_local_position(spawn_pos + offset);
+
+    // Restore health.
+    if player.MaxHealth <= 0 {
+        player.MaxHealth = 100;
+    }
+    player.CurrentHealth = player.MaxHealth;
+
+    // Clear KO animation and play spawn-in.
+    if player.animator != null && player.animator.instance != null && player.animator.instance.state_machine != null {
+        player.animator.instance.state_machine->set_trigger("cancel_all");
+        player.animator.instance.state_machine->set_trigger("Spawn");
+    }
+}
+
+Death_Effect :: class : Effect_Base {
+    has_respawned: bool;
+
+    effect_start :: method() {
+        player_specific.freeze_player = true;
+        has_respawned = false;
+
+        // Keep this effect alive long enough to respawn + fade back in.
+        set_duration(DEATH_RESPAWN_DELAY_SECONDS + DEATH_FADE_OUT_SECONDS);
+
+        if player == null {
+            return;
+        }
+
+        // Server-authoritative gameplay bits.
+        if Game.is_server() {
+            server_drop_resources_on_death(player);
+
+            // Play KO animation (replicates via synced animator/state machine).
+            if player.animator != null && player.animator.instance != null && player.animator.instance.state_machine != null {
+                player.animator.instance.state_machine->set_trigger("KO");
+            }
+        }
+    }
+
+    effect_update :: method(dt: float) {
+        _ := dt;
+        if player == null return;
+
+        // After 3 seconds, respawn at owned base (server-side).
+        if Game.is_server() && !has_respawned && get_elapsed_time() >= DEATH_RESPAWN_DELAY_SECONDS {
+            server_respawn_player_at_owned_base(player);
+            has_respawned = true;
+        }
+    }
+
+    effect_late_update :: method(dt: float) {
+        _ := dt;
+        if player == null return;
+
+        // Fade is purely local UI.
+        if !player->is_local() {
+            return;
+        }
+
+        t := get_elapsed_time();
+        alpha := 0.0;
+
+        if t < DEATH_FADE_IN_SECONDS {
+            alpha = t / DEATH_FADE_IN_SECONDS;
+        }
+        else if t < DEATH_RESPAWN_DELAY_SECONDS {
+            alpha = 1.0;
+        }
+        else if t < DEATH_RESPAWN_DELAY_SECONDS + DEATH_FADE_OUT_SECONDS {
+            alpha = 1.0 - ((t - DEATH_RESPAWN_DELAY_SECONDS) / DEATH_FADE_OUT_SECONDS);
+        }
+        else {
+            alpha = 0.0;
+        }
+
+        alpha = clamp(alpha, 0.0, 1.0);
+
+        UI.push_screen_draw_context();
+        defer UI.pop_draw_context();
+
+        UI.push_layer(1000);
+        defer UI.pop_layer();
+
+        screen := UI.get_screen_rect();
+        UI.quad(screen, core_globals.white_sprite, {0, 0, 0, alpha});
+    }
+
+    effect_end :: method(interrupt: bool) {
+        _ := interrupt;
+        if player == null return;
+
+        // Ensure we always respawn on server, even if interrupted early.
+        if Game.is_server() {
+            if !has_respawned {
+                server_respawn_player_at_owned_base(player);
+            }
+
+            // End pickup lockout now that we're back.
+            player.death_pickup_lockout = false;
+        }
+    }
+}
+

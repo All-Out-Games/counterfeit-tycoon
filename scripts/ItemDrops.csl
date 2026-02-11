@@ -33,6 +33,11 @@ Item_Drop_Magnet :: class : Component {
     // Optional: exclusive pickup by player user id
     exclusive_to_player: string;
 
+    // Optional: prevent a specific player (by user id) from picking this up
+    // while they are in a "death lockout" state. (Used by death drops so you
+    // can't instantly re-collect your own loot before respawning.)
+    blocked_player_user_id: string;
+
     // Server chooses an attraction target; replicated for consistent client smoothing.
     target_player_user_id: string;
 
@@ -108,6 +113,13 @@ Item_Drop_Magnet :: class : Component {
                 }
             }
 
+            // Death lockout: prevent the blocked player from targeting this drop while dead.
+            if blocked_player_user_id.count > 0 {
+                if p->get_user_id() == blocked_player_user_id && p.death_pickup_lockout {
+                    continue;
+                }
+            }
+
             delta := p.entity.world_position - origin;
             d2 := length_squared(delta);
             if d2 > best_d2 continue;
@@ -130,6 +142,13 @@ Item_Drop_Magnet :: class : Component {
 
         if exclusive_to_player.count > 0 && player->get_user_id() != exclusive_to_player {
             return false;
+        }
+
+        // Death lockout: the blocked player can't pick this up until they respawn.
+        if blocked_player_user_id.count > 0 {
+            if player->get_user_id() == blocked_player_user_id && player.death_pickup_lockout {
+                return false;
+            }
         }
 
         ITEMDROPS_COIN_CURRENCY :: "Coins";

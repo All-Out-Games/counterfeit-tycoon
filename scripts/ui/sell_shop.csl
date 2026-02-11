@@ -188,6 +188,7 @@ sell_all_of_type :: proc(player: Player, item_id: string) {
 
 draw_sell_shop_button :: proc(player: Player) {
     if player == null return;
+    if !player->is_local_or_server() return;
 
     safe := UI.get_safe_screen_rect();
     btn_rect := safe->right_center_rect()->grow(75)->offset(-90, 0);
@@ -200,7 +201,15 @@ draw_sell_shop_button :: proc(player: Player) {
     bs.press_scaling = 0.8;
 
     if UI.button(btn_rect, bs, ts, "Sell").clicked {
-        player.sell_shop_open = !player.sell_shop_open;
+        if Game.is_server() {
+            player.sell_shop_open = !player.sell_shop_open;
+            if player.sell_shop_open {
+                // Avoid overlapping modals.
+                player.managers_open = false;
+                player.harvester_upgrades_open = false;
+                player.weapons_shop_open = false;
+            }
+        }
     }
 }
 

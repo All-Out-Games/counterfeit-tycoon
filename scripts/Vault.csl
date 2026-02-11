@@ -1,6 +1,9 @@
 import "core:ao"
 
 VAULT_SAVE_KEY_FINISHED_BILLS :: "vault_finished_bills";
+VAULT_STEAL_HOLD_SECONDS :: 8.0;
+VAULT_STEAL_PERCENT :: 33; // 33% of stored_finished_bills
+VAULT_FINISHED_BILLS_STACK_MAX :: 64;
 
 // Vault:
 // - Players can interact to deposit Finished Bills from their inventory.
@@ -42,6 +45,9 @@ Vault :: class : Interactable {
         // Interaction prompt
         this->set_text("Deposit finished bills");
         this->set_hold_text("Depositing...");
+        if priority == 0 {
+            priority = 50;
+        }
 
         // Interactable defaults if not set
         if radius <= 0 {
@@ -56,11 +62,19 @@ Vault :: class : Interactable {
 
         // If ownership was already assigned during spawn, load immediately.
         server_try_load_from_save();
+
+        // Create the separate steal interactable on the server so it replicates to clients.
+        if Game.is_server() {
+            ensure_steal_interactable_exists();
+        }
     }
 
     ao_update :: method(dt: float) {
         _ := dt;
         server_try_load_from_save();
+        if Game.is_server() {
+            ensure_steal_interactable_exists();
+        }
     }
 
     // Server-only: allow a non-player "manager" (e.g., Courier) to deposit finished bills directly
@@ -127,7 +141,7 @@ Vault :: class : Interactable {
     }
 
     can_use :: method(player: Player) -> bool {
-        // Only the owning player (from our parent entity's PlayerBase) may use this vault.
+        // Deposit interactable is owner-only.
         return is_owner_of_parent_base(entity, player);
     }
 
@@ -191,6 +205,152 @@ Vault :: class : Interactable {
 
         // Persist immediately so disconnects/crashes don't lose progress.
         Save.set_int(player, VAULT_SAVE_KEY_FINISHED_BILLS, stored_finished_bills);
+    }
+
+    server_steal_finished_bills :: method(thief: Player) {
+        if thief == null return;
+        if !Game.is_server() return;
+
+        // Ensure we don't overwrite an existing save with a default 0.
+        server_try_load_from_save();
+
+        pb := get_parent_player_base(entity);
+        if pb == null {
+            Notifier.notify(thief, "Can't steal from this vault right now.");
+            return;
+        }
+
+        owner := pb->get_owner();
+        if owner == null {
+            Notifier.notify(thief, "Owner is not available.");
+            return;
+        }
+
+        if stored_finished_bills <= 0 {
+            Notifier.notify(thief, "Vault is empty.");
+            return;
+        }
+
+        // Compute 33% (integer).
+        to_steal := (stored_finished_bills * VAULT_STEAL_PERCENT) / 100;
+        if to_steal <= 0 {
+            to_steal = 1;
+        }
+        if to_steal > stored_finished_bills {
+            to_steal = stored_finished_bills;
+        }
+        if to_steal <= 0 {
+            Notifier.notify(thief, "Vault is empty.");
+            return;
+        }
+
+        // Remove from the vault first (server-authoritative).
+        stored_finished_bills -= to_steal;
+        if stored_finished_bills < 0 {
+            stored_finished_bills = 0;
+        }
+
+        server_give_finished_bills_to_player(thief, to_steal);
+
+        // Persist to the OWNER's save.
+        Save.set_int(owner, VAULT_SAVE_KEY_FINISHED_BILLS, stored_finished_bills);
+
+        Notifier.notify(thief, "Stole Finished Bills x%!", {to_steal});
+    }
+
+    server_give_finished_bills_to_player :: method(player: Player, amount: s64) {
+        if player == null return;
+        if !Game.is_server() return;
+        if amount <= 0 return;
+
+        defn := ItemManager.TryFindItem("finished_bills");
+        if defn == null {
+            defn = ItemManager.TryFindItem("FinishedBills");
+        }
+        if defn == null {
+            log_warning("Vault: couldn't find Finished Bills item definition", {});
+            return;
+        }
+
+        inv := player.default_inventory;
+        if inv == null || inv.self == null || inv.capacity <= 0 {
+            return;
+        }
+
+        // Item_Definition doesn't expose stack size in CSL; keep this in sync with
+        // the ItemManager registration (Finished Bills currently stack to 64).
+        stack_max := VAULT_FINISHED_BILLS_STACK_MAX;
+
+        remaining := amount;
+
+        // First try to fill inventory as much as possible.
+        room := Items.calculate_room_in_inventory_for_item(defn, inv);
+        if room < 0 {
+            room = 0;
+        }
+        to_inventory := remaining;
+        if to_inventory > room {
+            to_inventory = room;
+        }
+
+        while to_inventory > 0 {
+            chunk := to_inventory;
+            if chunk > stack_max {
+                chunk = stack_max;
+            }
+
+            item := Items.create_item_instance(defn, chunk);
+            if item != null && item.self != null {
+                Items.move_item_to_inventory(item, inv);
+            }
+            else if item != null {
+                Items.destroy_item_instance(item);
+                break;
+            }
+            else {
+                break;
+            }
+
+            to_inventory -= chunk;
+            remaining -= chunk;
+        }
+
+        // If there's leftover, spawn exclusive world drops in small stacks near the player.
+        if remaining > 0 {
+            rng := rng_seed_time();
+            DROP_RADIUS :: 1.25;
+            while remaining > 0 {
+                chunk := remaining;
+                if chunk > stack_max {
+                    chunk = stack_max;
+                }
+
+                spawn_pos := ItemDrops.random_point_on_circle_edge(player.entity.world_position, DROP_RADIUS, ref rng);
+                drop := ItemDrops.spawn_from_definition(spawn_pos, defn, chunk);
+                if drop != null {
+                    drop->set_exclusive(player);
+                }
+
+                remaining -= chunk;
+            }
+        }
+    }
+
+    ensure_steal_interactable_exists :: method() {
+        if entity == null || entity.self == null return;
+
+        steal := entity->get_component(Vault_Steal_Interactable);
+        if steal == null {
+            steal = entity->add_component(Vault_Steal_Interactable);
+        }
+        if steal == null return;
+
+        // Mirror the deposit interactable's range/prompt location.
+        steal.radius = radius;
+        steal.prompt_offset = prompt_offset;
+        if steal.priority == 0 {
+            steal.priority = 100;
+        }
     }
 
     server_try_load_from_save :: method() {
@@ -347,6 +507,79 @@ Vault :: class : Interactable {
 
         fill := bar->subrect(0, 0, progress, 1);
         UI.quad(fill, core_globals.white_sprite, {0.9, 0.8, 0.2, 1});
+    }
+}
+
+// Separate interactable for stealing, so we can have a different hold time + text
+// without affecting the owner's deposit interaction.
+Vault_Steal_Interactable :: class : Interactable {
+    ao_start :: method() {
+        this->set_listener(this);
+        this->set_text("Stealing");
+        this->set_hold_text("Stealing...");
+        required_hold_time = VAULT_STEAL_HOLD_SECONDS;
+        if priority == 0 {
+            priority = 100;
+        }
+    }
+
+    can_use :: method(player: Player) -> bool {
+        if player == null return false;
+
+        // Only non-owners can use the steal interactable.
+        if is_owner_of_parent_base(entity, player) {
+            return false;
+        }
+
+        pb := get_parent_player_base(entity);
+        if pb == null return false;
+        if pb.owner_user_id.count <= 0 return false;
+
+        return true;
+    }
+
+    on_holding :: method(player: Player) {
+        if player == null return;
+        if !Game.is_server() return;
+
+        // Track hold time on the thief so we can clear state when they stop holding
+        // (handled in Player.ao_update).
+        player.vault_theft_last_hold_time = get_time();
+
+        if player.vault_theft_target_entity_id != entity.id {
+            player.vault_theft_target_entity_id = entity.id;
+            player.vault_theft_hold_start_time = get_time();
+            player.vault_theft_owner_notified = false;
+        }
+
+        if !player.vault_theft_owner_notified {
+            pb := get_parent_player_base(entity);
+            if pb != null {
+                owner := pb->get_owner();
+                if owner != null {
+                    Notifier.notify(owner, "% is stealing from your Vault!", {player->get_username()});
+                }
+            }
+            player.vault_theft_owner_notified = true;
+        }
+    }
+
+    on_interact :: method(player: Player) {
+        if player == null return;
+        if !Game.is_server() return;
+
+        vault := entity->get_component(Vault);
+        if vault == null {
+            Notifier.notify(player, "Can't steal from this vault right now.");
+            return;
+        }
+
+        // Server safety: ensure non-owner.
+        if is_owner_of_parent_base(vault.entity, player) {
+            return;
+        }
+
+        vault->server_steal_finished_bills(player);
     }
 }
 

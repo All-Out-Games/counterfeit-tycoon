@@ -1,0 +1,14 @@
+[
+  {
+    "id": "UI/Health_Bar/health_bar_red/healthbar_back.png",
+    "texture": {
+      "resample_multiplier": 1
+    }
+  },
+  {
+    "id": "UI/Health_Bar/health_bar_red/healthbar_fill.png",
+    "texture": {
+      "resample_multiplier": 1
+    }
+  }
+]

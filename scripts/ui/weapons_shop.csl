@@ -1,0 +1,605 @@
+import "core:ao"
+
+WEAPONS_SHOP_COIN_CURRENCY :: "Coins";
+WEAPONS_SHOP_AMMO_BUY_AMOUNT :: 100;
+
+Weapons_Shop_Tab :: enum {
+    WEAPONS;
+    AMMO;
+}
+
+weapon_shop_weapon_types :: proc() -> [27]Weapon_Type {
+    return {
+        .ASSAULT_RIFLE,
+        .SUBMACHINE_GUN,
+        .GATLING_GUN,
+        .BEAM_MACHINE,
+        .WATER_GUN,
+        .MISSILE_BARRAGE,
+        .BLUNDERBUSS,
+        .RAY_GUN,
+        .PLASMA_BURST,
+        .MEGA_BLADE,
+        .BUZZSHOT,
+        .EXPLOSIVE_SHOTGUN,
+        .SUNNY_SIDE_SHOTTY,
+        .GOLDEN_ROCKET_LAUNCHER,
+        .WATER_BALLOON_RPG,
+        .POISON_GRENADE,
+        .BOOMWHEEL,
+        .FIRE_RAY,
+        .ICE_LAUNCHER,
+        .GLACIATOR,
+        .SOLAR_SIPHONER,
+        .OCTO_SIPHONER,
+        .VOID_SPLITTER,
+        .AKIMBO_PISTOLS,
+        .WIND_BLASTER,
+        .STORMS_EYE,
+        .HYDRO_CANNON,
+    };
+}
+
+weapon_shop_price :: proc(wt: Weapon_Type) -> s64 {
+    // Tuned to be "early game affordable" for ammo, "mid game" for weapons.
+    switch wt {
+        case .ASSAULT_RIFLE:          return 850;
+        case .SUBMACHINE_GUN:         return 900;
+        case .GATLING_GUN:            return 1400;
+        case .BEAM_MACHINE:           return 1600;
+        case .WATER_GUN:              return 600;
+        case .MISSILE_BARRAGE:        return 2200;
+        case .BLUNDERBUSS:            return 950;
+        case .RAY_GUN:                return 2000;
+        case .PLASMA_BURST:           return 1700;
+        case .MEGA_BLADE:             return 1800;
+        case .BUZZSHOT:               return 1650;
+        case .EXPLOSIVE_SHOTGUN:      return 2100;
+        case .SUNNY_SIDE_SHOTTY:      return 2300;
+        case .GOLDEN_ROCKET_LAUNCHER: return 3000;
+        case .WATER_BALLOON_RPG:      return 1900;
+        case .POISON_GRENADE:         return 1200;
+        case .BOOMWHEEL:              return 2600;
+        case .FIRE_RAY:               return 2400;
+        case .ICE_LAUNCHER:           return 2000;
+        case .GLACIATOR:              return 2500;
+        case .SOLAR_SIPHONER:         return 2800;
+        case .OCTO_SIPHONER:          return 2950;
+        case .VOID_SPLITTER:          return 3200;
+        case .AKIMBO_PISTOLS:         return 1100;
+        case .WIND_BLASTER:           return 1750;
+        case .STORMS_EYE:             return 3400;
+        case .HYDRO_CANNON:           return 1500;
+        case .NONE:                   return 0;
+    }
+    return 0;
+}
+
+ammo_shop_price :: proc(ammo_type_index: s64) -> s64 {
+    // Price is for 100 units (WEAPONS_SHOP_AMMO_BUY_AMOUNT).
+    switch ammo_type_index {
+        case 0: return 25;  // AR Rounds
+        case 1: return 45;  // Heavy Shots
+        case 2: return 70;  // Explosive Rounds
+        case 3: return 55;  // Cryo Cells
+        case 4: return 50;  // Tornado Shots
+        case 5: return 60;  // Energy Cells
+        case 6: return 80;  // Solar Cores
+        case 7: return 75;  // Sawblades
+        case 8: return 35;  // LMG Rounds
+        case 9: return 20;  // Water Balloons
+    }
+    return 0;
+}
+
+server_try_buy_weapon :: proc(player: Player, wt: Weapon_Type) {
+    if player == null return;
+    if !Game.is_server() return;
+    if wt == .NONE return;
+
+    init_weapon_items();
+
+    defn := get_weapon_item_def(wt);
+    if defn == null {
+        Notifier.notify(player, "Weapon not available.");
+        return;
+    }
+
+    inv := player.default_inventory;
+    if inv == null || inv.self == null {
+        Notifier.notify(player, "No inventory available.");
+        return;
+    }
+
+    room := Items.calculate_room_in_inventory_for_item(defn, inv);
+    if room < 1 {
+        Notifier.notify(player, "Inventory full!");
+        return;
+    }
+
+    cost := weapon_shop_price(wt);
+    if cost <= 0 {
+        Notifier.notify(player, "Can't buy that weapon right now.");
+        return;
+    }
+
+    if !Economy.can_withdraw_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost) {
+        Notifier.notify(player, "Not enough Coins!");
+        return;
+    }
+
+    // Withdraw before granting to avoid double-spend edge cases.
+    Economy.withdraw_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost);
+
+    item := Items.create_item_instance(defn, 1);
+    if item == null || item.self == null {
+        // Refund if creation failed.
+        Economy.deposit_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost);
+        Notifier.notify(player, "Purchase failed.");
+        return;
+    }
+
+    will_destroy: bool;
+    if Items.can_move_item_to_inventory(item, inv, ref will_destroy) {
+        Items.move_item_to_inventory(item, inv);
+        Notifier.notify(player, "Bought % for % Coins.", {defn->get_name(), cost});
+    }
+    else {
+        Items.destroy_item_instance(item);
+        Economy.deposit_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost);
+        Notifier.notify(player, "Inventory full!");
+    }
+}
+
+server_try_buy_ammo :: proc(player: Player, ammo_type_index: s64) {
+    if player == null return;
+    if !Game.is_server() return;
+    if ammo_type_index < 0 || ammo_type_index >= AMMO_TYPE_COUNT return;
+
+    init_weapon_items();
+
+    info := get_ammo_info(ammo_type_index);
+    defn := g_ammo_item_defs[ammo_type_index];
+    if defn == null {
+        Notifier.notify(player, "Ammo not available.");
+        return;
+    }
+
+    inv := player.default_inventory;
+    if inv == null || inv.self == null {
+        Notifier.notify(player, "No inventory available.");
+        return;
+    }
+
+    // Ensure there's room for the full 100 units before charging.
+    room := Items.calculate_room_in_inventory_for_item(defn, inv);
+    if room < WEAPONS_SHOP_AMMO_BUY_AMOUNT {
+        Notifier.notify(player, "Not enough inventory space for % ammo.", {WEAPONS_SHOP_AMMO_BUY_AMOUNT});
+        return;
+    }
+
+    cost := ammo_shop_price(ammo_type_index);
+    if cost <= 0 {
+        Notifier.notify(player, "Can't buy that ammo right now.");
+        return;
+    }
+
+    if !Economy.can_withdraw_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost) {
+        Notifier.notify(player, "Not enough Coins!");
+        return;
+    }
+
+    Economy.withdraw_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost);
+
+    remaining := WEAPONS_SHOP_AMMO_BUY_AMOUNT;
+    stack_max := info.stack_size;
+    if stack_max < 1 {
+        stack_max = 1;
+    }
+
+    // Create stacks respecting the definition's max stack size.
+    while remaining > 0 {
+        chunk := remaining;
+        if chunk > stack_max {
+            chunk = stack_max;
+        }
+
+        item := Items.create_item_instance(defn, chunk);
+        if item == null || item.self == null {
+            // Refund the remaining portion if something went wrong.
+            // (Should be rare; keep it safe.)
+            Economy.deposit_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost);
+            Notifier.notify(player, "Purchase failed.");
+            return;
+        }
+
+        will_destroy: bool;
+        if Items.can_move_item_to_inventory(item, inv, ref will_destroy) {
+            Items.move_item_to_inventory(item, inv);
+        }
+        else {
+            Items.destroy_item_instance(item);
+            Economy.deposit_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost);
+            Notifier.notify(player, "Inventory full!");
+            return;
+        }
+
+        remaining -= chunk;
+    }
+
+    Notifier.notify(player, "Bought % x% for % Coins.", {info.name, WEAPONS_SHOP_AMMO_BUY_AMOUNT, cost});
+}
+
+draw_weapons_shop_button :: proc(player: Player) {
+    if player == null return;
+    if !player->is_local_or_server() return;
+
+    safe := UI.get_safe_screen_rect();
+    btn_rect := safe->right_center_rect()->grow(60)->offset(-90, -120);
+
+    bs := UI.default_button_settings();
+    ts := UI.default_text_settings();
+    ts.size = 22;
+
+    icon := get_asset(Texture_Asset, "Buttons/shopicon.png");
+    if icon != null {
+        bs.sprite = icon;
+        bs.press_scaling = 0.8;
+        draw_rect := btn_rect->fit_aspect(icon->get_aspect());
+
+        if UI.button(draw_rect, bs, ts, "Arms").clicked {
+            if Game.is_server() {
+                player.weapons_shop_open = !player.weapons_shop_open;
+                if player.weapons_shop_open {
+                    // Avoid overlapping modals.
+                    player.sell_shop_open = false;
+                    player.managers_open = false;
+                    player.harvester_upgrades_open = false;
+                }
+            }
+        }
+        return;
+    }
+
+    // Fallback: regular button if icon missing.
+    bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_5.png"); // Blue
+    bs.press_scaling = 0.4;
+    if UI.button(btn_rect->grow(0, 120, 0, 120), bs, ts, "Arms").clicked {
+        if Game.is_server() {
+            player.weapons_shop_open = !player.weapons_shop_open;
+            if player.weapons_shop_open {
+                player.sell_shop_open = false;
+                player.managers_open = false;
+                player.harvester_upgrades_open = false;
+            }
+        }
+    }
+}
+
+draw_weapons_shop_tabs :: proc(player: Player, rect: Rect) {
+    if player == null return;
+
+    ts := UI.default_text_settings();
+    ts.size = 28;
+    ts.halign = .CENTER;
+    ts.valign = .CENTER;
+    ts.do_outline = true;
+    ts.outline_thickness = 2;
+    ts.outline_color = {0, 0, 0, 1};
+
+    bs_selected := UI.default_button_settings();
+    bs_selected.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_5.png"); // Blue
+    bs_selected.press_scaling = 0.35;
+
+    bs_normal := UI.default_button_settings();
+    bs_normal.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_8.png"); // Grey
+    bs_normal.press_scaling = 0.35;
+
+    labels: [2]string = {"Weapons", "Ammo"};
+    for i: 0..1 {
+        UI.push_id("wep_shop_tab_%", {i});
+        defer UI.pop_id();
+
+        x1 := i.(float) / 2.0;
+        x2 := (i + 1).(float) / 2.0;
+        btn := rect->subrect(x1, 0, x2, 1)->inset(8);
+
+        is_selected := player.weapons_shop_tab == i;
+        bs := is_selected ? bs_selected : bs_normal;
+
+        if UI.button(btn, bs, ts, labels[i]).clicked {
+            if Game.is_server() {
+                player.weapons_shop_tab = i;
+            }
+        }
+    }
+}
+
+draw_page_controls :: proc(player: Player, rect: Rect, page: ref s64, page_count: s64) {
+    if player == null return;
+
+    if page_count < 1 {
+        page_count = 1;
+    }
+    if page < 0 {
+        page = 0;
+    }
+    if page >= page_count {
+        page = page_count - 1;
+    }
+
+    left := rect->cut_left_unscaled(rect->width() * 0.33);
+    mid  := rect->cut_left_unscaled(rect->width() * 0.34);
+    right := rect;
+
+    bs := UI.default_button_settings();
+    bs.press_scaling = 0.35;
+    bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_8.png"); // Grey
+
+    ts := UI.default_text_settings();
+    ts.size = 26;
+    ts.halign = .CENTER;
+    ts.valign = .CENTER;
+    ts.do_outline = true;
+    ts.outline_thickness = 2;
+    ts.outline_color = {0, 0, 0, 1};
+
+    UI.push_id("page_prev", {}); defer UI.pop_id();
+    if UI.button(left->inset(6), bs, ts, "Prev").clicked {
+        if Game.is_server() {
+            if page > 0 page -= 1;
+        }
+    }
+
+    UI.text(mid, ts, "Page % / %", {page + 1, page_count});
+
+    UI.push_id("page_next", {}); defer UI.pop_id();
+    if UI.button(right->inset(6), bs, ts, "Next").clicked {
+        if Game.is_server() {
+            if page < page_count - 1 page += 1;
+        }
+    }
+}
+
+draw_weapon_shop_item_card :: proc(player: Player, rect: Rect, wt: Weapon_Type) {
+    if player == null return;
+
+    config := get_weapon_config(wt);
+    icon := get_asset(Texture_Asset, config.weapon_icon_path);
+    cost := weapon_shop_price(wt);
+
+    bs := UI.default_button_settings();
+    bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_8.png"); // Grey
+    bs.press_scaling = 0.25;
+
+    ts := UI.default_text_settings();
+    ts.size = 22;
+    ts.halign = .CENTER;
+    ts.valign = .CENTER;
+    ts.word_wrap = true;
+    ts.do_outline = true;
+    ts.outline_thickness = 2;
+    ts.outline_color = {0, 0, 0, 1};
+
+    result := UI.begin_button(rect, bs, ts, ""); {
+        defer UI.end_button();
+
+        inner := result.rect->inset(12);
+        top := inner->cut_top_unscaled(inner->height() * 0.62);
+        _ := inner->cut_top(6);
+
+        if icon != null {
+            UI.quad(top->fit_aspect(icon->get_aspect()), icon);
+        }
+        else {
+            UI.quad(top, core_globals.white_sprite, {0.2, 0.2, 0.2, 1});
+        }
+
+        UI.text(inner, ts, "%\n$%", {config.item_name, cost});
+    }
+
+    if result.clicked {
+        server_try_buy_weapon(player, wt);
+    }
+}
+
+draw_ammo_shop_item_card :: proc(player: Player, rect: Rect, ammo_type_index: s64) {
+    if player == null return;
+
+    info := get_ammo_info(ammo_type_index);
+    icon := get_asset(Texture_Asset, info.icon_path);
+    cost := ammo_shop_price(ammo_type_index);
+
+    bs := UI.default_button_settings();
+    bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_8.png"); // Grey
+    bs.press_scaling = 0.25;
+
+    ts := UI.default_text_settings();
+    ts.size = 22;
+    ts.halign = .CENTER;
+    ts.valign = .CENTER;
+    ts.word_wrap = true;
+    ts.do_outline = true;
+    ts.outline_thickness = 2;
+    ts.outline_color = {0, 0, 0, 1};
+
+    result := UI.begin_button(rect, bs, ts, ""); {
+        defer UI.end_button();
+
+        inner := result.rect->inset(12);
+        top := inner->cut_top_unscaled(inner->height() * 0.62);
+        _ := inner->cut_top(6);
+
+        if icon != null {
+            UI.quad(top->fit_aspect(icon->get_aspect()), icon);
+        }
+        else {
+            UI.quad(top, core_globals.white_sprite, {0.2, 0.2, 0.2, 1});
+        }
+
+        UI.text(inner, ts, "%\n% for $%", {info.name, WEAPONS_SHOP_AMMO_BUY_AMOUNT, cost});
+    }
+
+    if result.clicked {
+        server_try_buy_ammo(player, ammo_type_index);
+    }
+}
+
+draw_weapons_shop_modal :: proc(player: Player) {
+    UI.push_screen_draw_context();
+    defer UI.pop_draw_context();
+
+    UI.push_layer(220);
+    defer UI.pop_layer();
+
+    screen := UI.get_safe_screen_rect();
+
+    // Dim background
+    UI.quad(screen, core_globals.white_sprite, {0, 0, 0, 0.65});
+
+    // Window
+    window := screen->inset(100);
+    UI.quad(window, core_globals.white_sprite, {0.12, 0.12, 0.12, 0.95});
+
+    // Header: title + tabs + balance
+    header := window->cut_top(170)->inset(20);
+    title_rect := header->cut_top(60);
+    tabs_rect := header->cut_top(70);
+    balance_rect := header;
+
+    ts_title := UI.default_text_settings();
+    ts_title.size = 52;
+    ts_title.halign = .LEFT;
+    ts_title.valign = .CENTER;
+    ts_title.offset = {20, 0};
+    ts_title.do_outline = true;
+    ts_title.outline_thickness = 3;
+    ts_title.outline_color = {0, 0, 0, 1};
+    UI.text(title_rect, ts_title, "Arms Dealer");
+
+    draw_weapons_shop_tabs(player, tabs_rect);
+
+    coins := Economy.get_balance(player, WEAPONS_SHOP_COIN_CURRENCY);
+    ts_bal := UI.default_text_settings();
+    ts_bal.size = 28;
+    ts_bal.halign = .RIGHT;
+    ts_bal.valign = .CENTER;
+    ts_bal.offset = {-20, 0};
+    ts_bal.do_outline = true;
+    ts_bal.outline_thickness = 2;
+    ts_bal.outline_color = {0, 0, 0, 1};
+    UI.text(balance_rect, ts_bal, "Coins: %", {coins});
+
+    // Content
+    content := window->inset(30);
+
+    // Footer close button
+    footer := content->cut_bottom(95);
+    {
+        bs_close := UI.default_button_settings();
+        ts_close := UI.default_text_settings();
+        ts_close.size = 40;
+        ts_close.halign = .CENTER;
+        ts_close.valign = .CENTER;
+
+        bs_close.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_3.png"); // Red
+        bs_close.press_scaling = 0.45;
+
+        close_btn := footer->inset(10);
+        if UI.button(close_btn, bs_close, ts_close, "Close").clicked {
+            if Game.is_server() {
+                player.weapons_shop_open = false;
+            }
+            return;
+        }
+    }
+
+    body := content->inset(10);
+
+    // Page controls
+    page_controls := body->cut_top(64);
+
+    ITEMS_PER_PAGE :: 9;
+    // Tab: 0 = Weapons, 1 = Ammo
+    if player.weapons_shop_tab == 0 {
+        types := weapon_shop_weapon_types();
+        item_count := WEAPON_COUNT;
+        page_count := (item_count + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE;
+        draw_page_controls(player, page_controls, ref player.weapons_shop_weapon_page, page_count);
+
+        // Grid area below
+        grid := body->inset(6);
+
+        start := player.weapons_shop_weapon_page * ITEMS_PER_PAGE;
+        end := start + ITEMS_PER_PAGE;
+        if end > item_count {
+            end = item_count;
+        }
+
+        // 3x3 grid
+        for slot: 0..ITEMS_PER_PAGE-1 {
+            idx := start + slot;
+            if idx >= end break;
+
+            col := slot % 3;
+            row := slot / 3;
+
+            x1 := col.(float) / 3.0;
+            x2 := (col + 1).(float) / 3.0;
+            y1 := 1.0 - (row + 1).(float) / 3.0;
+            y2 := 1.0 - row.(float) / 3.0;
+
+            card := grid->subrect(x1, y1, x2, y2)->inset(10);
+            wt := types[idx];
+
+            UI.push_id("weapon_%", {wt.(s64)});
+            defer UI.pop_id();
+            draw_weapon_shop_item_card(player, card, wt);
+        }
+    }
+    else {
+        item_count := AMMO_TYPE_COUNT;
+        page_count := (item_count + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE;
+        draw_page_controls(player, page_controls, ref player.weapons_shop_ammo_page, page_count);
+
+        grid := body->inset(6);
+
+        start := player.weapons_shop_ammo_page * ITEMS_PER_PAGE;
+        end := start + ITEMS_PER_PAGE;
+        if end > item_count {
+            end = item_count;
+        }
+
+        for slot: 0..ITEMS_PER_PAGE-1 {
+            idx := start + slot;
+            if idx >= end break;
+
+            col := slot % 3;
+            row := slot / 3;
+
+            x1 := col.(float) / 3.0;
+            x2 := (col + 1).(float) / 3.0;
+            y1 := 1.0 - (row + 1).(float) / 3.0;
+            y2 := 1.0 - row.(float) / 3.0;
+
+            card := grid->subrect(x1, y1, x2, y2)->inset(10);
+
+            UI.push_id("ammo_%", {idx});
+            defer UI.pop_id();
+            draw_ammo_shop_item_card(player, card, idx);
+        }
+    }
+}
+
+draw_weapons_shop_ui :: proc(player: Player) {
+    if player == null return;
+    if !player->is_local_or_server() return;
+
+    // Always draw the toggle button.
+    draw_weapons_shop_button(player);
+
+    if player.weapons_shop_open {
+        draw_weapons_shop_modal(player);
+    }
+}
+

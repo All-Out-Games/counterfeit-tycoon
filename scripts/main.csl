@@ -1,5 +1,6 @@
 import "core:ao"
 import "ui"
+import "reusable_weapons"
 
 HealthBarBack_Red: Texture_Asset;
 HealthBarFill_Red: Texture_Asset;
@@ -14,6 +15,11 @@ HealthBarFill_Red: Texture_Asset;
 ao_before_scene_load :: proc() {
     // Called before the scene is loaded
     ItemManager.AllItemDefinitions();
+
+    // Reusable weapons item definitions must be registered on BOTH server + clients,
+    // and early (before UI/inventories try to resolve icons). If this only runs
+    // server-side, clients can end up with null icons after rejoining/restarting.
+    init_weapon_items();
 
     // Economy currency registration (global, safe to call once).
     #static coin_currency_registered: bool;
@@ -40,6 +46,73 @@ ao_late_update :: proc(dt: float) {
 }
 
 COIN_CURRENCY :: "Coins";
+
+// Cheat: grant an item directly into the caller's inventory.
+// Usage:
+// - /g <item_id>
+// - /g <item_id> <count>   (count only applies if the item is stackable)
+g :: proc(player: Player, item_id: string, count: s64 = 1) {
+    if player == null return;
+    if !Game.is_server() return;
+
+    if item_id == "" {
+        Notifier.notify(player, "Usage: /g <item_id> [count]");
+        return;
+    }
+
+    if count < 1 {
+        count = 1;
+    }
+
+    defn := ItemManager.TryFindItem(item_id);
+    if defn == null {
+        Notifier.notify(player, "Unknown item_id: %", {item_id});
+        return;
+    }
+
+    inv := player.default_inventory;
+    if inv == null || inv.self == null {
+        Notifier.notify(player, "No inventory available.");
+        return;
+    }
+
+    // Create an instance with the requested quantity.
+    item := Items.create_item_instance(defn, count);
+    if item == null || item.self == null {
+        Notifier.notify(player, "Failed to create item: %", {item_id});
+        return;
+    }
+
+    // If the engine clamps quantity, treat it as non-stackable and only give 1.
+    if count > 1 && item.quantity != count {
+        Items.destroy_item_instance(item);
+        count = 1;
+        item = Items.create_item_instance(defn, 1);
+        Notifier.notify(player, "Item % is not stackable; giving 1.", {item_id});
+    }
+
+    destroyed_item: bool;
+    moved := Items.move_as_many_items_as_possible_to_inventory(item, inv, ref destroyed_item);
+
+    if moved <= 0 {
+        // Inventory full → clean up the instance we created (if it still exists).
+        if item != null && item.self != null {
+            Items.destroy_item_instance(item);
+        }
+        Notifier.notify(player, "Inventory full.");
+        return;
+    }
+
+    if moved < count {
+        Notifier.notify(player, "Gave % x% (inventory full).", {item_id, moved});
+    }
+    else if count > 1 {
+        Notifier.notify(player, "Gave % x%.", {item_id, moved});
+    }
+    else {
+        Notifier.notify(player, "Gave %.", {item_id});
+    }
+} @chat_command @youtuber
 
 // Convert any legacy "coin" item stacks into Coin currency.
 // (We used to award Coins as an Item_Definition; now it's a currency.)
@@ -114,6 +187,26 @@ draw_coin_currency_hud :: proc(player: Player) {
     UI.text(inner, ts, "%", {balance});
 }
 
+// Base safe zone:
+// If a player is within this axis-aligned box (width/height) centered on their own `base_entity`,
+// they cannot take weapon/bullet damage (when the damage source opts into the check).
+BASE_SAFE_ZONE_BOX_SIZE :: 15.0;
+BASE_SAFE_ZONE_BOX_HALF :: (BASE_SAFE_ZONE_BOX_SIZE * 0.5);
+
+player_is_in_own_base_safe_zone :: proc(player: Player) -> bool {
+    if player == null return false;
+    if player.entity == null || player.entity.self == null return false;
+    if player.base_entity == null || player.base_entity.self == null return false;
+
+    base_pos := player.base_entity.world_position;
+    p_pos := player.entity.world_position;
+
+    dx := abs(p_pos.x - base_pos.x);
+    dy := abs(p_pos.y - base_pos.y);
+
+    return dx <= BASE_SAFE_ZONE_BOX_HALF && dy <= BASE_SAFE_ZONE_BOX_HALF;
+}
+
 
 
 Player :: class : Player_Base {
@@ -123,9 +216,25 @@ Player :: class : Player_Base {
 
     base_state_machine: State_Machine;
 
+    equipped_weapon_type: Weapon_Type;
+    // Reusable weapons: per-player spawned attachment for Boomwheel.
+    boomwheel_cannon: Boomwheel_Cannon;
+    equipped_item_def: Item_Definition;
+    last_selected_index: s64;
+
+    // Debug: local-only marker that follows the "PROJECTILE" bone.
+    projectile_bone_debug_entity: Entity;
+
     // UI state (per-player, multiplayer safe)
     sell_shop_open: bool;
     sell_shop_movement_locked: bool;
+
+    // Reusable weapons shop UI (per-player, multiplayer safe)
+    weapons_shop_open: bool;
+    weapons_shop_movement_locked: bool;
+    weapons_shop_tab: s64;          // Weapons_Shop_Tab enum as s64 (0=Weapons, 1=Ammo)
+    weapons_shop_weapon_page: s64;
+    weapons_shop_ammo_page: s64;
 
     // Managers UI state + unlocks (per-player, multiplayer safe)
     managers_open: bool;
@@ -140,6 +249,90 @@ Player :: class : Player_Base {
     // PlayerBase ownership state (per-player, multiplayer safe)
     base_entity: Entity;
     base_spawn_index: s64;
+
+    // Vault theft hold tracking (per-player, multiplayer safe; server authoritative)
+    vault_theft_target_entity_id: u64; // entity.id of the vault currently being stolen from (0 if none)
+    vault_theft_hold_start_time: float;
+    vault_theft_last_hold_time: float;
+    vault_theft_owner_notified: bool;
+
+    // Client-side fallback notification (local-only via #static in method)
+    client_check_vault_theft_notifications :: method() {
+        // Purely cosmetic: only do this on the local client's player.
+        if !this->is_local() {
+            return;
+        }
+
+        // We want the toast on the client even if the server RPC is delayed/missed.
+        // This is a best-effort local UI notification using replicated thief hold state.
+
+        Theft_Notify_Entry :: struct {
+            thief_user_id: string;
+            vault_entity_id: u64;
+            time: float;
+        }
+
+        #static entries: [8]Theft_Notify_Entry;
+        #static cursor: s64;
+
+        // Helper: check whether `vault_entity_id` is one of OUR vault entities.
+        local_owns_vault_id :: proc(owner: Player, vault_entity_id: u64) -> bool {
+            if owner == null return false;
+            if vault_entity_id == 0 return false;
+            foreach v: component_iterator(Vault) {
+                if v == null continue;
+                if v.entity == null || v.entity.self == null continue;
+                if v.entity.id != vault_entity_id continue;
+                return is_owner_of_parent_base(v.entity, owner);
+            }
+            return false;
+        }
+
+        now := get_time();
+        THROTTLE_SECONDS :: 2.5;
+
+        foreach thief: component_iterator(Player) {
+            if thief == null continue;
+            if thief == this continue;
+            if thief.self == null continue;
+
+            vault_id := thief.vault_theft_target_entity_id;
+            if vault_id == 0 continue;
+
+            if !local_owns_vault_id(this, vault_id) {
+                continue;
+            }
+
+            // Throttle per (thief, vault).
+            already_notified := false;
+            for i: 0..entries.count-1 {
+                if entries[i].thief_user_id.count == 0 continue;
+                if entries[i].thief_user_id != thief->get_user_id() continue;
+                if entries[i].vault_entity_id != vault_id continue;
+                if now - entries[i].time < THROTTLE_SECONDS {
+                    already_notified = true;
+                }
+                break;
+            }
+            if already_notified continue;
+
+            msg := format_string("% is stealing from your Vault!", {thief->get_username()});
+            Notifier.notify(msg);
+
+            // Record.
+            if cursor < 0 {
+                cursor = 0;
+            }
+            idx := cursor % entries.count;
+            entries[idx].thief_user_id = thief->get_user_id();
+            entries[idx].vault_entity_id = vault_id;
+            entries[idx].time = now;
+            cursor += 1;
+        }
+    }
+
+    // Death / respawn state (per-player, server authoritative)
+    death_pickup_lockout: bool;
 
     give_item :: proc(player: Player, item_id: string) {
     item := Items.create_item_instance(ItemManager.FindItem(item_id), 1);
@@ -162,6 +355,12 @@ Player :: class : Player_Base {
         sell_shop_open = false;
         sell_shop_movement_locked = false;
 
+        weapons_shop_open = false;
+        weapons_shop_movement_locked = false;
+        weapons_shop_tab = 0;
+        weapons_shop_weapon_page = 0;
+        weapons_shop_ammo_page = 0;
+
         managers_open = false;
         managers_selected_lane = 0; // Lane 1 auto-selected
         for i: 0..3 {
@@ -175,8 +374,15 @@ Player :: class : Player_Base {
         base_entity = null;
         base_spawn_index = -1;
 
+        death_pickup_lockout = false;
+
+        last_selected_index = -1;
+
         // One-time migration: convert any legacy Coin items into Coin currency.
         if Game.is_server() {
+
+            init_weapon_items();
+
             migrate_legacy_coin_items_to_currency(this);
 
             // Load per-player Managers unlock masks (server authoritative, replicates to clients).
@@ -230,7 +436,22 @@ Player :: class : Player_Base {
         }
 
         // Configure the main player spine state machine on the base animator.
-        this->setup_player_spine_state_machine();
+        //this->setup_player_spine_state_machine();
+        setup_reusable_weapons_player_state_machine(this);
+
+
+        // Debug marker showing the current PROJECTILE bone position.
+        // Spawn on the server so the marker exists and replicates for everyone.
+        /*if Game.is_server() {
+            if projectile_bone_debug_entity == null {
+                e := Scene.create_entity();
+                e->set_local_position(entity.world_position);
+                dbg := e->add_component(Projectile_Bone_Debug);
+                dbg.player = this;
+                projectile_bone_debug_entity = e;
+            }
+        }
+        */
     }
 
     ao_update :: method(dt: float) {
@@ -250,7 +471,36 @@ Player :: class : Player_Base {
                     sell_shop_movement_locked = false;
                 }
             }
+
+            // Ensure the player can't move while the Weapons Shop modal is open.
+            if weapons_shop_open {
+                if !weapons_shop_movement_locked {
+                    this->add_disable_movement_input_reason("weapons_shop_ui");
+                    weapons_shop_movement_locked = true;
+                }
+            }
+            else {
+                if weapons_shop_movement_locked {
+                    this->remove_disable_movement_input_reason("weapons_shop_ui");
+                    weapons_shop_movement_locked = false;
+                }
+            }
+
+            // Clear "holding interactable" theft state shortly after the player stops holding.
+            // (There's no explicit "hold ended" callback.)
+            VAULT_HOLD_CLEAR_GRACE :: 0.25;
+            if vault_theft_target_entity_id != 0 && vault_theft_last_hold_time > 0 {
+                if get_time() - vault_theft_last_hold_time > VAULT_HOLD_CLEAR_GRACE {
+                    vault_theft_target_entity_id = 0;
+                    vault_theft_hold_start_time = 0;
+                    vault_theft_last_hold_time = 0;
+                    vault_theft_owner_notified = false;
+                }
+            }
         }
+
+          // Draw the floating health bar above the player's name, except for the Monster.
+        this->draw_health_bar();
 
         // Compute a shared "is_moving" flag from the movement agent's velocity.
         is_moving := false;
@@ -277,17 +527,36 @@ Player :: class : Player_Base {
             return;
         }
 
-        // Draw the floating health bar above the player's name, except for the Monster.
-        this->draw_health_bar();
+        // Client-side toast if someone starts stealing our vault.
+        client_check_vault_theft_notifications();
 
          // Draw floating combat text damage numbers in world space.
         this->draw_damage_numbers(dt);
 
-        // Draw the built-in inventory hotbar (engine UI).
-        draw_player_hotbar(this);
+        // Draw fire ability button based on equipped weapon
+        if equipped_weapon_type != .NONE {
+            config := get_weapon_config(equipped_weapon_type);
+            switch config.fire_mode {
+                case .CONTINUOUS:  { draw_ability_button(this, Continuous_Fire_Ability, 0); }
+                case .SINGLE_SHOT: { draw_ability_button(this, Single_Shot_Ability, 0); }
+                case .SPREAD:      { draw_ability_button(this, Spread_Shot_Ability, 0); }
+                case .LOBBED:      { draw_ability_button(this, Lobbed_Shot_Ability, 0); }
+                case .BEAM:        { draw_ability_button(this, Beam_Ability, 0); }
+                case .SPECIAL:     { draw_ability_button(this, Special_Ability, 0); }
+            }
+            draw_ability_button(this, Melee_Ability, 1); // optional melee
+        }
+
+        // Draw hotbar and handle equip/unequip
+        options := Inventory_Draw_Options.default();
+        hotbar := Items.draw_hotbar(this, default_inventory, options);
+        handle_equipped_item_changing(hotbar.selected_item_index);
 
         // Currency HUD
         draw_coin_currency_hud(this);
+
+        // Draw weapons shop button + modal UI.
+        draw_weapons_shop_ui(this);
 
         // Draw sell shop button + modal UI.
         draw_sell_shop_ui(this);
@@ -302,10 +571,21 @@ Player :: class : Player_Base {
     ao_end :: method() {
         // Called when this component is destroyed
         if Game.is_server() {
+            if projectile_bone_debug_entity != null {
+                projectile_bone_debug_entity->destroy();
+                projectile_bone_debug_entity = null;
+            }
+        }
+
+        if Game.is_server() {
             // Safety: ensure movement is re-enabled if the player leaves while UI is open.
             if sell_shop_movement_locked {
                 this->remove_disable_movement_input_reason("sell_shop_ui");
                 sell_shop_movement_locked = false;
+            }
+            if weapons_shop_movement_locked {
+                this->remove_disable_movement_input_reason("weapons_shop_ui");
+                weapons_shop_movement_locked = false;
             }
 
             gm := get_game_manager();
@@ -331,6 +611,43 @@ Player :: class : Player_Base {
 
     ao_on_holding_interactable :: method(interactable: Interactable) {
         // Called once per frame while the player is holding on the interactable
+        if interactable == null return;
+        if !Game.is_server() return;
+
+        // Only care about the steal interactable (deposit is owner-only).
+        if interactable.#type != Vault_Steal_Interactable {
+            return;
+        }
+
+        vault_entity := interactable.entity;
+        if vault_entity == null || vault_entity.self == null return;
+
+        // Touch the "last hold" timestamp so ao_update doesn't clear state mid-hold.
+        vault_theft_last_hold_time = get_time();
+
+        // Owner holds are normal deposits; only track non-owner holds.
+        if is_owner_of_parent_base(vault_entity, this) {
+            return;
+        }
+
+        // New target vault? Start timing and allow a fresh notification.
+        if vault_theft_target_entity_id != vault_entity.id {
+            vault_theft_target_entity_id = vault_entity.id;
+            vault_theft_hold_start_time = get_time();
+            vault_theft_owner_notified = false;
+        }
+
+        // Notify the owner client once, right as stealing begins.
+        if !vault_theft_owner_notified {
+            pb := get_parent_player_base(vault_entity);
+            if pb != null {
+                owner := pb->get_owner();
+                if owner != null {
+                    Notifier.notify(owner, "% is stealing from your Vault!", {this->get_username()});
+                }
+            }
+            vault_theft_owner_notified = true;
+        }
     }
 
    // Configure the base player spine state machine for this player's main animator.
@@ -822,14 +1139,63 @@ Player :: class : Player_Base {
         Tutorial_Arrow.draw(this, target_world, options);
     }
 
+    handle_equipped_item_changing :: method(selected_index: s64) {
+        // Resolve item from hotbar index
+        selected_item: Item_Instance;
+        if selected_index >= 0 && selected_index < default_inventory.capacity {
+            selected_item = default_inventory->get_item(selected_index);
+        }
+
+        new_def: Item_Definition;
+        if selected_item != null {
+            new_def = selected_item->get_definition();
+        }
+
+        // Skip if nothing changed
+        if selected_index == last_selected_index && new_def == equipped_item_def return;
+        last_selected_index = selected_index;
+
+        // Skip if same item definition
+        if new_def == equipped_item_def return;
+
+        // Unequip old weapon
+        if equipped_weapon_type != .NONE {
+            weapon_unequip(this, equipped_weapon_type);
+            equipped_weapon_type = .NONE;
+        }
+        equipped_item_def = null;
+
+        // Equip new weapon if it's a registered weapon
+        if new_def != null {
+            wt := get_weapon_type_for_item(new_def);
+            if wt != .NONE {
+                weapon_equip(this, wt);
+                equipped_weapon_type = wt;
+                equipped_item_def = new_def;
+            }
+        }
+    }
+
     // Apply damage to this player from server-authoritative logic.
-    take_damage :: proc(using this: Player, amount: float, source: Player = null) {
+    take_damage :: proc(using this: Player, amount: float, source: Player = null, blocked_by_base_safe_zone: bool = false) {
+        _ := source;
+
         if amount <= 0 {
             return;
         }
 
         // Health should only be modified on the server.
         if !Game.is_server() {
+            return;
+        }
+
+        // Ignore damage while dead / in death sequence.
+        if death_pickup_lockout {
+            return;
+        }
+
+        // Optional: weapon/bullet damage is blocked when the player is in their own base safe zone.
+        if blocked_by_base_safe_zone && player_is_in_own_base_safe_zone(this) {
             return;
         }
 
@@ -865,5 +1231,24 @@ Player :: class : Player_Base {
         // Start a damage flicker on this player's rig for visual feedback.
         //flash := new(Damage_Flash_Effect);
         //entity->add_passive_effect(flash);
+
+        // Death trigger.
+        if CurrentHealth <= 0 {
+            this->server_start_death();
+        }
+    }
+
+    // Server-only: begin the death sequence (active effect + item drops + lockout).
+    server_start_death :: method() {
+        if !Game.is_server() return;
+        if death_pickup_lockout return; // already dying/dead
+        if entity == null || entity.self == null return;
+
+        // Set immediately so we can't re-enter via multiple damage events in a single tick.
+        death_pickup_lockout = true;
+
+        // Attach the death effect (handles freeze, animation, drops, respawn + fade).
+        effect := new(Death_Effect);
+        entity->set_active_effect(effect);
     }
 }

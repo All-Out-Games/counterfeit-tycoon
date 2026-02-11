@@ -100,6 +100,7 @@ draw_harvester_upgrades_button :: proc(player: Player) {
                     // Avoid overlapping modals.
                     player.managers_open = false;
                     player.sell_shop_open = false;
+                    player.weapons_shop_open = false;
                 }
             }
         }
@@ -115,6 +116,7 @@ draw_harvester_upgrades_button :: proc(player: Player) {
             if player.harvester_upgrades_open {
                 player.managers_open = false;
                 player.sell_shop_open = false;
+                player.weapons_shop_open = false;
             }
         }
     }
