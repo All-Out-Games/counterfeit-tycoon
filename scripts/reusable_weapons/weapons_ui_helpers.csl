@@ -3,6 +3,10 @@ draw_all_players_health_bars_local :: proc() {
     UI.push_world_draw_context();
     defer UI.pop_draw_context();
 
+    // Ensure we draw above most sprites nearby.
+    UI.push_layer(5);
+    defer UI.pop_layer();
+
     foreach p: component_iterator(Player) {
         if p == null continue;
         if p.entity == null || p.entity.self == null continue;
@@ -17,7 +21,8 @@ draw_health_bar_in_world_context :: proc(player: Player) {
     // Anchor directly to player world position (do not depend on nameplate rects, which can be unstable).
     pos := player.entity.world_position + v2{0, 1.75};
 
-    UI.push_z(pos.y - 0.0001);
+    // Sort relative to the owning entity (not the bar's y-offset) so bars stay in front of players.
+    UI.push_z(player.entity.world_position.y - 0.002);
     defer UI.pop_z();
 
     // World-space sizing (meters)

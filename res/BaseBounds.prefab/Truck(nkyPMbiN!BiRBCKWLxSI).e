@@ -41,4 +41,17 @@
   "data": {
     "lock_to_navmesh": true
   }
+},
+{
+  "cid": 3,
+  "aoid": "145585187735471:1770882060007326100",
+  "component_type": "Internal_Component",
+  "internal_component_type": "Circle_Collider",
+  "data": {
+    "is_trigger": true,
+    "size": 1,
+    "offset": {
+      "Y": 0.2500000000000000
+    }
+  }
 }

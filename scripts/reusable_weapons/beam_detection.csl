@@ -29,6 +29,31 @@ beam_line_damage :: proc(player: Player, origin: v2, direction: v2, range: float
             target->take_damage(damage, player, true);
         }
     }
+
+    // Truck hit registration (only when carrying bills, and never by its owner)
+    nearby_trucks: [..]Truck;
+    Scene.get_all_components_in_range(origin, range, ref nearby_trucks);
+
+    for t: nearby_trucks {
+        if t == null continue;
+        if t.entity == null || t.entity.self == null continue;
+
+        target_pos := t.entity.world_position;
+        to_target := v2{target_pos.x - origin.x, target_pos.y - origin.y};
+
+        // Project onto beam direction
+        dot := to_target.x * dir.x + to_target.y * dir.y;
+        if dot < 0 || dot > range continue;
+
+        // Perpendicular distance
+        proj := v2{dir.x * dot, dir.y * dot};
+        perp := v2{to_target.x - proj.x, to_target.y - proj.y};
+        perp_dist := length(perp);
+
+        if perp_dist <= width {
+            _ := t->server_register_weapon_hit(player.entity.id, damage);
+        }
+    }
 }
 
 // Cone beam: damage players within a cone from origin
@@ -64,6 +89,31 @@ beam_cone_damage :: proc(player: Player, origin: v2, direction: v2, range: float
             target->take_damage(damage, player, true);
         }
     }
+
+    // Truck hit registration (only when carrying bills, and never by its owner)
+    nearby_trucks: [..]Truck;
+    Scene.get_all_components_in_range(origin, range, ref nearby_trucks);
+
+    for t: nearby_trucks {
+        if t == null continue;
+        if t.entity == null || t.entity.self == null continue;
+
+        target_pos := t.entity.world_position;
+        to_target := v2{target_pos.x - origin.x, target_pos.y - origin.y};
+        dist := length(to_target);
+        if dist < 0.1 || dist > range continue;
+
+        to_target_norm := normalize(to_target);
+
+        dot := dir.x * to_target_norm.x + dir.y * to_target_norm.y;
+        if dot > 1.0 { dot = 1.0; }
+        if dot < -1.0 { dot = -1.0; }
+
+        cos_half := cos(half_angle);
+        if dot >= cos_half {
+            _ := t->server_register_weapon_hit(player.entity.id, damage);
+        }
+    }
 }
 
 // Radius-based damage: damages all players within range (Octo Siphoner)
@@ -80,6 +130,15 @@ beam_radius_damage :: proc(player: Player, origin: v2, range: float, damage: flo
         }
         target->take_damage(damage, player, true);
         hit_count += 1;
+    }
+
+    // Truck hit registration (does NOT affect the player hit_count return value)
+    nearby_trucks: [..]Truck;
+    Scene.get_all_components_in_range(origin, range, ref nearby_trucks);
+    for t: nearby_trucks {
+        if t == null continue;
+        if t.entity == null || t.entity.self == null continue;
+        _ := t->server_register_weapon_hit(player.entity.id, damage);
     }
     return hit_count;
 }

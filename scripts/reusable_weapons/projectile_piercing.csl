@@ -62,6 +62,42 @@ Piercing_Projectile :: class : Component {
                     SFX.play(hit_sfx, sfx_desc);
                 }
             }
+
+            // Truck hit registration (only when carrying bills, and never by its owner)
+            nearby_trucks: [..]Truck;
+            Scene.get_all_components_in_range(pos, 1.25, ref nearby_trucks);
+
+            for hit_truck: nearby_trucks {
+                if hit_truck == null continue;
+                if hit_truck.entity == null || hit_truck.entity.self == null continue;
+
+                // Check if already hit
+                already_hit := false;
+                j := 0;
+                while j < hit_count {
+                    if hit_ids[j] == hit_truck.entity.id {
+                        already_hit = true;
+                    }
+                    j += 1;
+                }
+                if already_hit continue;
+
+                if hit_truck->server_register_weapon_hit(owner_id, damage) {
+                    // Record hit (only if the hit was accepted)
+                    if hit_count < 32 {
+                        hit_ids[hit_count] = hit_truck.entity.id;
+                        hit_count += 1;
+                    }
+
+                    if !mute_hit_sound {
+                        hit_sfx := get_asset(SFX_Asset, "reusable_weapons/sounds/reusable-weapons/bullet_hit.wav");
+                        sfx_desc := SFX.default_sfx_desc();
+                        sfx_desc->set_position(pos);
+                        sfx_desc.range_multiplier = 2.0;
+                        SFX.play(hit_sfx, sfx_desc);
+                    }
+                }
+            }
         }
     }
 }

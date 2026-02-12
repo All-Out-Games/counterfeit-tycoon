@@ -1,0 +1,195 @@
+import "core:ao"
+
+TRUCK_UPGRADES_COIN_CURRENCY :: "Coins";
+TRUCK_UPGRADES_MAX_LEVEL :: 10;
+
+Truck_Upgrade_Kind :: enum {
+    CAPACITY;
+    HP;
+    SPEED;
+}
+
+truck_upgrade_kind_index :: proc(kind: Truck_Upgrade_Kind) -> s64 {
+    switch kind {
+        case .CAPACITY: return 0;
+        case .HP:       return 1;
+        case .SPEED:    return 2;
+    }
+    return 0;
+}
+
+truck_upgrade_kind_from_index :: proc(idx: s64) -> Truck_Upgrade_Kind {
+    switch idx {
+        case 0: return .CAPACITY;
+        case 1: return .HP;
+        case 2: return .SPEED;
+    }
+    return .CAPACITY;
+}
+
+truck_upgrade_display_name :: proc(kind: Truck_Upgrade_Kind) -> string {
+    switch kind {
+        case .CAPACITY: return "Capacity";
+        case .HP:       return "HP";
+        case .SPEED:    return "Speed";
+    }
+    return "Upgrade";
+}
+
+truck_upgrade_level_save_key :: proc(kind: Truck_Upgrade_Kind) -> string {
+    switch kind {
+        case .CAPACITY: return "truck_capacity_level";
+        case .HP:       return "truck_hp_level";
+        case .SPEED:    return "truck_speed_level";
+    }
+    return "truck_capacity_level";
+}
+
+get_player_truck_level :: proc(player: Player, kind: Truck_Upgrade_Kind) -> s64 {
+    if player == null return 1;
+
+    idx := truck_upgrade_kind_index(kind);
+    if idx < 0 || idx >= 3 return 1;
+
+    lvl := player.truck_upgrade_levels[idx];
+    if lvl < 1 {
+        lvl = 1;
+    }
+    if lvl > TRUCK_UPGRADES_MAX_LEVEL {
+        lvl = TRUCK_UPGRADES_MAX_LEVEL;
+    }
+    return lvl;
+}
+
+set_player_truck_level :: proc(player: Player, kind: Truck_Upgrade_Kind, level: s64) {
+    if player == null return;
+
+    idx := truck_upgrade_kind_index(kind);
+    if idx < 0 || idx >= 3 return;
+
+    if level < 1 {
+        level = 1;
+    }
+    if level > TRUCK_UPGRADES_MAX_LEVEL {
+        level = TRUCK_UPGRADES_MAX_LEVEL;
+    }
+    player.truck_upgrade_levels[idx] = level;
+}
+
+// Capacity scaling:
+// - Level 1: 1,000 Finished Bills per trip
+// - Level 10: 1,000,000 Finished Bills per trip
+// We use smooth exponential scaling between endpoints.
+truck_capacity_for_level :: proc(level: s64) -> s64 {
+    if level <= 1 return 1000;
+    if level >= TRUCK_UPGRADES_MAX_LEVEL return 1000000;
+
+    t := (level - 1).(float) / (TRUCK_UPGRADES_MAX_LEVEL - 1).(float); // 0..1
+    base := 1000.0;
+    maxv := 1000000.0;
+    val_f := base * pow(maxv / base, t);
+    // Round to nearest whole bill.
+    val := (val_f + 0.5).(s64);
+    if val < 1000 {
+        val = 1000;
+    }
+    if val > 1000000 {
+        val = 1000000;
+    }
+    return val;
+}
+
+// HP scaling:
+// - Level 1: 100 HP
+// - Level 10: 5000 HP
+// We use linear scaling between endpoints.
+truck_max_hp_for_level :: proc(level: s64) -> s64 {
+    if level <= 1 return 100;
+    if level >= TRUCK_UPGRADES_MAX_LEVEL return 5000;
+
+    t := (level - 1).(float) / (TRUCK_UPGRADES_MAX_LEVEL - 1).(float); // 0..1
+    val_f := lerp(100.0, 5000.0, t);
+    val := (val_f + 0.5).(s64);
+    if val < 100 {
+        val = 100;
+    }
+    if val > 5000 {
+        val = 5000;
+    }
+    return val;
+}
+
+// Speed scaling:
+// Multiplier applied to the Truck's base move_speed.
+TRUCK_SPEED_MULT_PER_LEVEL :: 0.12;
+truck_speed_mult_for_level :: proc(level: s64) -> float {
+    if level < 1 {
+        level = 1;
+    }
+    if level > TRUCK_UPGRADES_MAX_LEVEL {
+        level = TRUCK_UPGRADES_MAX_LEVEL;
+    }
+    lvl_f := (level - 1).(float);
+    return 1.0 + lvl_f * TRUCK_SPEED_MULT_PER_LEVEL;
+}
+
+base_truck_upgrade_costs :: proc() -> [9]s64 {
+    // Placeholder tuning: costs to upgrade from 1->2, 2->3, ... 9->10 (HP baseline).
+    return {250, 600, 1400, 3200, 7200, 16000, 35000, 75000, 160000};
+}
+
+truck_upgrade_cost_multiplier :: proc(kind: Truck_Upgrade_Kind) -> s64 {
+    // Capacity most expensive, then Speed, then HP.
+    switch kind {
+        case .HP:       return 1;
+        case .SPEED:    return 3;
+        case .CAPACITY: return 10;
+    }
+    return 1;
+}
+
+truck_upgrade_cost_for_level :: proc(kind: Truck_Upgrade_Kind, level: s64) -> s64 {
+    if level < 1 return 0;
+    if level >= TRUCK_UPGRADES_MAX_LEVEL return 0;
+
+    costs := base_truck_upgrade_costs();
+    idx := level - 1; // level 1 uses costs[0]
+    if idx < 0 || idx >= costs.count return 0;
+
+    mult := truck_upgrade_cost_multiplier(kind);
+    if mult < 1 {
+        mult = 1;
+    }
+    return costs[idx] * mult;
+}
+
+server_try_upgrade_truck :: proc(player: Player, kind: Truck_Upgrade_Kind) {
+    if player == null return;
+    if !Game.is_server() return;
+
+    level := get_player_truck_level(player, kind);
+    if level >= TRUCK_UPGRADES_MAX_LEVEL {
+        Notifier.notify(player, "% is already max level.", {truck_upgrade_display_name(kind)});
+        return;
+    }
+
+    cost := truck_upgrade_cost_for_level(kind, level);
+    if cost <= 0 {
+        Notifier.notify(player, "Can't upgrade right now.");
+        return;
+    }
+
+    if !Economy.can_withdraw_currency(player, TRUCK_UPGRADES_COIN_CURRENCY, cost) {
+        Notifier.notify(player, "Not enough Coins!");
+        return;
+    }
+
+    Economy.withdraw_currency(player, TRUCK_UPGRADES_COIN_CURRENCY, cost);
+
+    new_level := level + 1;
+    set_player_truck_level(player, kind, new_level);
+    Save.set_int(player, truck_upgrade_level_save_key(kind), new_level);
+
+    Notifier.notify(player, "Truck % upgraded to Level %.", {truck_upgrade_display_name(kind), new_level});
+}
+

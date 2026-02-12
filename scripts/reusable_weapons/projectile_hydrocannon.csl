@@ -120,6 +120,33 @@ Hydro_Cannon_Geyser :: class : Component {
 
             target->take_damage(GEYSER_DAMAGE, null, true);
         }
+
+        // Damage nearby trucks (only when carrying bills, and never by the truck's owner)
+        nearby_trucks: [..]Truck;
+        Scene.get_all_components_in_range(pos, GEYSER_HIT_RADIUS, ref nearby_trucks);
+
+        for t: nearby_trucks {
+            if t == null continue;
+            if t.entity == null || t.entity.self == null continue;
+
+            // Check if already hit by this geyser
+            already_hit := false;
+            j := 0;
+            while j < hit_count {
+                if hit_ids[j] == t.entity.id {
+                    already_hit = true;
+                }
+                j += 1;
+            }
+            if already_hit continue;
+
+            if t->server_register_weapon_hit(owner_id, GEYSER_DAMAGE) {
+                if hit_count < 32 {
+                    hit_ids[hit_count] = t.entity.id;
+                    hit_count += 1;
+                }
+            }
+        }
     }
 }
 

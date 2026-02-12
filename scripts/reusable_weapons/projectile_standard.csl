@@ -43,6 +43,21 @@ Standard_Projectile :: class : Component {
                     return;
                 }
             }
+
+            // Truck hit registration (only when carrying bills, and never by its owner)
+            hit_truck, found_truck := Scene.get_closest_component_in_range(pos, 1.25, Truck);
+            if found_truck && hit_truck != null {
+                if hit_truck->server_register_weapon_hit(owner_id, damage) {
+                    hit_sfx := get_asset(SFX_Asset, "reusable_weapons/sounds/reusable-weapons/bullet_hit.wav");
+                    sfx_desc := SFX.default_sfx_desc();
+                    sfx_desc->set_position(pos);
+                    sfx_desc.range_multiplier = 2.0;
+                    SFX.play(hit_sfx, sfx_desc);
+
+                    entity->destroy();
+                    return;
+                }
+            }
         }
     }
 }

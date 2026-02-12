@@ -256,6 +256,7 @@ draw_weapons_shop_button :: proc(player: Player) {
                     player.managers_open = false;
                     player.harvester_upgrades_open = false;
                     player.upgrades_open = false;
+                    player.truck_upgrades_open = false;
                 }
             }
         }
@@ -273,6 +274,7 @@ draw_weapons_shop_button :: proc(player: Player) {
                 player.managers_open = false;
                 player.harvester_upgrades_open = false;
                 player.upgrades_open = false;
+                player.truck_upgrades_open = false;
             }
         }
     }

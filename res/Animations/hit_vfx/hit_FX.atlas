@@ -1,0 +1,79 @@
+483bfcf30c2df14b.png
+	size: 4060, 304
+	filter: Linear, Linear
+	scale: 0.5
+images/1/1
+	bounds: 3805, 67, 114, 98
+	offsets: 3, 0, 117, 98
+images/1/2
+	bounds: 2397, 55, 74, 95
+images/1/3
+	bounds: 3805, 171, 126, 124
+	rotate: 90
+images/2/1
+	bounds: 3476, 50, 247, 94
+	offsets: 0, 0, 249, 95
+	rotate: 90
+images/2/2
+	bounds: 3576, 67, 230, 87
+	offsets: 1, 0, 231, 88
+	rotate: 90
+images/2/3
+	bounds: 3181, 20, 277, 135
+	offsets: 0, 0, 277, 136
+	rotate: 90
+images/3/1
+	bounds: 764, 6, 305, 291
+images/3/2
+	bounds: 1657, 10, 287, 262
+	rotate: 90
+images/3/3
+	bounds: 1925, 52, 245, 236
+	rotate: 90
+images/4/1
+	bounds: 2840, 45, 90, 108
+	offsets: 1, 1, 91, 109
+images/4/2
+	bounds: 3935, 46, 117, 120
+	offsets: 0, 0, 117, 121
+images/5/1
+	bounds: 3669, 151, 130, 146
+images/5/2
+	bounds: 3935, 172, 115, 125
+images/5/3
+	bounds: 2477, 66, 78, 84
+images/5/4
+	bounds: 3322, 138, 148, 159
+images/6/1
+	bounds: 2167, 68, 106, 82
+	offsets: 0, 1, 106, 83
+images/6/2
+	bounds: 2708, 54, 126, 99
+images/6/3
+	bounds: 2564, 60, 138, 93
+images/explosion big/explosion_5_00
+	bounds: 2279, 78, 112, 72
+	offsets: 153, 92, 420, 330
+images/explosion big/explosion_5_01
+	bounds: 2959, 72, 225, 216
+	offsets: 90, 48, 420, 330
+	rotate: 90
+images/explosion big/explosion_5_02
+	bounds: 1386, 7, 290, 265
+	offsets: 67, 21, 420, 330
+	rotate: 90
+images/explosion big/explosion_5_03
+	bounds: 1075, 23, 305, 274
+	offsets: 57, 14, 420, 330
+images/explosion big/explosion_5_04
+	bounds: 6, 15, 361, 282
+	offsets: 29, 12, 420, 330
+images/explosion big/explosion_5_05
+	bounds: 373, 37, 385, 260
+	offsets: 17, 36, 420, 330
+images/explosion big/explosion_5_06
+	bounds: 2167, 156, 391, 141
+	offsets: 14, 69, 420, 330
+images/explosion big/explosion_5_07
+	bounds: 2564, 159, 389, 138
+	offsets: 15, 69, 420, 330

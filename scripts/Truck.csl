@@ -29,6 +29,17 @@ find_connected_player_by_user_id :: proc(user_id: string) -> Player {
     return null;
 }
 
+find_local_player :: proc() -> Player {
+    foreach p: component_iterator(Player) {
+        if p == null continue;
+        if p.self == null continue;
+        if p->is_local() {
+            return p;
+        }
+    }
+    return null;
+}
+
 find_vault_for_base :: proc(base: PlayerBase) -> Vault {
     if base == null return null;
     if base.entity == null || base.entity.self == null return null;
@@ -107,12 +118,26 @@ Truck :: class : Interactable {
     state: Truck_State;
     carried_finished_bills: s64;
     owner_user_id: string;
+    
+    // Delivery event (runtime / synced)
+    // Updated on successful bank sale so the owner client can display a local notification.
+    delivery_seq: s64;
+    delivery_bills: s64;
+    delivery_coins: s64;
+
+    // Upgraded stats (runtime / synced)
+    hp: s64;
+    hp_max: s64;
 
     // Runtime
     agent: Movement_Agent;
     home_world_pos: v2;
+    home_world_pos_locked: bool;
     target_world_pos: v2;
     drive_start_time: float;
+
+    base_move_speed: float;
+    base_move_speed_initialized: bool;
     
     spine: Spine_Animator;
     spine_sm: State_Machine;
@@ -128,6 +153,10 @@ Truck :: class : Interactable {
         // Defaults (only if not set in editor)
         if move_speed <= 0 {
             move_speed = 4.0;
+        }
+        if !base_move_speed_initialized {
+            base_move_speed = move_speed;
+            base_move_speed_initialized = true;
         }
         if arrive_radius <= 0 {
             arrive_radius = 0.6;
@@ -150,6 +179,7 @@ Truck :: class : Interactable {
 
         // Home position is wherever the truck started the game.
         home_world_pos = entity.world_position;
+        home_world_pos_locked = false;
         target_world_pos = home_world_pos;
         
         last_world_pos = entity.world_position;
@@ -159,6 +189,14 @@ Truck :: class : Interactable {
         carried_finished_bills = 0;
         owner_user_id = {};
         drive_start_time = 0;
+        
+        delivery_seq = 0;
+        delivery_bills = 0;
+        delivery_coins = 0;
+
+        // Default upgraded stats (will be overwritten once owner is resolved).
+        hp_max = truck_max_hp_for_level(1);
+        hp = hp_max;
 
         agent = entity->get_component(Movement_Agent);
         if agent == null {
@@ -245,17 +283,29 @@ Truck :: class : Interactable {
             return;
         }
 
-        // Capture "home" at dispatch time so returning works even if the truck was repositioned
-        // after spawning (e.g., based on PlayerSpawn index).
-        home_world_pos = entity.world_position;
-        target_world_pos = home_world_pos;
-        last_world_pos = entity.world_position;
-        last_world_pos_initialized = true;
+        // Take at most the upgraded capacity worth of bills from the vault.
+        cap_level := get_player_truck_level(player, .CAPACITY);
+        max_take := truck_capacity_for_level(cap_level);
+        take := bills;
+        if take > max_take {
+            take = max_take;
+        }
+        if take <= 0 {
+            Notifier.notify(player, "Truck can't carry any Finished Bills right now.");
+            return;
+        }
 
-        // Take ALL bills from the vault.
-        vault.stored_finished_bills = 0;
-        carried_finished_bills = bills;
-        owner_user_id = base.owner_user_id;
+        vault.stored_finished_bills -= take;
+        if vault.stored_finished_bills < 0 {
+            vault.stored_finished_bills = 0;
+        }
+        carried_finished_bills = take;
+        // Resolve ownership via the interacting player's user id so the server can
+        // reliably find the connected Player later for payout + notification.
+        owner_user_id = player->get_user_id();
+        if owner_user_id.count <= 0 {
+            owner_user_id = base.owner_user_id;
+        }
 
         // Drive to bank.
         target_world_pos = get_bank_destination_world_pos(bank);
@@ -263,14 +313,27 @@ Truck :: class : Interactable {
         drive_start_time = get_time();
 
         this->set_text("Truck in transit");
-        Notifier.notify(player, "Truck dispatched with % Finished Bills.", {bills});
+        Notifier.notify(player, "Truck dispatched with % Finished Bills.", {take});
     }
 
     ao_update :: method(dt: float) {
         _ := dt;
+
+        // Cache "home" once: the first position this Truck has when it starts pathing.
+        // This is the position it should always attempt to return to.
+        if !home_world_pos_locked && state != .IDLE {
+            home_world_pos = entity.world_position;
+            home_world_pos_locked = true;
+        }
         
         // Visuals/animation should run on all peers (server + clients).
         update_visuals();
+        
+        // Apply upgraded stats from the owning player on all peers so movement is smooth.
+        apply_owner_upgrade_stats();
+        
+        // Client-side (local) notification for successful deliveries (owner only).
+        try_notify_delivery_local();
 
         // Movement target should be set on BOTH client and server (for smooth local motion),
         // but gameplay state changes remain server-authoritative.
@@ -326,9 +389,248 @@ Truck :: class : Interactable {
                     state = .IDLE;
                     drive_start_time = 0;
                     this->set_text("Send truck to bank");
+                    // Repair when it makes it home.
+                    if hp < hp_max {
+                        hp = hp_max;
+                    }
                 }
             }
         }
+    }
+    
+    try_notify_delivery_local :: method() {
+        // Trigger off the replicated sequence number; show notification only once per delivery.
+        // NOTE: Do NOT store "seen" as a replicated field; it will be overwritten by server state.
+        if delivery_seq <= 0 return;
+
+        // Only run on clients (cosmetic).
+        if Game.is_server() return;
+
+        local_player := find_local_player();
+        if local_player == null return;
+
+        // Only the owning client should display this message.
+        if local_player->get_user_id() != owner_user_id return;
+        if delivery_bills <= 0 || delivery_coins <= 0 return;
+
+        Delivery_Seen_Entry :: struct {
+            truck_entity_id: u64;
+            seq: s64;
+        }
+        #static seen: [16]Delivery_Seen_Entry;
+        #static cursor: s64;
+
+        truck_id := entity.id;
+
+        slot: s64 = -1;
+        for i: 0..seen.count-1 {
+            if seen[i].truck_entity_id == 0 continue;
+            if seen[i].truck_entity_id != truck_id continue;
+            slot = i;
+            break;
+        }
+
+        if slot >= 0 {
+            if seen[slot].seq == delivery_seq {
+                return;
+            }
+            seen[slot].seq = delivery_seq;
+        }
+        else {
+            if cursor < 0 {
+                cursor = 0;
+            }
+            idx := cursor % seen.count;
+            seen[idx].truck_entity_id = truck_id;
+            seen[idx].seq = delivery_seq;
+            cursor += 1;
+        }
+
+        msg := format_string("Traded in % Counterfeits for % Coins", {delivery_bills, delivery_coins});
+        Notifier.notify(msg);
+    }
+
+    get_owner_player :: method() -> Player {
+        base := get_parent_player_base(entity);
+        if base == null return null;
+
+        // Best case: owner component is available on this peer.
+        owner := base->get_owner();
+        if owner != null {
+            return owner;
+        }
+
+        // Fallback: resolve from user id (usually server-only).
+        if base.owner_user_id.count > 0 {
+            return find_connected_player_by_user_id(base.owner_user_id);
+        }
+        return null;
+    }
+
+    apply_owner_upgrade_stats :: method() {
+        if !base_move_speed_initialized {
+            base_move_speed = move_speed;
+            base_move_speed_initialized = true;
+        }
+
+        owner := get_owner_player();
+
+        // Speed
+        speed_lvl := get_player_truck_level(owner, .SPEED);
+        speed_mult := truck_speed_mult_for_level(speed_lvl);
+        move_speed = base_move_speed * speed_mult;
+
+        // HP
+        hp_lvl := get_player_truck_level(owner, .HP);
+        new_hp_max := truck_max_hp_for_level(hp_lvl);
+        if new_hp_max < 1 {
+            new_hp_max = 1;
+        }
+        if hp_max != new_hp_max {
+            hp_max = new_hp_max;
+            // Only clamp down when max HP changes; do NOT auto-heal to full.
+            if hp > hp_max {
+                hp = hp_max;
+            }
+        }
+        // Keep HP in [0, hp_max].
+        if hp < 0 { hp = 0; }
+        if hp > hp_max { hp = hp_max; }
+
+        // HP should always be max while idle (fully repaired at home).
+        if state == .IDLE {
+            hp = hp_max;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Weapon hit registration (server-only gameplay)
+    // Other players can damage this truck ONLY when it is carrying bills.
+    // The owning player can NEVER damage their own truck.
+    // -----------------------------------------------------------------------
+    get_owner_entity_id :: method() -> u64 {
+        owner := get_owner_player();
+        if owner != null && owner.entity != null && owner.entity.self != null {
+            return owner.entity.id;
+        }
+        return 0;
+    }
+
+    can_be_shot_by_entity_id :: method(shooter_entity_id: u64) -> bool {
+        if !Game.is_server() return false;
+        if shooter_entity_id == 0 return false;
+
+        // Only shootable while it actually contains bills.
+        if carried_finished_bills <= 0 return false;
+
+        // Owner can't shoot their own truck.
+        owner_id := get_owner_entity_id();
+        if owner_id != 0 && shooter_entity_id == owner_id {
+            return false;
+        }
+
+        return true;
+    }
+
+    // Called by weapon projectiles / beams when they overlap this truck.
+    // Returns true if the hit was accepted (so the weapon can "consume" the hit).
+    server_register_weapon_hit :: method(shooter_entity_id: u64, damage: float) -> bool {
+        if !can_be_shot_by_entity_id(shooter_entity_id) return false;
+        if hp <= 0 return false;
+
+        // Convert float weapon damage into integer HP damage.
+        dmg := (damage + 0.5).(s64);
+        if dmg < 1 { dmg = 1; }
+
+        hp -= dmg;
+        if hp < 0 { hp = 0; }
+
+        if hp <= 0 {
+            server_on_destroyed_by(shooter_entity_id);
+        }
+
+        return true;
+    }
+
+    server_on_destroyed_by :: method(shooter_entity_id: u64) {
+        if !Game.is_server() return;
+
+        // Drop carried bills into the world so other players can steal them.
+        if carried_finished_bills > 0 {
+            defn := ItemManager.TryFindItem("finished_bills");
+            if defn != null {
+                remaining := carried_finished_bills;
+                STACK_MAX :: 64;
+                rng: u64 = rng_seed_time();
+
+                while remaining > 0 {
+                    give_count := remaining;
+                    if give_count > STACK_MAX { give_count = STACK_MAX; }
+                    spawn_pos := ItemDrops.random_point_on_circle_edge(entity.world_position, 0.6, ref rng);
+                    _ := ItemDrops.spawn_from_definition(spawn_pos, defn, give_count);
+                    remaining -= give_count;
+                }
+            }
+        }
+
+        carried_finished_bills = 0;
+
+        // Notify owner + shooter (if connected).
+        owner := get_owner_player();
+        if owner != null {
+            Notifier.notify(owner, "Your truck was destroyed! The bills spilled out.");
+        }
+
+        shooter: Player;
+        foreach p: component_iterator(Player) {
+            if p == null continue;
+            if p.self == null continue;
+            if p.entity == null || p.entity.self == null continue;
+            if p.entity.id == shooter_entity_id {
+                shooter = p;
+                break;
+            }
+        }
+        if shooter != null {
+            Notifier.notify(shooter, "Destroyed truck! The bills spilled out.");
+        }
+
+        // Explosion VFX at the truck's death position (before teleport).
+        death_pos := entity.world_position;
+        explosion_prefab := get_asset(Prefab_Asset, "ExplosionVFX.prefab");
+        if explosion_prefab != null {
+            fx := Scene.instantiate(explosion_prefab);
+            if fx != null && fx.self != null {
+                fx->set_local_position(death_pos);
+                fx->queue_for_destruction(1);
+            }
+        }
+
+        // Teleport home immediately (prevents soft-lock / keeps truck usable).
+        //
+        // NOTE: Trucks are typically children of the PlayerBase entity; set_local_position expects
+        // parent-local coordinates. We convert world->local in the simple/common case (no parent rotation).
+        if entity != null && entity.self != null {
+            local_home := home_world_pos;
+            if entity.parent != null && entity.parent.self != null {
+                local_home = home_world_pos - entity.parent.world_position;
+            }
+            entity->set_local_position(local_home);
+        }
+
+        // Reset state at home
+        target_world_pos = home_world_pos;
+        state = .IDLE;
+        drive_start_time = 0;
+        this->set_text("Send truck to bank");
+
+        // Repair instantly after respawn
+        if hp_max < 1 { hp_max = 1; }
+        hp = hp_max;
+
+        // Keep client-side visuals stable after teleport
+        last_world_pos = home_world_pos;
+        last_world_pos_initialized = true;
     }
     
     resolve_spine :: method() {
@@ -453,8 +755,13 @@ Truck :: class : Interactable {
             // Use the same per-item rate as the Sell Shop UI.
             coins := carried_finished_bills * SELL_FINISHED_VALUE;
             if coins > 0 {
-                give_coins_to_player(owner, coins);
-                Notifier.notify(owner, "Truck delivery complete: % Finished Bills sold for % Coins.", {carried_finished_bills, coins});
+                // Pay out directly (no coin drops to pick up).
+                Economy.deposit_currency(owner, "Coins", coins);
+
+                // Replicated "event" so the owner's client can show a local notification.
+                delivery_bills = carried_finished_bills;
+                delivery_coins = coins;
+                delivery_seq += 1;
             }
         }
         else if vault != null && carried_finished_bills > 0 {
@@ -489,5 +796,136 @@ Truck :: class : Interactable {
         drive_start_time = get_time();
         this->set_text("Truck returning");
     }
+}
+
+// ---------------------------------------------------------------------------
+// Cosmetic world-space UI (local-only)
+// Drawn from the local player's `ao_late_update` (see `scripts/main.csl`).
+// ---------------------------------------------------------------------------
+draw_all_truck_health_bars_local :: proc() {
+    UI.push_world_draw_context();
+    defer UI.pop_draw_context();
+
+    // Ensure we draw above most sprites nearby.
+    UI.push_layer(5);
+    defer UI.pop_layer();
+
+    foreach t: component_iterator(Truck) {
+        if t == null continue;
+        if t.entity == null || t.entity.self == null continue;
+        if !t.entity->get_world_enabled() continue;
+        draw_truck_health_bar_in_world_context(t);
+        draw_truck_carried_ui_in_world_context(t);
+    }
+}
+
+draw_truck_health_bar_in_world_context :: proc(truck: Truck) {
+    if truck == null return;
+    if truck.entity == null || truck.entity.self == null return;
+
+    // Anchor to truck position; offset upward to sit above the model.
+    pos := truck.entity.world_position + v2{0, 1.85};
+
+    // Sort relative to the owning entity (not the bar's y-offset) so bars stay in front of trucks/players.
+    UI.push_z(truck.entity.world_position.y - 0.002);
+    defer UI.pop_z();
+
+    // Cache textures (shared style with reusable weapons player healthbar).
+    #static back := get_asset(Texture_Asset, "reusable_weapons/sprites/reusable-weapons/hud_elements/health_bar_green/healthbar_back.png");
+    #static fill := get_asset(Texture_Asset, "reusable_weapons/sprites/reusable-weapons/hud_elements/health_bar_green/healthbar_fill.png");
+    #static pip := get_asset(Texture_Asset, "reusable_weapons/sprites/reusable-weapons/hud_elements/health_bar_green/healthbar_pip.png");
+
+    // World-space sizing (meters).
+    health_rect := Rect{pos, pos}->grow(0.07, 0.70, 0.07, 0.70); // ~1.4m wide, ~0.14m tall
+    border_rect := health_rect->grow(0.02, 0.02, 0.02, 0.02);
+
+    // Background
+    if back != null {
+        UI.quad(border_rect, back, {1, 1, 1, 1});
+    }
+    else {
+        UI.quad(border_rect, core_globals.white_sprite, {0, 0, 0, 0.8});
+    }
+
+    // Health fill
+    health_pct := 0.0;
+    if truck.hp_max > 0 {
+        health_pct = truck.hp.(float) / truck.hp_max.(float);
+        if health_pct < 0 { health_pct = 0; }
+        if health_pct > 1 { health_pct = 1; }
+    }
+
+    fill_rect := health_rect->subrect(0, 0, health_pct, 1);
+    if fill != null {
+        UI.quad(fill_rect, fill, {1, 1, 1, 1});
+    }
+    else {
+        UI.quad(fill_rect, core_globals.white_sprite, {0, 1, 0, 1});
+    }
+
+    // Pip markers (filled pips only)
+    total_pips :: 6;
+    health_per_pip := 0.0;
+    if total_pips > 0 {
+        health_per_pip = truck.hp_max.(float) / total_pips.(float);
+    }
+
+    left_offset :: 0.05;
+    right_offset :: 0.05;
+    available_width := 1.0 - left_offset - right_offset;
+    pip_width := available_width / total_pips.(float);
+    shrink :: 0.3;
+
+    i := 0;
+    while i < total_pips {
+        pip_threshold := (i + 1).(float) * health_per_pip;
+        if truck.hp.(float) >= pip_threshold {
+            x_min := left_offset + i.(float) * pip_width;
+            new_width := pip_width * shrink;
+            new_x_min := x_min + (pip_width - new_width) / 2.0;
+            new_x_max := new_x_min + new_width;
+            pip_rect := health_rect->subrect(new_x_min, 0, new_x_max, 1);
+            if pip != null {
+                UI.quad(pip_rect, pip, {1, 1, 1, 1});
+            }
+        }
+        i += 1;
+    }
+}
+
+draw_truck_carried_ui_in_world_context :: proc(truck: Truck) {
+    if truck == null return;
+    if truck.entity == null || truck.entity.self == null return;
+    if truck.carried_finished_bills <= 0 return;
+
+    // Only show carried bills when the truck is away from the owner's base (in transit / returning).
+    // We use the synced state instead of home_world_pos (which is runtime-only on clients).
+    if truck.state == .IDLE return;
+
+    UI.push_z(truck.entity.world_position.y - 0.002);
+    defer UI.pop_z();
+
+    pos := truck.entity.world_position + v2{0, 1.55};
+
+    rect := Rect{pos, pos}->grow(0.18, 0.55, 0.18, 0.55);
+    icon_rect := rect->cut_left(0.22)->inset(0.01);
+    text_rect := rect;
+
+    #static bills_icon := get_asset(Texture_Asset, "Items/FinishedBills.png");
+    if bills_icon != null {
+        UI.quad(icon_rect->fit_aspect(bills_icon->get_aspect()), bills_icon);
+    }
+
+    ts := UI.default_text_settings();
+    ts.size = 0.34;
+    ts.halign = .LEFT;
+    ts.valign = .CENTER;
+    ts.do_outline = true;
+    ts.outline_thickness = 2;
+    ts.outline_color = {0, 0, 0, 1};
+    ts.color = {1, 1, 1, 1};
+    ts.offset = {0.05, 0};
+
+    UI.text(text_rect, ts, "x%", {truck.carried_finished_bills});
 }
 

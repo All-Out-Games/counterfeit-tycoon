@@ -11,6 +11,15 @@ apply_aoe_damage :: proc(pos: v2, owner_id: u64, radius: float, damage: float) {
         if player_is_in_own_base_safe_zone(p) continue;
         p->take_damage(damage, null, true);
     }
+
+    // Truck hit registration (only when carrying bills, and never by its owner)
+    nearby_trucks: [..]Truck;
+    Scene.get_all_components_in_range(pos, radius, ref nearby_trucks);
+    for t: nearby_trucks {
+        if t == null continue;
+        if t.entity == null || t.entity.self == null continue;
+        _ := t->server_register_weapon_hit(owner_id, damage);
+    }
 }
 
 // AOE projectile: standard projectile that explodes on impact
@@ -48,6 +57,25 @@ AOE_Projectile :: class : Component {
                     }
 
                     // AOE damage
+                    if aoe_radius > 0 {
+                        apply_aoe_damage(pos, owner_id, aoe_radius, aoe_damage);
+                    }
+
+                    sfx := get_asset(SFX_Asset, "reusable_weapons/sounds/reusable-weapons/cannon_explode.wav");
+                    sfx_desc := SFX.default_sfx_desc();
+                    sfx_desc->set_position(pos);
+                    sfx_desc.range_multiplier = 3.0;
+                    SFX.play(sfx, sfx_desc);
+
+                    entity->destroy();
+                    return;
+                }
+            }
+
+            // Truck direct hit: explode on a valid truck hit
+            hit_truck, found_truck := Scene.get_closest_component_in_range(pos, 1.25, Truck);
+            if found_truck && hit_truck != null {
+                if hit_truck->server_register_weapon_hit(owner_id, damage) {
                     if aoe_radius > 0 {
                         apply_aoe_damage(pos, owner_id, aoe_radius, aoe_damage);
                     }

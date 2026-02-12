@@ -186,6 +186,7 @@ draw_managers_button :: proc(player: Player) {
                 player.weapons_shop_open = false;
                 player.harvester_upgrades_open = false;
                 player.upgrades_open = false;
+                player.truck_upgrades_open = false;
             }
         }
     }

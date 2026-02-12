@@ -149,6 +149,7 @@ Harvester :: class : Interactable {
     base_move_speed: float;
     base_max_wood_capacity: s64;
     home_world_pos: v2;
+    home_world_pos_locked: bool;
     target_world_pos: v2;
     drive_start_time: float;
     harvest_start_time: float;
@@ -202,6 +203,7 @@ Harvester :: class : Interactable {
 
         // Home is wherever the harvester started the game.
         home_world_pos = entity.world_position;
+        home_world_pos_locked = false;
         target_world_pos = home_world_pos;
 
         last_world_pos = entity.world_position;
@@ -308,7 +310,6 @@ Harvester :: class : Interactable {
         }
 
         // Dispatch.
-        home_world_pos = entity.world_position; // recapture at dispatch time
         target_tree_entity_id = tree.entity.id;
         target_world_pos = tree.entity.world_position;
         state = .TO_TREE;
@@ -322,6 +323,13 @@ Harvester :: class : Interactable {
 
     ao_update :: method(dt: float) {
         _ := dt;
+
+        // Cache "home" once: the first position this Harvester has when it starts pathing.
+        // This is the position it should always attempt to return to.
+        if !home_world_pos_locked && state != .IDLE_AT_HOME {
+            home_world_pos = entity.world_position;
+            home_world_pos_locked = true;
+        }
 
         // Visuals/animation should run on all peers (server + clients).
         update_visuals();
@@ -690,7 +698,6 @@ Harvester :: class : Interactable {
         }
 
         // Dispatch.
-        home_world_pos = entity.world_position;
         target_tree_entity_id = tree.entity.id;
         target_world_pos = tree.entity.world_position;
         state = .TO_TREE;
