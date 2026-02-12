@@ -1,0 +1,149 @@
+import "core:ao"
+
+LANE_UNLOCK_COIN_CURRENCY :: "Coins";
+
+LaneUnlock :: class : Interactable {
+    // Which player this prompt belongs to (owner-only interaction).
+    owner: Player;
+    // 0-based lane index to unlock (expected 1..3; lane 0 is always unlocked).
+    lane_index: s64;
+
+    ao_start :: method() {
+        this->set_listener(this);
+        refresh_prompt_text();
+        update_visuals_visibility_for_local_player();
+    }
+
+    ao_on_state_sync :: method() {
+        // Client-only hook: after replication, apply local-only visuals override.
+        refresh_prompt_text();
+        update_visuals_visibility_for_local_player();
+    }
+
+    configure :: method(new_owner: Player, new_lane_index: s64) {
+        owner = new_owner;
+        lane_index = new_lane_index;
+        refresh_prompt_text();
+        update_visuals_visibility_for_local_player();
+    }
+
+    refresh_prompt_text :: method() {
+        // Interactable prompt text shown to nearby players.
+        cost := lanes_unlock_cost(lane_index);
+        lane_number := lane_index + 1;
+        this->set_text(format_string("Unlock Lane % for $% Coins?", {lane_number, cost}));
+    }
+
+    can_use :: method(player: Player) -> bool {
+        if player == null return false;
+        if owner == null return false;
+        if player != owner return false;
+        if lane_index < 1 || lane_index > 3 return false;
+
+        // If it became unlocked (e.g. via UI), no longer interactable.
+        if lanes_is_unlocked(player, lane_index) {
+            return false;
+        }
+
+        // Safety: must have previous lane unlocked.
+        if !lanes_is_unlocked(player, lane_index - 1) {
+            return false;
+        }
+
+        return true;
+    }
+
+    on_interact :: method(player: Player) {
+        if player == null return;
+        if !Game.is_server() return;
+        if owner == null return;
+        if player != owner return;
+        if lane_index < 1 || lane_index > 3 return;
+
+        // Already unlocked?
+        if lanes_is_unlocked(player, lane_index) {
+            if entity != null && entity.self != null {
+                entity->destroy();
+            }
+            return;
+        }
+
+        // Previous lane required.
+        if !lanes_is_unlocked(player, lane_index - 1) {
+            Notifier.notify(player, "Unlock the previous lane first.");
+            return;
+        }
+
+        cost := lanes_unlock_cost(lane_index);
+        if cost <= 0 return;
+
+        if !Economy.can_withdraw_currency(player, LANE_UNLOCK_COIN_CURRENCY, cost) {
+            Notifier.notify(player, "Not enough Coins to unlock that lane!");
+            return;
+        }
+
+        // Use the canonical unlock flow (withdraws + saves + spawns lane).
+        server_try_unlock_lane(player, lane_index);
+
+        // Despawn this prompt.
+        if entity != null && entity.self != null {
+            entity->destroy();
+        }
+
+        // Immediately spawn the next prompt if needed (up to lane 4).
+        gm := get_game_manager();
+        if gm != null {
+            gm->server_reconcile_lane_unlock_prompt_for_player(player);
+        }
+    }
+
+    update_visuals_visibility_for_local_player :: method() {
+        // Stretch goal:
+        // Only show sprite-renderer visuals to the owner on their local client.
+        // NOTE: We don't disable the root entity (which hosts the interactable).
+        if Game.is_server() {
+            return;
+        }
+
+        // If owner isn't known yet on client, keep it visible until synced.
+        visible := true;
+        if owner != null {
+            local_player, ok := Game.get_local_player();
+            if ok && local_player != null && local_player != owner {
+                visible = false;
+            }
+        }
+
+        is_descendant_of :: proc(child: Entity, ancestor: Entity) -> bool {
+            if child == null return false;
+            if child.self == null return false;
+            if ancestor == null return false;
+            if ancestor.self == null return false;
+
+            cur := child;
+            for step: 0..48 {
+                _ := step;
+                if cur == null break;
+                if cur.self == null break;
+                if cur == ancestor return true;
+                cur = cur.parent;
+            }
+            return false;
+        }
+
+        // Disable only child entities that contain Sprite_Renderers.
+        foreach e: entity_iterator() {
+            if e == null continue;
+            if e.self == null continue;
+            if e == entity continue;
+            if !is_descendant_of(e, entity) continue;
+
+            sr := e->get_component(Sprite_Renderer);
+            if sr == null continue;
+
+            // Use entity-local enable as a proxy for sprite renderer enable.
+            e->set_local_enabled(visible);
+        }
+    }
+}
+

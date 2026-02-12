@@ -25,6 +25,7 @@
     "texture": "UI/Manager.png",
     "tint": {
       "W": 0.5882353186607361
-    }
+    },
+    "layer": -1
   }
 }

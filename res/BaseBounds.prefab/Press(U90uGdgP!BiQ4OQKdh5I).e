@@ -17,19 +17,6 @@
   "parent": "150484291903114:1770189516079501100"
 },
 {
-  "cid": 1,
-  "aoid": "92209426432754:1770161923589334800",
-  "component_type": "Internal_Component",
-  "internal_component_type": "Sprite_Renderer",
-  "data": {
-    "texture": "Press.png",
-    "scale": {
-      "X": 0.3499999940395355,
-      "Y": 0.3499999940395355
-    }
-  }
-},
-{
   "cid": 2,
   "aoid": "92265886431463:1770161950322316000",
   "component_type": "Internal_Component",
@@ -46,6 +33,8 @@
     "collect_radius": 1.5000000000000000,
     "collect_cooldown": 2,
     "loot_spawn_radius": 1.5000000000000000,
+    "spine_animator": "161585891186391:1770889636113771800",
+    "spine_entity": "161559067989462:1770889623413378900",
     "ui_offset": {
       "y": 1.5000000000000000
     }

@@ -1,0 +1,24 @@
+paper_press.png
+	size: 1352, 688
+	filter: Linear, Linear
+	scale: 0.5
+Industrial hydraulic Press/Press machine body
+	bounds: 3, 3, 500, 679
+Industrial hydraulic Press/Press machine connection
+	bounds: 1190, 459, 223, 44
+	rotate: 90
+Industrial hydraulic Press/Press machine normal
+	bounds: 832, 359, 323, 225
+	offsets: 0, 2, 323, 227
+	rotate: 90
+Industrial hydraulic Press/Press machine working
+	bounds: 506, 336, 323, 346
+paper
+	bounds: 1060, 554, 128, 128
+pressed pieces/paper_bits_1
+	bounds: 1237, 642, 38, 40
+pressed pieces/paper_bits_2
+	bounds: 1318, 649, 31, 33
+pressed pieces/paper_bits_3
+	bounds: 1278, 644, 38, 37
+	rotate: 90

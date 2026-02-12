@@ -138,6 +138,11 @@ GameManager :: class : Component {
     warned_missing_lane_prefab: bool;
     last_lanes_reconcile_time: float;
 
+    // Lane unlock prompt prefab (optional) spawned per-player for the next locked lane.
+    cached_lane_unlock_prompt_prefab: Prefab_Asset;
+    warned_missing_lane_unlock_prompt_prefab: bool;
+    last_lane_unlock_prompt_reconcile_time: float;
+
     warned_missing_navmesh: bool;
     warned_navmesh_rebuild_failed: bool;
     last_base_entity_ids: [..]u64;
@@ -260,6 +265,7 @@ GameManager :: class : Component {
             last_managers_reconcile_time = -99999.0;
             last_station_upgrades_reconcile_time = -99999.0;
             last_lanes_reconcile_time = -99999.0;
+            last_lane_unlock_prompt_reconcile_time = -99999.0;
         }
     }
 
@@ -309,6 +315,30 @@ GameManager :: class : Component {
             last_lanes_reconcile_time = get_time();
             this->server_reconcile_lanes();
         }
+
+        // Reconcile "Unlock Lane" prompts periodically (covers unlock-at-runtime and unlocks loaded on join).
+        LANE_UNLOCK_PROMPT_RECONCILE_INTERVAL :: 0.5;
+        if get_time() - last_lane_unlock_prompt_reconcile_time >= LANE_UNLOCK_PROMPT_RECONCILE_INTERVAL {
+            last_lane_unlock_prompt_reconcile_time = get_time();
+            this->server_reconcile_lane_unlock_prompts();
+        }
+    }
+
+    lane_local_y_for_player :: method(player: Player, lane_index: s64) -> float {
+        // - Spawns 0/1/2: lanes stack upward (+Y)
+        // - Spawns 3/4/5: mirror lanes to stack downward (-Y)
+        sign := 1.0;
+        if player != null && player.base_spawn_index >= 3 {
+            sign = -1.0;
+        }
+
+        base_y := lane_index.(float) * 3.5;
+        // Special-case Lane 4 (index 3): spawn at (0, -3.5) then mirror if needed.
+        if lane_index == 3 {
+            base_y = -3.5;
+        }
+
+        return sign * base_y;
     }
 
     ensure_lane_prefab_loaded :: method() {
@@ -316,6 +346,13 @@ GameManager :: class : Component {
             return;
         }
         cached_lane_prefab = get_asset(Prefab_Asset, "Lane.prefab");
+    }
+
+    ensure_lane_unlock_prompt_prefab_loaded :: method() {
+        if cached_lane_unlock_prompt_prefab != null {
+            return;
+        }
+        cached_lane_unlock_prompt_prefab = get_asset(Prefab_Asset, "LaneUnlockPrompt.prefab");
     }
 
     server_spawn_lane_for_player :: method(player: Player, lane_index: s64) {
@@ -329,28 +366,10 @@ GameManager :: class : Component {
             return;
         }
 
-        // Compute the lane's local Y based on which PlayerSpawn index the base uses.
-        // - Spawns 0/1/2: lanes stack upward (+Y)
-        // - Spawns 3/4/5: mirror lanes to stack downward (-Y)
-        lane_local_y :: proc(p: Player, li: s64) -> float {
-            sign := 1.0;
-            if p != null && p.base_spawn_index >= 3 {
-                sign = -1.0;
-            }
-
-            base_y := li.(float) * 3.5;
-            // Special-case Lane 4 (index 3): spawn at (0, -3.5) then mirror if needed.
-            if li == 3 {
-                base_y = -3.5;
-            }
-
-            return sign * base_y;
-        }
-
         // Already spawned and still alive? Ensure it's positioned correctly and return.
         existing := player.lane_entities[lane_index];
         if existing != null && existing.self != null {
-            existing->set_local_position(v2{0, lane_local_y(player, lane_index)});
+            existing->set_local_position(v2{0, this->lane_local_y_for_player(player, lane_index)});
             return;
         }
 
@@ -404,7 +423,7 @@ GameManager :: class : Component {
                 }
 
                 // Position lanes stacked vertically.
-                y := lane_local_y(ud.player, ud.lane_index);
+                y := ud.gm->lane_local_y_for_player(ud.player, ud.lane_index);
                 spawned_entity->set_local_position(v2{0, y});
 
                 // Track on the player so we can avoid duplicate spawns.
@@ -485,6 +504,189 @@ GameManager :: class : Component {
                 }
             }
         );
+    }
+
+    get_next_locked_lane_index :: method(player: Player) -> s64 {
+        if player == null return -1;
+        // Lane 1 (index 0) is always unlocked; we only prompt for lanes 2-4 (indices 1..3).
+        for li: 1..3 {
+            if !lanes_is_unlocked(player, li) {
+                return li;
+            }
+        }
+        return -1;
+    }
+
+    server_destroy_lane_unlock_prompt_for_player :: method(player: Player) {
+        if !Game.is_server() return;
+        if player == null return;
+
+        e := player.lane_unlock_prompt_entity;
+        if e != null && e.self != null {
+            e->destroy();
+        }
+        player.lane_unlock_prompt_entity = null;
+        player.lane_unlock_prompt_lane_index = -1;
+    }
+
+    server_spawn_lane_unlock_prompt_for_player :: method(player: Player, lane_index: s64) {
+        if !Game.is_server() return;
+        if player == null return;
+        if lane_index < 1 || lane_index > 3 return;
+        if player.base_entity == null || player.base_entity.self == null return;
+
+        // Don't spawn if already unlocked (race safety).
+        if lanes_is_unlocked(player, lane_index) {
+            return;
+        }
+
+        // If prefab exists, instantiate it; otherwise create a minimal runtime placeholder.
+        ensure_lane_unlock_prompt_prefab_loaded();
+        spawn_pos := player.base_entity.world_position;
+
+        if cached_lane_unlock_prompt_prefab != null {
+            ud := new(Spawn_Lane_Userdata);
+            ud.player = player;
+            ud.base_entity = player.base_entity;
+            ud.lane_index = lane_index;
+            ud.gm = this;
+
+            _ := Scene.instantiate(
+                cached_lane_unlock_prompt_prefab,
+                spawn_pos,
+                ud,
+                proc(spawned_entity: Entity, userdata: Object) {
+                    ud := userdata.(Spawn_Lane_Userdata);
+                    if ud == null return;
+                    if spawned_entity == null return;
+                    if spawned_entity.self == null return;
+
+                    // Parent under the base so it is destroyed when the base is destroyed.
+                    if ud.base_entity != null && ud.base_entity.self != null {
+                        spawned_entity->set_parent(ud.base_entity, true);
+                    }
+
+                    // Position exactly where this lane would be spawned.
+                    y := ud.gm->lane_local_y_for_player(ud.player, ud.lane_index);
+                    spawned_entity->set_local_position(v2{0, y});
+
+                    // Add/configure the interactable.
+                    lu := spawned_entity->get_component(LaneUnlock);
+                    if lu == null {
+                        lu = spawned_entity->add_component(LaneUnlock);
+                    }
+                    if lu != null {
+                        lu->configure(ud.player, ud.lane_index);
+                        // Reasonable defaults if prefab didn't set them.
+                        if lu.radius <= 0.01 {
+                            lu.radius = 2.0;
+                        }
+                        if lu.priority == 0 {
+                            lu.priority = 50;
+                        }
+                        if lu.required_hold_time < 0.0 {
+                            lu.required_hold_time = 0.0;
+                        }
+                        if lu.prompt_offset.x == 0.0 && lu.prompt_offset.y == 0.0 {
+                            lu.prompt_offset = v2{0, 1.0};
+                        }
+                    }
+
+                    // Track on the player so we can avoid duplicate spawns.
+                    if ud.player != null {
+                        ud.player.lane_unlock_prompt_entity = spawned_entity;
+                        ud.player.lane_unlock_prompt_lane_index = ud.lane_index;
+                    }
+                }
+            );
+            return;
+        }
+
+        if !warned_missing_lane_unlock_prompt_prefab {
+            warned_missing_lane_unlock_prompt_prefab = true;
+            log_warning("GameManager: missing LaneUnlockPrompt.prefab asset (expected prefab at \"LaneUnlockPrompt.prefab\"). Using runtime placeholder.", {});
+        }
+
+        // Runtime placeholder entity (simple coin sprite child so it's visible).
+        root := Scene.create_entity();
+        root->set_parent(player.base_entity, true);
+        y := this->lane_local_y_for_player(player, lane_index);
+        root->set_local_position(v2{0, y});
+        root->set_local_rotation(0);
+        root->set_local_scale(v2{1, 1});
+
+        // Visual child.
+        visual := Scene.create_entity();
+        visual->set_parent(root, true);
+        visual->set_local_position(v2{0, 0});
+        visual->set_local_rotation(0);
+        visual->set_local_scale(v2{1, 1});
+        sr := visual->add_component(Sprite_Renderer);
+        if sr != null {
+            tex := get_asset(Texture_Asset, "Items/Coin.png");
+            if tex != null {
+                sr->set_texture(tex);
+            }
+            sr.depth_offset = 0.5;
+            sr.layer = 20;
+            sr.color = v4{1, 1, 1, 1};
+        }
+
+        lu := root->add_component(LaneUnlock);
+        if lu != null {
+            lu->configure(player, lane_index);
+            if lu.radius <= 0.01 {
+                lu.radius = 2.0;
+            }
+            if lu.priority == 0 {
+                lu.priority = 50;
+            }
+            if lu.prompt_offset.x == 0.0 && lu.prompt_offset.y == 0.0 {
+                lu.prompt_offset = v2{0, 1.0};
+            }
+        }
+
+        player.lane_unlock_prompt_entity = root;
+        player.lane_unlock_prompt_lane_index = lane_index;
+    }
+
+    server_reconcile_lane_unlock_prompt_for_player :: method(player: Player) {
+        if !Game.is_server() return;
+        if player == null return;
+        if player.base_entity == null || player.base_entity.self == null return;
+
+        next := this->get_next_locked_lane_index(player);
+        if next < 0 {
+            this->server_destroy_lane_unlock_prompt_for_player(player);
+            return;
+        }
+
+        // If we already have the correct prompt alive, just ensure it's positioned correctly.
+        e := player.lane_unlock_prompt_entity;
+        if e != null && e.self != null && player.lane_unlock_prompt_lane_index == next {
+            y := this->lane_local_y_for_player(player, next);
+            e->set_local_position(v2{0, y});
+
+            lu := e->get_component(LaneUnlock);
+            if lu != null {
+                lu->configure(player, next);
+            }
+            return;
+        }
+
+        // Otherwise replace it.
+        this->server_destroy_lane_unlock_prompt_for_player(player);
+        this->server_spawn_lane_unlock_prompt_for_player(player, next);
+    }
+
+    server_reconcile_lane_unlock_prompts :: method() {
+        if !Game.is_server() return;
+
+        foreach p: component_iterator(Player) {
+            if p == null continue;
+            if p.base_entity == null || p.base_entity.self == null continue;
+            this->server_reconcile_lane_unlock_prompt_for_player(p);
+        }
     }
 
     server_reconcile_lanes :: method() {
