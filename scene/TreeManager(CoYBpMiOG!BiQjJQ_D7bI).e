@@ -23,11 +23,11 @@
   "data": {
     "tree_prefab_path": "BaseTree.prefab",
     "spawn_radius": 20,
-    "max_trees": 50,
+    "max_trees": 80,
     "min_spacing_radius": 1.5000000000000000,
     "attempts_per_tree": 3,
     "spawn_budget_per_tick": 10,
-    "respawn_interval": 3.5000000000000000
+    "respawn_interval": 1.5000000000000000
   }
 },
 {

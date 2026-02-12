@@ -126,9 +126,9 @@ server_try_upgrade_station :: proc(player: Player, lane_index: s64, kind: Statio
     if !Game.is_server() return;
     if lane_index < 0 || lane_index >= UPGRADES_LANE_COUNT return;
 
-    // For now, only Lane 1 (index 0) is purchasable.
-    if lane_index != 0 {
-        Notifier.notify(player, "Lane % upgrades are not available yet.", {lane_index + 1});
+    // Must have the lane unlocked.
+    if !lanes_is_unlocked(player, lane_index) {
+        Notifier.notify(player, "Lane % is locked.", {lane_index + 1});
         return;
     }
 
@@ -164,6 +164,61 @@ server_try_upgrade_station :: proc(player: Player, lane_index: s64, kind: Statio
     }
 
     Notifier.notify(player, "% upgraded to Level % (Lane %).", {station_display_name(kind), new_level, lane_index + 1});
+}
+
+draw_upgrades_unlock_lane_prompt :: proc(player: Player, rect: Rect, lane_index: s64) {
+    if player == null return;
+    if lane_index < 0 || lane_index >= UPGRADES_LANE_COUNT return;
+
+    UI.quad(rect, core_globals.white_sprite, {0.08, 0.08, 0.08, 0.95});
+    inner := rect->inset(26);
+
+    title := inner->cut_top(90);
+    _ := inner->cut_top(10);
+    button_row := inner->cut_top(100);
+
+    ts_title := UI.default_text_settings();
+    ts_title.size = 44;
+    ts_title.halign = .CENTER;
+    ts_title.valign = .CENTER;
+    ts_title.do_outline = true;
+    ts_title.outline_thickness = 3;
+    ts_title.outline_color = {0, 0, 0, 1};
+    UI.text(title, ts_title, "Unlock Lane %?", {lane_index + 1});
+
+    // Prereq: previous lane must be unlocked.
+    prereq_ok := lane_index == 0 || lanes_is_unlocked(player, lane_index - 1);
+    cost := lanes_unlock_cost(lane_index);
+    can_afford := cost > 0 && Economy.can_withdraw_currency(player, UPGRADES_COIN_CURRENCY, cost);
+
+    bs := UI.default_button_settings();
+    bs.press_scaling = 0.4;
+
+    ts_btn := UI.default_text_settings();
+    ts_btn.size = 34;
+    ts_btn.halign = .CENTER;
+    ts_btn.valign = .CENTER;
+    ts_btn.do_outline = true;
+    ts_btn.outline_thickness = 2;
+    ts_btn.outline_color = {0, 0, 0, 1};
+
+    if !prereq_ok {
+        bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_8.png"); // Grey
+        UI.push_disabled(true);
+        defer UI.pop_disabled();
+        _ := UI.button(button_row->inset(10), bs, ts_btn, "Unlock previous lane first");
+        return;
+    }
+
+    bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_2.png"); // Green
+    if !can_afford {
+        bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_3.png"); // Red
+    }
+
+    label := format_string("Unlock ($%)", {cost});
+    if UI.button(button_row->inset(10), bs, ts_btn, label).clicked {
+        server_try_unlock_lane(player, lane_index);
+    }
 }
 
 draw_upgrades_button :: proc(player: Player) {
@@ -309,14 +364,14 @@ draw_station_upgrade_card :: proc(player: Player, rect: Rect, lane_index: s64, k
     ts_btn.outline_thickness = 2;
     ts_btn.outline_color = {0, 0, 0, 1};
 
-    // Lanes 2-4 are not available yet.
-    if lane_index != 0 {
+    // Lane locked?
+    if !lanes_is_unlocked(player, lane_index) {
         bs_na := UI.default_button_settings();
         bs_na.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_8.png"); // Grey
         bs_na.press_scaling = 0.0;
         UI.push_disabled(true);
         defer UI.pop_disabled();
-        _ := UI.button(btn_rect->inset(6), bs_na, ts_btn, "Not Available");
+        _ := UI.button(btn_rect->inset(6), bs_na, ts_btn, "Lane Locked");
         return;
     }
 
@@ -411,6 +466,13 @@ draw_upgrades_modal :: proc(player: Player) {
     lane := player.upgrades_selected_lane;
     if lane < 0 || lane >= UPGRADES_LANE_COUNT {
         lane = 0;
+    }
+
+    // If this lane is locked, show the lane unlock purchase UI instead of station cards.
+    if !lanes_is_unlocked(player, lane) {
+        prompt_rect := body->center_rect()->grow(160, 360, 160, 360);
+        draw_upgrades_unlock_lane_prompt(player, prompt_rect, lane);
+        return;
     }
 
     // 2x2 grid of station cards

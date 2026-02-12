@@ -606,26 +606,27 @@ Blank_Bill_Press :: class : Interactable {
         // - UI/into.png
         // - Timer bar (progress)
         // - Output icon + stored output count
-        PANEL_HALF_H :: 0.96;
-        PANEL_BG_HALF_W :: 1.22;       // reduced width
-        PANEL_CONTENT_HALF_W :: 1.00;  // stable content width (reduced width)
+        // Scaled down ~15%
+        PANEL_HALF_H :: 0.816;
+        PANEL_BG_HALF_W :: 1.037;       // reduced width
+        PANEL_CONTENT_HALF_W :: 0.85;   // stable content width (reduced width)
 
         panel_bg := Rect{pos, pos}->grow(PANEL_HALF_H, PANEL_BG_HALF_W, PANEL_HALF_H, PANEL_BG_HALF_W);
         panel_content := Rect{pos, pos}->grow(PANEL_HALF_H, PANEL_CONTENT_HALF_W, PANEL_HALF_H, PANEL_CONTENT_HALF_W);
 
         // "Slate" background (tinted quad).
-        UI.quad(panel_bg, core_globals.white_sprite, {0.08, 0.09, 0.10, 0.78});
+        UI.quad(panel_bg, core_globals.white_sprite, {0.08, 0.09, 0.10, 0.468});
 
-        content := panel_content->inset(0.06);
+        content := panel_content->inset(0.051);
 
-        gap :: 0.07;
-        into_timer_gap :: 0.03;
-        header_h :: 0.32;
-        input_h :: 0.38;
-        into_h :: 0.29;
-        timer_h :: 0.16;
-        output_h :: 0.38;
-        ICON_HALF :: 0.196;
+        gap :: 0.0595;
+        into_timer_gap :: 0.0255;
+        header_h :: 0.272;
+        input_h :: 0.323;
+        into_h :: 0.2465;
+        timer_h :: 0.136;
+        output_h :: 0.323;
+        ICON_HALF :: 0.167;
 
         header := content->cut_top(header_h);
         _ := content->cut_top(gap);
@@ -638,10 +639,10 @@ Blank_Bill_Press :: class : Interactable {
         output_row := content->cut_top(output_h);
 
         // Header background strip
-        UI.quad(header, core_globals.white_sprite, {0.12, 0.13, 0.15, 0.92});
+        UI.quad(header, core_globals.white_sprite, {0.12, 0.13, 0.15, 0.552});
 
         ts_header := UI.default_text_settings();
-        ts_header.size = 0.46;
+        ts_header.size = 0.391;
         ts_header.halign = .CENTER;
         ts_header.valign = .CENTER;
         ts_header.do_outline = true;
@@ -651,7 +652,7 @@ Blank_Bill_Press :: class : Interactable {
         UI.text(header, ts_header, "Lv %", {upgrade_level});
 
         ts_row := UI.default_text_settings();
-        ts_row.size = 0.46;
+        ts_row.size = 0.391;
         ts_row.halign = .CENTER;
         ts_row.valign = .CENTER;
         ts_row.do_outline = true;
@@ -662,8 +663,8 @@ Blank_Bill_Press :: class : Interactable {
 
         // Input: Paper
         {
-            r := input_row->inset(0.02);
-            icon_box_w := ICON_HALF * 2 + 0.10;
+            r := input_row->inset(0.017);
+            icon_box_w := ICON_HALF * 2 + 0.085;
             icon_box := r->cut_left(icon_box_w);
             icon_rect := icon_box->center_rect()->grow(ICON_HALF);
             text_rect := r;
@@ -677,7 +678,7 @@ Blank_Bill_Press :: class : Interactable {
 
         // Into arrow
         {
-            r := into_row->inset(0.02);
+            r := into_row->inset(0.017);
             #static into_icon := get_asset(Texture_Asset, "UI/into.png");
             if into_icon != null {
                 icon_rect := r->center_rect()->grow(ICON_HALF);
@@ -687,7 +688,7 @@ Blank_Bill_Press :: class : Interactable {
 
         // Timer bar (progress toward next blank bill)
         {
-            bar := timer_row->inset(0.03);
+            bar := timer_row->inset(0.0255);
             UI.quad(bar, core_globals.white_sprite, {0, 0, 0, 0.65});
 
             timer_val := convert_timer;
@@ -718,8 +719,8 @@ Blank_Bill_Press :: class : Interactable {
 
         // Output: Blank Bills
         {
-            r := output_row->inset(0.02);
-            icon_box_w := ICON_HALF * 2 + 0.10;
+            r := output_row->inset(0.017);
+            icon_box_w := ICON_HALF * 2 + 0.085;
             icon_box := r->cut_left(icon_box_w);
             icon_rect := icon_box->center_rect()->grow(ICON_HALF);
             text_rect := r;

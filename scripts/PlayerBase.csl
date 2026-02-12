@@ -104,17 +104,28 @@ get_local_player :: proc() -> Player {
     return null;
 }
 
-// Returns the PlayerBase component on the parent of `child_entity` (if any).
+// Returns the closest PlayerBase component in the parent chain (if any).
 get_parent_player_base :: proc(child_entity: Entity) -> PlayerBase {
     if child_entity == null return null;
     if child_entity.self == null return null;
 
     // NOTE: The "in-world Parent entity" is the entity transform parent.
-    parent := child_entity.parent;
-    if parent == null return null;
-    if parent.self == null return null;
+    // Walk up the chain so prefabs can add intermediate grouping entities (e.g. Lane.prefab)
+    // without breaking ownership checks or station upgrade application.
+    cur := child_entity.parent;
+    for step: 0..31 {
+        _ := step;
+        if cur == null break;
+        if cur.self == null break;
 
-    return parent->get_component(PlayerBase);
+        pb := cur->get_component(PlayerBase);
+        if pb != null {
+            return pb;
+        }
+        cur = cur.parent;
+    }
+
+    return null;
 }
 
 // Convenience: check if `player` owns the parent base of `child_entity`.

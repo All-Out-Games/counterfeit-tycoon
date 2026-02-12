@@ -45,6 +45,9 @@
     "deposit_per_interact": 64,
     "collect_radius": 1.5000000000000000,
     "collect_cooldown": 2,
-    "loot_spawn_radius": 1.5000000000000000
+    "loot_spawn_radius": 1.5000000000000000,
+    "ui_offset": {
+      "y": 1.5000000000000000
+    }
   }
 }

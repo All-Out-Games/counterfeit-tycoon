@@ -21,7 +21,7 @@ PressOperator_State :: enum {
     PAUSE_BEFORE_TO_MILL;
 }
 
-find_paper_mill_for_base :: proc(base: PlayerBase) -> Paper_Mill {
+press_operator_find_paper_mill_for_base_and_lane :: proc(base: PlayerBase, lane_index: s64) -> Paper_Mill {
     if base == null return null;
     if base.entity == null || base.entity.self == null return null;
 
@@ -29,6 +29,7 @@ find_paper_mill_for_base :: proc(base: PlayerBase) -> Paper_Mill {
         if m == null continue;
         if m.entity == null || m.entity.self == null continue;
         if !m.entity->get_world_enabled() continue;
+        if m.lane_index != lane_index continue;
 
         pb := get_parent_player_base(m.entity);
         if pb == base {
@@ -38,7 +39,7 @@ find_paper_mill_for_base :: proc(base: PlayerBase) -> Paper_Mill {
     return null;
 }
 
-find_blank_bill_press_for_base :: proc(base: PlayerBase) -> Blank_Bill_Press {
+press_operator_find_blank_bill_press_for_base_and_lane :: proc(base: PlayerBase, lane_index: s64) -> Blank_Bill_Press {
     if base == null return null;
     if base.entity == null || base.entity.self == null return null;
 
@@ -46,6 +47,7 @@ find_blank_bill_press_for_base :: proc(base: PlayerBase) -> Blank_Bill_Press {
         if p == null continue;
         if p.entity == null || p.entity.self == null continue;
         if !p.entity->get_world_enabled() continue;
+        if p.lane_index != lane_index continue;
 
         pb := get_parent_player_base(p.entity);
         if pb == base {
@@ -177,6 +179,18 @@ PressOperator :: class : Component {
         return state == .PAUSE_BEFORE_TO_PRESS || state == .PAUSE_BEFORE_TO_MILL;
     }
 
+    should_play_bored_idle :: method() -> bool {
+        // Only play bored idle when we're waiting at a station with no output to pick up.
+        // (Not when we're pausing between path legs.)
+        if state != .WAIT_AT_MILL return false;
+        if carried_paper > 0 return false;
+
+        pb := get_parent_player_base(entity);
+        mill := press_operator_find_paper_mill_for_base_and_lane(pb, lane_index);
+        if mill == null return false;
+        return mill.stored_paper <= 0;
+    }
+
     // Called by the server-side spawner after instantiation.
     server_init :: method(owner_id: string, lane: s64) {
         if !Game.is_server() {
@@ -184,6 +198,9 @@ PressOperator :: class : Component {
         }
         owner_user_id = owner_id;
         lane_index = lane;
+        if lane_index < 0 {
+            lane_index = 0;
+        }
         // Reset the loop.
         state = .TO_MILL;
         drive_start_time = get_time();
@@ -332,7 +349,7 @@ PressOperator :: class : Component {
         if is_moving() {
             mode = 1;
         }
-        else if is_pausing() {
+        else if should_play_bored_idle() {
             mode = (break_variant == 1) ? 2 : 3;
         }
         spine.instance.state_machine->set_int("anim_mode", mode);
@@ -435,10 +452,10 @@ PressOperator :: class : Component {
             agent = entity->get_component(Movement_Agent);
         }
 
-        // Find our base + stations (best-effort). Lane support will be expanded later.
+        // Find our base + stations for our lane.
         pb := get_parent_player_base(entity);
-        mill := find_paper_mill_for_base(pb);
-        press := find_blank_bill_press_for_base(pb);
+        mill := press_operator_find_paper_mill_for_base_and_lane(pb, lane_index);
+        press := press_operator_find_blank_bill_press_for_base_and_lane(pb, lane_index);
 
         // Client+server: drive the movement target for smoother replicated motion.
         if agent != null {
@@ -506,6 +523,18 @@ PressOperator :: class : Component {
                 if mill == null {
                     // Stations can be destroyed/disabled if base is changing.
                     return;
+                }
+
+                // Choose a break variant only when we're truly waiting on empty output.
+                // This prevents "bored" idles from being associated with path pauses.
+                if carried_paper <= 0 && mill.stored_paper <= 0 {
+                    if break_variant == 0 {
+                        rng := rng_seed_time();
+                        break_variant = rng_range_int(ref rng, 1, 2);
+                    }
+                }
+                else {
+                    break_variant = 0;
                 }
 
                 // If we have room, try to collect paper from the mill output.

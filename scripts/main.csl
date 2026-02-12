@@ -41,6 +41,92 @@ ao_late_update :: proc(dt: float) {
 
 COIN_CURRENCY :: "Coins";
 
+// ---------------------------------------------------------------------------
+// Lanes progression (per-player, saved)
+//
+// We store unlocked lanes as a bitmask:
+// - bit 0 => Lane 1 unlocked (default)
+// - bit 1 => Lane 2 unlocked
+// - bit 2 => Lane 3 unlocked
+// - bit 3 => Lane 4 unlocked
+// ---------------------------------------------------------------------------
+LANES_UNLOCK_SAVE_KEY :: "lane_unlock_mask";
+LANES_UNLOCK_MASK_DEFAULT :: 1; // Lane 1 unlocked by default
+LANES_LANE_COUNT :: 4;
+
+lanes_lane_bit :: proc(lane_index: s64) -> s64 {
+    if lane_index < 0 || lane_index >= LANES_LANE_COUNT {
+        return 0;
+    }
+    return 1 << lane_index;
+}
+
+lanes_is_unlocked :: proc(player: Player, lane_index: s64) -> bool {
+    if player == null return false;
+    if lane_index < 0 || lane_index >= LANES_LANE_COUNT return false;
+    bit := lanes_lane_bit(lane_index);
+    if bit == 0 return false;
+    return (player.lane_unlock_mask & bit) != 0;
+}
+
+lanes_unlock_cost :: proc(lane_index: s64) -> s64 {
+    // lane_index is 0-based. Lane 1 (index 0) is free/default.
+    switch lane_index {
+        case 1: return 10000;    // Lane 2
+        case 2: return 100000;   // Lane 3
+        case 3: return 1000000;  // Lane 4
+    }
+    return 0;
+}
+
+server_try_unlock_lane :: proc(player: Player, lane_index: s64) {
+    if player == null return;
+    if !Game.is_server() return;
+    if lane_index < 0 || lane_index >= LANES_LANE_COUNT return;
+
+    // Lane 1 is always unlocked.
+    if lane_index == 0 {
+        return;
+    }
+
+    // Already unlocked?
+    if lanes_is_unlocked(player, lane_index) {
+        return;
+    }
+
+    // Must have previous lane unlocked first.
+    if !lanes_is_unlocked(player, lane_index - 1) {
+        Notifier.notify(player, "Unlock Lane % first.", {lane_index});
+        return;
+    }
+
+    cost := lanes_unlock_cost(lane_index);
+    if cost <= 0 return;
+
+    if !Economy.can_withdraw_currency(player, COIN_CURRENCY, cost) {
+        Notifier.notify(player, "Not enough Coins!");
+        return;
+    }
+
+    Economy.withdraw_currency(player, COIN_CURRENCY, cost);
+
+    // Update mask (always keep Lane 1 bit set).
+    bit := lanes_lane_bit(lane_index);
+    new_mask := (player.lane_unlock_mask | bit) | LANES_UNLOCK_MASK_DEFAULT;
+    // Clamp to 4 lanes.
+    new_mask = new_mask & 15;
+    player.lane_unlock_mask = new_mask;
+    Save.set_int(player, LANES_UNLOCK_SAVE_KEY, new_mask);
+
+    Notifier.notify(player, "Unlocked Lane %.", {lane_index + 1});
+
+    // Spawn the lane prefab under their PlayerBase.
+    gm := get_game_manager();
+    if gm != null {
+        gm->server_spawn_lane_for_player(player, lane_index);
+    }
+}
+
 // Cheat: grant an item directly into the caller's inventory.
 // Usage:
 // - /g <item_id>
@@ -106,6 +192,22 @@ g :: proc(player: Player, item_id: string, count: s64 = 1) {
     else {
         Notifier.notify(player, "Gave %.", {item_id});
     }
+} @chat_command @youtuber
+
+// Cheat: grant Coins currency to the caller.
+// Usage:
+// - /coins <amount>
+coins :: proc(player: Player, amount: s64) {
+    if player == null return;
+    if !Game.is_server() return;
+
+    if amount <= 0 {
+        Notifier.notify(player, "Usage: /coins <amount> (must be > 0)");
+        return;
+    }
+
+    Economy.deposit_currency(player, COIN_CURRENCY, amount);
+    Notifier.notify(player, "Gave yourself % Coins.", {amount});
 } @chat_command @youtuber
 
 // Convert any legacy "coin" item stacks into Coin currency.
@@ -246,6 +348,12 @@ Player :: class : Player_Base {
     // Flat storage: index = lane_index * 4 + station_index (0..3). Values are 1..10.
     station_upgrade_levels: [16]s64;
 
+    // Lane unlock progression (per-player, server authoritative, replicated)
+    // lane_unlock_mask uses bits for lanes 0..3 (see helpers above).
+    lane_unlock_mask: s64;
+    // Runtime: spawned lane prefab instances (Lane 2-4 are indices 1..3).
+    lane_entities: [4]Entity;
+
     // PlayerBase ownership state (per-player, multiplayer safe)
     base_entity: Entity;
     base_spawn_index: s64;
@@ -370,6 +478,14 @@ Player :: class : Player_Base {
             }
         }
 
+        // Lanes progression (server authoritative, loaded from Save and replicated).
+        if Game.is_server() {
+            lane_unlock_mask = LANES_UNLOCK_MASK_DEFAULT;
+            for i: 0..3 {
+                lane_entities[i] = null;
+            }
+        }
+
         harvester_upgrades_open = false;
         // Server authoritative (loaded from Save and replicated).
         if Game.is_server() {
@@ -399,6 +515,21 @@ Player :: class : Player_Base {
             init_weapon_items();
 
             migrate_legacy_coin_items_to_currency(this);
+
+            // Load per-player lane unlock mask (server authoritative, replicates to clients).
+            {
+                mask := Save.get_int(this, LANES_UNLOCK_SAVE_KEY, LANES_UNLOCK_MASK_DEFAULT);
+                if mask < 0 {
+                    mask = 0;
+                }
+                // Always keep Lane 1 unlocked.
+                mask = mask | LANES_UNLOCK_MASK_DEFAULT;
+                // Clamp to 4 lanes.
+                mask = mask & 15;
+                lane_unlock_mask = mask;
+                // Ensure key exists for new players / migrations.
+                Save.set_int(this, LANES_UNLOCK_SAVE_KEY, mask);
+            }
 
             // Load per-player Managers unlock masks (server authoritative, replicates to clients).
             for lane: 0..3 {
@@ -450,6 +581,18 @@ Player :: class : Player_Base {
             gm := get_game_manager();
             if gm != null {
                 gm->request_base_reconcile();
+            }
+        }
+
+        // Lock player movement to the main navmesh (both server + clients).
+        // This prevents players from walking outside navigable areas.
+        {
+            gm := get_game_manager();
+            if gm != null && gm.navmesh != null {
+                movement_agent := entity->get_component(Movement_Agent);
+                if movement_agent != null {
+                    movement_agent->set_navmesh_to_lock_to(gm.navmesh);
+                }
             }
         }
 

@@ -20,6 +20,7 @@
   "component_type": "Internal_Component",
   "internal_component_type": "GameManager",
   "data": {
+    "navmesh": "165183328052988:1770196476085209300",
     "player_base_prefab_path": "BaseBounds.prefab",
     "PlayerSpawns": [
       "156606450222343:1770192414986856300",

@@ -70,8 +70,11 @@ server_try_unlock_manager :: proc(player: Player, lane_index: s64, kind: Manager
     if player == null return;
     if !Game.is_server() return;
     if lane_index < 0 || lane_index >= MANAGERS_LANE_COUNT return;
-    // For now, only Lane 1 (index 0) is purchasable.
-    if lane_index != 0 return;
+    // Must have the lane unlocked.
+    if !lanes_is_unlocked(player, lane_index) {
+        Notifier.notify(player, "Lane % is locked.", {lane_index + 1});
+        return;
+    }
 
     bit := manager_bit(kind);
     if bit == 0 return;
@@ -96,6 +99,60 @@ server_try_unlock_manager :: proc(player: Player, lane_index: s64, kind: Manager
 
     Save.set_int(player, managers_lane_save_key(lane_index), new_mask);
     Notifier.notify(player, "Unlocked % (Lane %).", {manager_display_name(kind), lane_index + 1});
+}
+
+draw_managers_unlock_lane_prompt :: proc(player: Player, rect: Rect, lane_index: s64) {
+    if player == null return;
+    if lane_index < 0 || lane_index >= MANAGERS_LANE_COUNT return;
+
+    UI.quad(rect, core_globals.white_sprite, {0.08, 0.08, 0.08, 0.95});
+    inner := rect->inset(26);
+
+    title := inner->cut_top(90);
+    _ := inner->cut_top(10);
+    button_row := inner->cut_top(100);
+
+    ts_title := UI.default_text_settings();
+    ts_title.size = 44;
+    ts_title.halign = .CENTER;
+    ts_title.valign = .CENTER;
+    ts_title.do_outline = true;
+    ts_title.outline_thickness = 3;
+    ts_title.outline_color = {0, 0, 0, 1};
+    UI.text(title, ts_title, "Unlock Lane %?", {lane_index + 1});
+
+    prereq_ok := lane_index == 0 || lanes_is_unlocked(player, lane_index - 1);
+    cost := lanes_unlock_cost(lane_index);
+    can_afford := cost > 0 && Economy.can_withdraw_currency(player, MANAGERS_COIN_CURRENCY, cost);
+
+    bs := UI.default_button_settings();
+    bs.press_scaling = 0.4;
+
+    ts_btn := UI.default_text_settings();
+    ts_btn.size = 34;
+    ts_btn.halign = .CENTER;
+    ts_btn.valign = .CENTER;
+    ts_btn.do_outline = true;
+    ts_btn.outline_thickness = 2;
+    ts_btn.outline_color = {0, 0, 0, 1};
+
+    if !prereq_ok {
+        bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_8.png"); // Grey
+        UI.push_disabled(true);
+        defer UI.pop_disabled();
+        _ := UI.button(button_row->inset(10), bs, ts_btn, "Unlock previous lane first");
+        return;
+    }
+
+    bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_2.png"); // Green
+    if !can_afford {
+        bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_3.png"); // Red
+    }
+
+    label := format_string("Unlock ($%)", {cost});
+    if UI.button(button_row->inset(10), bs, ts_btn, label).clicked {
+        server_try_unlock_lane(player, lane_index);
+    }
 }
 
 draw_managers_button :: proc(player: Player) {
@@ -231,12 +288,12 @@ draw_manager_card :: proc(player: Player, rect: Rect, lane_index: s64, kind: Man
         ts.outline_thickness = 2;
         ts.outline_color = {0, 0, 0, 1};
 
-        if lane_index != 0 {
-            // Lanes 2-4 are not available yet.
+        if !lanes_is_unlocked(player, lane_index) {
+            // Lane is locked: manager purchase not available.
             bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_8.png"); // Grey
             UI.push_disabled(true);
             defer UI.pop_disabled();
-            _ := UI.button(btn_rect->inset(6), bs, ts, "Not Available");
+            _ := UI.button(btn_rect->inset(6), bs, ts, "Lane Locked");
         }
         else {
             label := format_string("Unlock $%", {cost});
@@ -326,6 +383,13 @@ draw_managers_modal :: proc(player: Player) {
     lane := player.managers_selected_lane;
     if lane < 0 || lane >= MANAGERS_LANE_COUNT {
         lane = 0;
+    }
+
+    // If this lane is locked, show the lane unlock purchase UI instead of manager cards.
+    if !lanes_is_unlocked(player, lane) {
+        prompt_rect := body->center_rect()->grow(160, 360, 160, 360);
+        draw_managers_unlock_lane_prompt(player, prompt_rect, lane);
+        return;
     }
 
     // 2x2 grid of manager cards

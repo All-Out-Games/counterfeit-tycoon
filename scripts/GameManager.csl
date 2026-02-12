@@ -46,6 +46,13 @@ Spawn_Woodchipper_Userdata :: class {
     owner_user_id: string;
 }
 
+Spawn_Lane_Userdata :: class {
+    player: Player;
+    base_entity: Entity;
+    lane_index: s64;
+    gm: GameManager;
+}
+
 find_truck_for_base :: proc(base: PlayerBase) -> Truck {
     if base == null return null;
     if base.entity == null || base.entity.self == null return null;
@@ -126,39 +133,33 @@ GameManager :: class : Component {
     last_managers_reconcile_time: float;
     last_station_upgrades_reconcile_time: float;
 
+    // Lanes (Lane.prefab) spawned per-player based on lane unlock mask.
+    cached_lane_prefab: Prefab_Asset;
+    warned_missing_lane_prefab: bool;
+    last_lanes_reconcile_time: float;
+
     warned_missing_navmesh: bool;
+    warned_navmesh_rebuild_failed: bool;
     last_base_entity_ids: [..]u64;
     scratch_base_entity_ids: [..]u64;
-
-    resolve_navmesh :: method() -> Navmesh {
-        if navmesh != null return navmesh;
-
-        // Common case: Navmesh is on the same entity as GameManager.
-        if entity != null && entity.self != null {
-            navmesh = entity->get_component(Navmesh);
-        }
-
-        // Fallback: first navmesh found in scene.
-        if navmesh == null {
-            foreach n: component_iterator(Navmesh) {
-                navmesh = n;
-                break;
-            }
-        }
-
-        return navmesh;
-    }
+    last_lane_sigs: [..]u64;
+    scratch_lane_sigs: [..]u64;
 
     mark_navmesh_for_rebuild :: method() {
-        nm := resolve_navmesh();
+        // Explicit reference only (set in-editor on the GameManager).
+        nm := navmesh;
         if nm == null {
             if !warned_missing_navmesh {
                 warned_missing_navmesh = true;
-                log_warning("GameManager: Navmesh reference is missing (set GameManager.navmesh in-editor or put a Navmesh component on the same entity)", {});
+                log_warning("GameManager: Navmesh reference is missing (set GameManager.navmesh in-editor)", {});
             }
             return;
         }
-        nm->mark_for_rebuild();
+        ok := nm->rebuild_immediately();
+        if !ok && !warned_navmesh_rebuild_failed {
+            warned_navmesh_rebuild_failed = true;
+            log_warning("GameManager: Navmesh rebuild failed", {});
+        }
     }
 
     sort_u64_ascending :: method(arr: ref [..]u64) {
@@ -210,12 +211,55 @@ GameManager :: class : Component {
         }
     }
 
+    update_navmesh_rebuild_if_lane_set_changed :: method() {
+        scratch_lane_sigs->clear();
+
+        foreach p: component_iterator(Player) {
+            if p == null continue;
+
+            // Track spawned lane prefab roots (lanes 2-4). Lane 1 lives in the base prefab.
+            for lane: 1..3 {
+                e := p.lane_entities[lane];
+                if e == null continue;
+                if e.self == null continue;
+                if !e->get_world_enabled() continue;
+
+                // Include local Y position in the signature so lane repositioning also triggers rebuilds.
+                yq := (e.local_position.y * 1000.0).(s64);
+                sig := e.id ^ (yq.(u64) * 1315423911);
+                scratch_lane_sigs->append(sig);
+            }
+        }
+
+        this->sort_u64_ascending(ref scratch_lane_sigs);
+
+        changed := scratch_lane_sigs.count != last_lane_sigs.count;
+        if !changed {
+            for i: 0..scratch_lane_sigs.count-1 {
+                if scratch_lane_sigs[i] != last_lane_sigs[i] {
+                    changed = true;
+                    break;
+                }
+            }
+        }
+
+        if changed {
+            this->mark_navmesh_for_rebuild();
+
+            last_lane_sigs->clear();
+            for sig: scratch_lane_sigs {
+                last_lane_sigs->append(sig);
+            }
+        }
+    }
+
     ao_start :: proc(using this: GameManager) {
         // Called when this component is created
         if Game.is_server() {
             needs_base_reconcile = true;
             last_managers_reconcile_time = -99999.0;
             last_station_upgrades_reconcile_time = -99999.0;
+            last_lanes_reconcile_time = -99999.0;
         }
     }
 
@@ -224,8 +268,9 @@ GameManager :: class : Component {
         _ := dt;
 
         // Runs on both server + clients so everyone rebuilds their local navmesh
-        // when bases are created/destroyed via replication.
+        // when bases/lanes are created/destroyed/repositioned via replication.
         this->update_navmesh_rebuild_if_base_set_changed();
+        this->update_navmesh_rebuild_if_lane_set_changed();
 
         if !Game.is_server() {
             return;
@@ -255,6 +300,206 @@ GameManager :: class : Component {
             foreach p: component_iterator(Player) {
                 if p == null continue;
                 this->server_apply_station_upgrade_levels_for_player(p);
+            }
+        }
+
+        // Reconcile lane prefabs periodically (covers unlock-at-runtime and unlocks loaded on join).
+        LANES_RECONCILE_INTERVAL :: 0.5;
+        if get_time() - last_lanes_reconcile_time >= LANES_RECONCILE_INTERVAL {
+            last_lanes_reconcile_time = get_time();
+            this->server_reconcile_lanes();
+        }
+    }
+
+    ensure_lane_prefab_loaded :: method() {
+        if cached_lane_prefab != null {
+            return;
+        }
+        cached_lane_prefab = get_asset(Prefab_Asset, "Lane.prefab");
+    }
+
+    server_spawn_lane_for_player :: method(player: Player, lane_index: s64) {
+        if !Game.is_server() return;
+        if player == null return;
+        if lane_index < 0 || lane_index > 3 return;
+        if player.base_entity == null || player.base_entity.self == null return;
+
+        // We only spawn additional lanes (Lane 2-4). Lane 1 is expected to exist in the base prefab already.
+        if lane_index == 0 {
+            return;
+        }
+
+        // Compute the lane's local Y based on which PlayerSpawn index the base uses.
+        // - Spawns 0/1/2: lanes stack upward (+Y)
+        // - Spawns 3/4/5: mirror lanes to stack downward (-Y)
+        lane_local_y :: proc(p: Player, li: s64) -> float {
+            sign := 1.0;
+            if p != null && p.base_spawn_index >= 3 {
+                sign = -1.0;
+            }
+
+            base_y := li.(float) * 3.5;
+            // Special-case Lane 4 (index 3): spawn at (0, -3.5) then mirror if needed.
+            if li == 3 {
+                base_y = -3.5;
+            }
+
+            return sign * base_y;
+        }
+
+        // Already spawned and still alive? Ensure it's positioned correctly and return.
+        existing := player.lane_entities[lane_index];
+        if existing != null && existing.self != null {
+            existing->set_local_position(v2{0, lane_local_y(player, lane_index)});
+            return;
+        }
+
+        ensure_lane_prefab_loaded();
+        if cached_lane_prefab == null {
+            if !warned_missing_lane_prefab {
+                warned_missing_lane_prefab = true;
+                log_warning("GameManager: missing Lane.prefab asset (expected prefab at \"Lane.prefab\")", {});
+            }
+            return;
+        }
+
+        spawn_pos := player.base_entity.world_position;
+
+        ud := new(Spawn_Lane_Userdata);
+        ud.player = player;
+        ud.base_entity = player.base_entity;
+        ud.lane_index = lane_index;
+        ud.gm = this;
+
+        _ := Scene.instantiate(
+            cached_lane_prefab,
+            spawn_pos,
+            ud,
+            proc(spawned_entity: Entity, userdata: Object) {
+                ud := userdata.(Spawn_Lane_Userdata);
+                if ud == null return;
+                if spawned_entity == null return;
+                if spawned_entity.self == null return;
+
+                is_descendant_of :: proc(child: Entity, ancestor: Entity) -> bool {
+                    if child == null return false;
+                    if child.self == null return false;
+                    if ancestor == null return false;
+                    if ancestor.self == null return false;
+
+                    cur := child;
+                    for step: 0..48 {
+                        _ := step;
+                        if cur == null break;
+                        if cur.self == null break;
+                        if cur == ancestor return true;
+                        cur = cur.parent;
+                    }
+                    return false;
+                }
+
+                // Parent under the base so it is destroyed when the base is destroyed.
+                if ud.base_entity != null && ud.base_entity.self != null {
+                    spawned_entity->set_parent(ud.base_entity, true);
+                }
+
+                // Position lanes stacked vertically.
+                y := lane_local_y(ud.player, ud.lane_index);
+                spawned_entity->set_local_position(v2{0, y});
+
+                // Track on the player so we can avoid duplicate spawns.
+                if ud.player != null {
+                    ud.player.lane_entities[ud.lane_index] = spawned_entity;
+                }
+
+                // IMPORTANT:
+                // Stations inside Lane.prefab must have their `lane_index` set correctly so they
+                // save/load lane-specific keys (otherwise they default to Lane 1 values).
+                // After setting lane_index, force a re-load from Save for this lane.
+                pb := get_parent_player_base(spawned_entity);
+                if pb != null {
+                    foreach m: component_iterator(Paper_Mill) {
+                        if m == null continue;
+                        if m.entity == null || m.entity.self == null continue;
+                        if get_parent_player_base(m.entity) != pb continue;
+                        if !is_descendant_of(m.entity, spawned_entity) continue;
+
+                        m.lane_index = ud.lane_index;
+                        m.loaded_from_save = false;
+                        m.loaded_for_user_id = {};
+                        m.stored_wood = 0;
+                        m.stored_paper = 0;
+                        m.convert_timer = 0;
+                        m->server_try_load_from_save();
+                    }
+                    foreach b: component_iterator(Blank_Bill_Press) {
+                        if b == null continue;
+                        if b.entity == null || b.entity.self == null continue;
+                        if get_parent_player_base(b.entity) != pb continue;
+                        if !is_descendant_of(b.entity, spawned_entity) continue;
+
+                        b.lane_index = ud.lane_index;
+                        b.loaded_from_save = false;
+                        b.loaded_for_user_id = {};
+                        b.stored_paper = 0;
+                        b.stored_blank_bills = 0;
+                        b.convert_timer = 0;
+                        b->server_try_load_from_save();
+                    }
+                    foreach c: component_iterator(Colored_Bill_Press) {
+                        if c == null continue;
+                        if c.entity == null || c.entity.self == null continue;
+                        if get_parent_player_base(c.entity) != pb continue;
+                        if !is_descendant_of(c.entity, spawned_entity) continue;
+
+                        c.lane_index = ud.lane_index;
+                        c.loaded_from_save = false;
+                        c.loaded_for_user_id = {};
+                        c.stored_blank_bills = 0;
+                        c.stored_colored_bills = 0;
+                        c.convert_timer = 0;
+                        c->server_try_load_from_save();
+                    }
+                    foreach f: component_iterator(Finished_Bill_Press) {
+                        if f == null continue;
+                        if f.entity == null || f.entity.self == null continue;
+                        if get_parent_player_base(f.entity) != pb continue;
+                        if !is_descendant_of(f.entity, spawned_entity) continue;
+
+                        f.lane_index = ud.lane_index;
+                        f.loaded_from_save = false;
+                        f.loaded_for_user_id = {};
+                        f.stored_colored_bills = 0;
+                        f.stored_finished_bills = 0;
+                        f.convert_timer = 0;
+                        f->server_try_load_from_save();
+                    }
+                }
+
+                // Newly spawned stations should reflect saved upgrade levels immediately.
+                gm := ud.gm;
+                if gm != null && ud.player != null {
+                    gm->apply_station_upgrade_levels_for_player(ud.player);
+                    // Lane spawned + repositioned: rebuild navmesh ASAP on server.
+                    gm->mark_navmesh_for_rebuild();
+                }
+            }
+        );
+    }
+
+    server_reconcile_lanes :: method() {
+        if !Game.is_server() return;
+
+        foreach p: component_iterator(Player) {
+            if p == null continue;
+            if p.base_entity == null || p.base_entity.self == null continue;
+
+            // Spawn lanes 2-4 if unlocked.
+            for lane: 1..3 {
+                if !lanes_is_unlocked(p, lane) {
+                    continue;
+                }
+                this->server_spawn_lane_for_player(p, lane);
             }
         }
     }
@@ -648,10 +893,8 @@ GameManager :: class : Component {
     server_reconcile_press_operators_lane1 :: method() {
         if !Game.is_server() return;
 
-        // Lane 1 is lane_index = 0.
         // PressOperator is bit 1 (lowest bit) in the lane mask.
         PRESS_OPERATOR_BIT :: 1;
-        LANE_INDEX :: 0;
 
         foreach p: component_iterator(Player) {
             if p == null continue;
@@ -660,19 +903,29 @@ GameManager :: class : Component {
             pb := p.base_entity->get_component(PlayerBase);
             if pb == null continue;
 
-            mask := p.managers_lane_masks[LANE_INDEX];
-            unlocked := (mask & PRESS_OPERATOR_BIT) != 0;
+            for lane: 0..3 {
+                existing := find_press_operator_for_base(pb, lane);
 
-            existing := find_press_operator_for_base(pb, LANE_INDEX);
-
-            if unlocked {
-                if existing == null {
-                    server_spawn_press_operator(pb, p->get_user_id(), LANE_INDEX);
+                // Don't run managers in locked lanes.
+                if !lanes_is_unlocked(p, lane) {
+                    if existing != null && existing.entity != null && existing.entity.self != null {
+                        existing.entity->destroy();
+                    }
+                    continue;
                 }
-            }
-            else {
-                if existing != null && existing.entity != null && existing.entity.self != null {
-                    existing.entity->destroy();
+
+                mask := p.managers_lane_masks[lane];
+                unlocked := (mask & PRESS_OPERATOR_BIT) != 0;
+
+                if unlocked {
+                    if existing == null {
+                        server_spawn_press_operator(pb, p->get_user_id(), lane);
+                    }
+                }
+                else {
+                    if existing != null && existing.entity != null && existing.entity.self != null {
+                        existing.entity->destroy();
+                    }
                 }
             }
         }
@@ -747,10 +1000,8 @@ GameManager :: class : Component {
     server_reconcile_colorists_lane1 :: method() {
         if !Game.is_server() return;
 
-        // Lane 1 is lane_index = 0.
         // Colorist is bit 2 in the lane mask.
         COLORIST_BIT :: 2;
-        LANE_INDEX :: 0;
 
         foreach p: component_iterator(Player) {
             if p == null continue;
@@ -759,19 +1010,28 @@ GameManager :: class : Component {
             pb := p.base_entity->get_component(PlayerBase);
             if pb == null continue;
 
-            mask := p.managers_lane_masks[LANE_INDEX];
-            unlocked := (mask & COLORIST_BIT) != 0;
+            for lane: 0..3 {
+                existing := find_colorist_for_base(pb, lane);
 
-            existing := find_colorist_for_base(pb, LANE_INDEX);
-
-            if unlocked {
-                if existing == null {
-                    server_spawn_colorist(pb, p->get_user_id(), LANE_INDEX);
+                if !lanes_is_unlocked(p, lane) {
+                    if existing != null && existing.entity != null && existing.entity.self != null {
+                        existing.entity->destroy();
+                    }
+                    continue;
                 }
-            }
-            else {
-                if existing != null && existing.entity != null && existing.entity.self != null {
-                    existing.entity->destroy();
+
+                mask := p.managers_lane_masks[lane];
+                unlocked := (mask & COLORIST_BIT) != 0;
+
+                if unlocked {
+                    if existing == null {
+                        server_spawn_colorist(pb, p->get_user_id(), lane);
+                    }
+                }
+                else {
+                    if existing != null && existing.entity != null && existing.entity.self != null {
+                        existing.entity->destroy();
+                    }
                 }
             }
         }
@@ -846,10 +1106,8 @@ GameManager :: class : Component {
     server_reconcile_stampers_lane1 :: method() {
         if !Game.is_server() return;
 
-        // Lane 1 is lane_index = 0.
         // Stamper is bit 4 in the lane mask.
         STAMPER_BIT :: 4;
-        LANE_INDEX :: 0;
 
         foreach p: component_iterator(Player) {
             if p == null continue;
@@ -858,19 +1116,28 @@ GameManager :: class : Component {
             pb := p.base_entity->get_component(PlayerBase);
             if pb == null continue;
 
-            mask := p.managers_lane_masks[LANE_INDEX];
-            unlocked := (mask & STAMPER_BIT) != 0;
+            for lane: 0..3 {
+                existing := find_stamper_for_base(pb, lane);
 
-            existing := find_stamper_for_base(pb, LANE_INDEX);
-
-            if unlocked {
-                if existing == null {
-                    server_spawn_stamper(pb, p->get_user_id(), LANE_INDEX);
+                if !lanes_is_unlocked(p, lane) {
+                    if existing != null && existing.entity != null && existing.entity.self != null {
+                        existing.entity->destroy();
+                    }
+                    continue;
                 }
-            }
-            else {
-                if existing != null && existing.entity != null && existing.entity.self != null {
-                    existing.entity->destroy();
+
+                mask := p.managers_lane_masks[lane];
+                unlocked := (mask & STAMPER_BIT) != 0;
+
+                if unlocked {
+                    if existing == null {
+                        server_spawn_stamper(pb, p->get_user_id(), lane);
+                    }
+                }
+                else {
+                    if existing != null && existing.entity != null && existing.entity.self != null {
+                        existing.entity->destroy();
+                    }
                 }
             }
         }
@@ -945,10 +1212,8 @@ GameManager :: class : Component {
     server_reconcile_couriers_lane1 :: method() {
         if !Game.is_server() return;
 
-        // Lane 1 is lane_index = 0.
         // Courier is bit 8 in the lane mask.
         COURIER_BIT :: 8;
-        LANE_INDEX :: 0;
 
         foreach p: component_iterator(Player) {
             if p == null continue;
@@ -957,19 +1222,28 @@ GameManager :: class : Component {
             pb := p.base_entity->get_component(PlayerBase);
             if pb == null continue;
 
-            mask := p.managers_lane_masks[LANE_INDEX];
-            unlocked := (mask & COURIER_BIT) != 0;
+            for lane: 0..3 {
+                existing := find_courier_for_base(pb, lane);
 
-            existing := find_courier_for_base(pb, LANE_INDEX);
-
-            if unlocked {
-                if existing == null {
-                    server_spawn_courier(pb, p->get_user_id(), LANE_INDEX);
+                if !lanes_is_unlocked(p, lane) {
+                    if existing != null && existing.entity != null && existing.entity.self != null {
+                        existing.entity->destroy();
+                    }
+                    continue;
                 }
-            }
-            else {
-                if existing != null && existing.entity != null && existing.entity.self != null {
-                    existing.entity->destroy();
+
+                mask := p.managers_lane_masks[lane];
+                unlocked := (mask & COURIER_BIT) != 0;
+
+                if unlocked {
+                    if existing == null {
+                        server_spawn_courier(pb, p->get_user_id(), lane);
+                    }
+                }
+                else {
+                    if existing != null && existing.entity != null && existing.entity.self != null {
+                        existing.entity->destroy();
+                    }
                 }
             }
         }
