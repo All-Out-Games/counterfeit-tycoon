@@ -51,6 +51,9 @@ weapon_equip :: proc(player: Player, wt: Weapon_Type) {
 weapon_unequip :: proc(player: Player, wt: Weapon_Type) {
     config := get_weapon_config(wt);
 
+    // If the player was aiming, ensure mouse IK/facing doesn't "stick" after unequipping.
+    player->set_mouse_ik_enabled(false);
+
     // Boomwheel: stop cannon roll sound and destroy cannon entity
     if wt == .BOOMWHEEL {
         if player.boomwheel_cannon != null {

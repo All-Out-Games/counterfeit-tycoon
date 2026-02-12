@@ -1,17 +1,29 @@
-draw_health_bar :: proc(player: Player) {
+draw_all_players_health_bars_local :: proc() {
+    // Purely cosmetic: draw world-space bars locally on each client.
     UI.push_world_draw_context();
     defer UI.pop_draw_context();
 
-    pos := player.entity.world_position;
+    foreach p: component_iterator(Player) {
+        if p == null continue;
+        if p.entity == null || p.entity.self == null continue;
+        draw_health_bar_in_world_context(p);
+    }
+}
+
+draw_health_bar_in_world_context :: proc(player: Player) {
+    if player == null return;
+    if player.entity == null || player.entity.self == null return;
+
+    // Anchor directly to player world position (do not depend on nameplate rects, which can be unstable).
+    pos := player.entity.world_position + v2{0, 1.75};
+
     UI.push_z(pos.y - 0.0001);
     defer UI.pop_z();
 
-    UI.push_scale_factor(5.0 / 540.0);
-    defer UI.pop_scale_factor();
-
-    health_rect := player.username_rect->top_center_rect()->offset(0, 5);
-    health_rect = health_rect->grow(13, 70, 0, 70);
-    border_rect := health_rect->grow(5.5, 4, 5.5, 4)->offset(0, -2);
+    // World-space sizing (meters)
+    // Tuned to be closer to the old scaled UI size.
+    health_rect := Rect{pos, pos}->grow(0.06, 0.60, 0.06, 0.60); // ~1.2m wide, ~0.12m tall
+    border_rect := health_rect->grow(0.02, 0.02, 0.02, 0.02);
 
     back := get_asset(Texture_Asset, "reusable_weapons/sprites/reusable-weapons/hud_elements/health_bar_green/healthbar_back.png");
     fill := get_asset(Texture_Asset, "reusable_weapons/sprites/reusable-weapons/hud_elements/health_bar_green/healthbar_fill.png");
@@ -32,7 +44,11 @@ draw_health_bar :: proc(player: Player) {
 
     // Pip markers
     total_pips :: 6;
-    health_per_pip := player.MaxHealth / total_pips.(float);
+    health_per_pip := 0.0;
+    if total_pips > 0 {
+        health_per_pip = player.MaxHealth / total_pips.(float);
+    }
+
     left_offset :: 0.05;
     right_offset :: 0.05;
     available_width := 1.0 - left_offset - right_offset;
@@ -52,4 +68,11 @@ draw_health_bar :: proc(player: Player) {
         }
         i += 1;
     }
+}
+
+// Backwards-compatible single-player draw (still local-only if you call it from client code).
+draw_health_bar :: proc(player: Player) {
+    UI.push_world_draw_context();
+    defer UI.pop_draw_context();
+    draw_health_bar_in_world_context(player);
 }

@@ -18,8 +18,6 @@ Game :: struct {
 }
 
 Server :: struct {
-    set_matchmaking_priority   :: proc(priority: int) #foreign "server_set_matchmaking_priority";
-
     kick_player :: proc(player: Player, reason: string = "Kicked.") #foreign "server_kick_player";
 
     queue_add_player           :: proc(queue: string, player: Player)    #foreign "server_queue_add_player";

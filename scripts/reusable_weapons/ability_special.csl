@@ -1,52 +1,3 @@
-// Melee ability - universal, always available at slot 1
-Melee_Ability :: class : Ability_Base {
-    on_init :: proc(ability: Ability_Base) {
-        ability.name = "Melee";
-        ability.icon = get_asset(Texture_Asset, "reusable_weapons/sprites/reusable-weapons/katana.png");
-        ability.disable_keybind = true;
-        ability.is_aimed_ability = false;
-    }
-
-    can_use :: proc(ability: Ability_Base) -> bool {
-        return true;
-    }
-
-    on_update :: proc(ability: Ability_Base, params: ref Ability_Update_Params) {
-        p := ability.player.(Player);
-
-        if params.pressed && params.can_use && ability.current_cooldown <= 0 {
-            // Trigger melee animation
-            p.animator.instance.state_machine->set_trigger("melee_AL");
-
-            // Enable katana skin briefly
-            p.animator.instance->enable_skin("weapons/katana");
-            p.animator.instance->refresh_skins();
-
-            // Play katana sound
-            sfx_desc := SFX.default_sfx_desc();
-            sfx_desc->set_position(p.entity.world_position);
-            sfx_desc.range_multiplier = 2.0;
-            SFX.play(get_asset(SFX_Asset, "reusable_weapons/sounds/reusable-weapons/katana_slash.wav"), sfx_desc);
-
-            // Damage nearby players
-            if Game.is_server() {
-                nearby: [..]Player;
-                pos := p.entity.world_position;
-                Scene.get_all_components_in_range(pos, 1.5, ref nearby);
-                for hit: nearby {
-                    if hit != null {
-                        if hit.entity.id != p.entity.id {
-                            hit->take_damage(25.0, p, true);
-                        }
-                    }
-                }
-            }
-
-            ability.current_cooldown = 1.0;
-        }
-    }
-}
-
 // Special weapon abilities dispatcher
 Special_Ability :: class : Ability_Base {
     was_shooting: bool;
@@ -70,6 +21,11 @@ Special_Ability :: class : Ability_Base {
         p := ability.player.(Player);
         self := ability.(Special_Ability);
         wt := p.equipped_weapon_type;
+        if wt == .NONE {
+            // No weapon equipped: don't enable mouse IK / facing.
+            p->set_mouse_ik_enabled(false);
+            return;
+        }
         config := get_weapon_config(wt);
 
         ability.icon = get_asset(Texture_Asset, config.weapon_icon_path);

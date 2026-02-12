@@ -2,9 +2,6 @@ import "core:ao"
 import "ui"
 import "reusable_weapons"
 
-HealthBarBack_Red: Texture_Asset;
-HealthBarFill_Red: Texture_Asset;
-
 // Item drops:
 // Use `ItemDrops.spawn(...)` / `ItemDrops.spawn_from_definition(...)` from `scripts/ItemDrops.csl`
 // to drop items into the world. Pickups will magnet to nearby players and grant the item.
@@ -32,9 +29,6 @@ ao_before_scene_load :: proc() {
 
 ao_start :: proc() {
     // Called after the scene is loaded
-     // cached textures
-    HealthBarBack_Red = get_asset(Texture_Asset, "UI/Health_Bar/health_bar_red/healthbar_back.png");
-    HealthBarFill_Red = get_asset(Texture_Asset, "UI/Health_Bar/health_bar_red/healthbar_fill.png");
 }
 
 ao_update :: proc(dt: float) {
@@ -246,6 +240,12 @@ Player :: class : Player_Base {
     harvester_level: s64;                 // 1..10
     harvester_manager_unlocked: bool;     // one-time unlock
 
+    // Station upgrades UI + levels (per-player, multiplayer safe)
+    upgrades_open: bool;
+    upgrades_selected_lane: s64;          // 0-based
+    // Flat storage: index = lane_index * 4 + station_index (0..3). Values are 1..10.
+    station_upgrade_levels: [16]s64;
+
     // PlayerBase ownership state (per-player, multiplayer safe)
     base_entity: Entity;
     base_spawn_index: s64;
@@ -363,13 +363,28 @@ Player :: class : Player_Base {
 
         managers_open = false;
         managers_selected_lane = 0; // Lane 1 auto-selected
-        for i: 0..3 {
-            managers_lane_masks[i] = 0;
+        // Server syncs these to clients; don't clobber already-synced values on clients.
+        if Game.is_server() {
+            for i: 0..3 {
+                managers_lane_masks[i] = 0;
+            }
         }
 
         harvester_upgrades_open = false;
-        harvester_level = 1;
-        harvester_manager_unlocked = false;
+        // Server authoritative (loaded from Save and replicated).
+        if Game.is_server() {
+            harvester_level = 1;
+            harvester_manager_unlocked = false;
+        }
+
+        upgrades_open = false;
+        upgrades_selected_lane = 0; // Lane 1 auto-selected
+        // Server authoritative (loaded from Save and replicated).
+        if Game.is_server() {
+            for i: 0..15 {
+                station_upgrade_levels[i] = 1;
+            }
+        }
 
         base_entity = null;
         base_spawn_index = -1;
@@ -410,6 +425,25 @@ Player :: class : Player_Base {
 
                 unlocked_int := Save.get_int(this, "harvester_manager_unlocked", 0);
                 harvester_manager_unlocked = unlocked_int != 0;
+            }
+
+            // Load station upgrade levels (server authoritative, replicates to clients).
+            // 4 lanes (0..3), 4 stations (0..3), levels 1..10.
+            for lane: 0..3 {
+                for station: 0..3 {
+                    key := format_string("station_lane_%_station_%_level", {lane, station});
+                    lvl := Save.get_int(this, key, 1);
+                    if lvl < 1 {
+                        lvl = 1;
+                    }
+                    if lvl > 10 {
+                        lvl = 10;
+                    }
+                    idx := lane * 4 + station;
+                    if idx >= 0 && idx < 16 {
+                        station_upgrade_levels[idx] = lvl;
+                    }
+                }
             }
 
             // Joining player: ask the GameManager to assign bases (or warp to 0,0 if full).
@@ -456,6 +490,12 @@ Player :: class : Player_Base {
 
     ao_update :: method(dt: float) {
         // Called once per frame
+
+        // No weapon equipped: ensure mouse IK/facing is disabled (it can otherwise remain enabled after unequip).
+        if equipped_weapon_type == .NONE {
+            this->set_mouse_ik_enabled(false);
+        }
+
         // Ensure the player can't move while the Sell Shop modal is open.
         // Do this server-side so movement is authoritatively blocked.
         if Game.is_server() {
@@ -499,9 +539,6 @@ Player :: class : Player_Base {
             }
         }
 
-          // Draw the floating health bar above the player's name, except for the Monster.
-        this->draw_health_bar();
-
         // Compute a shared "is_moving" flag from the movement agent's velocity.
         is_moving := false;
         if #alive(agent) {
@@ -519,6 +556,15 @@ Player :: class : Player_Base {
 
     }
 
+    // Called on clients immediately after this Player's state sync is applied.
+    // Use this to update local-only derived station tuning so station world UI shows correct levels/speed.
+    ao_on_state_sync :: method() {
+        gm := get_game_manager();
+        if gm != null {
+            gm->apply_station_upgrade_levels_for_player(this);
+        }
+    }
+
     ao_late_update :: method(dt: float) {
         // Called once per frame after physics has been resolved
 
@@ -529,6 +575,12 @@ Player :: class : Player_Base {
 
         // Client-side toast if someone starts stealing our vault.
         client_check_vault_theft_notifications();
+
+        // Draw world-space player health bars locally (cosmetic-only).
+        // Do it here (late update) so it's stable and not tied to replicated/nameplate rect state.
+        if this->is_local() {
+            draw_all_players_health_bars_local();
+        }
 
          // Draw floating combat text damage numbers in world space.
         this->draw_damage_numbers(dt);
@@ -544,7 +596,6 @@ Player :: class : Player_Base {
                 case .BEAM:        { draw_ability_button(this, Beam_Ability, 0); }
                 case .SPECIAL:     { draw_ability_button(this, Special_Ability, 0); }
             }
-            draw_ability_button(this, Melee_Ability, 1); // optional melee
         }
 
         // Draw hotbar and handle equip/unequip
@@ -566,6 +617,9 @@ Player :: class : Player_Base {
 
         // Draw harvester upgrades button + modal UI.
         draw_harvester_upgrades_ui(this);
+
+        // Draw station upgrades button + modal UI.
+        draw_upgrades_ui(this);
     }
 
     ao_end :: method() {
@@ -906,13 +960,6 @@ Player :: class : Player_Base {
             t = game_layer->create_global_transition(handless_state, true);
             t->create_trigger_condition(handless_var);
 
-            // Melee attack
-            melee_state := game_layer->create_state("Attack_Melee_1_mIK_AL2", false, 0.0);
-            melee_var := sm->create_variable("melee_AL", State_Machine_Variable.Kind.TRIGGER);
-            t = game_layer->create_global_transition(melee_state, true);
-            t->create_trigger_condition(melee_var);
-            game_layer->create_transition(melee_state, empty, true);
-
             // Weapon equipping / unequipping and basic shooting on the additive layer.
 
             // 1h pull out
@@ -987,56 +1034,6 @@ Player :: class : Player_Base {
 
         // Finally, bind this state machine to the base animator.
         player.animator.instance->set_state_machine(sm, true);
-    }
-
-    // Draws a health bar just above the player's position on screen and returns the bar rect.
-    draw_health_bar :: proc(using this: Player) -> Rect {
-
-        // Screen-space UI so we explicitly position over the player's screen position.
-        UI.push_world_draw_context();
-        defer UI.pop_draw_context();
-
-        // Make sure the bar renders above most HUD.
-        UI.push_z(entity.world_position.y - 0.001);
-        defer UI.pop_z();
-
-        // Compute the player's position on screen, slightly above the character.
-        bar_pos := entity.world_position + v2{0, 1.55};
-        base_rect := Rect{bar_pos, bar_pos};
-
-        // Grow into a horizontal health bar centered at the screen position and offset slightly upward.
-        health_rect := base_rect->grow(0.15, 0.65, 0, 0.65)->offset(0, 0.05);
-
-        border_rect := health_rect->grow(0.05, 0.04, 0.05, 0.04)->offset(0, -0.02);
-
-        // Placeholder in case we want to draw a level badge later.
-        level_rect := health_rect;
-
-        back := HealthBarBack_Red;
-        fill := HealthBarFill_Red;
-
-        // Draw bar background.
-        UI.quad(border_rect, back, {1, 1, 1, 1});
-
-        // Avoid division by zero when MaxHealth is not initialized for some reason.
-        if MaxHealth <= 0 {
-            return health_rect;
-        }
-
-        health_percent := CurrentHealth / MaxHealth;
-
-        // Clamp to [0, 1] to avoid weird rendering when values go out of range.
-        if health_percent < 0 {
-            health_percent = 0;
-        }
-        if health_percent > 1 {
-            health_percent = 1;
-        }
-
-        health_percent_rect := health_rect->subrect(0, 0, health_percent, 1);
-        UI.quad(health_percent_rect, fill, {1, 1, 1, 1});
-
-        return health_rect;
     }
 
     draw_damage_numbers :: proc(using this: Player, dt: float) {
@@ -1217,7 +1214,7 @@ Player :: class : Player_Base {
             dn.DoingFading = false;
 
             ts := UI.default_text_settings();
-            ts.size = 26;
+            ts.size = 0.35;
             ts.halign = .CENTER;
             ts.valign = .CENTER;
             ts.do_outline = true;

@@ -128,6 +128,7 @@ draw_managers_button :: proc(player: Player) {
                 player.sell_shop_open = false;
                 player.weapons_shop_open = false;
                 player.harvester_upgrades_open = false;
+                player.upgrades_open = false;
             }
         }
     }
@@ -213,8 +214,13 @@ draw_manager_card :: proc(player: Player, rect: Rect, lane_index: s64, kind: Man
     if !unlocked {
         cost := manager_unlock_cost(kind);
 
+        can_afford := cost > 0 && Economy.can_withdraw_currency(player, MANAGERS_COIN_CURRENCY, cost);
+
         bs := UI.default_button_settings();
         bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_2.png"); // Green
+        if !can_afford {
+            bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_3.png"); // Red
+        }
         bs.press_scaling = 0.4;
 
         ts := UI.default_text_settings();

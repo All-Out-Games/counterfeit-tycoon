@@ -106,9 +106,4 @@ setup_reusable_weapons_player_state_machine :: proc(player: Player) {
     hands_out_state := additive_layer->create_state("redsun/Hands_Out_AL", true);
     additive_layer->create_transition(idle_state, hands_out_state, false)->create_trigger_condition(sm->create_variable("hands_out_start", .TRIGGER));
     additive_layer->create_transition(hands_out_state, idle_state, false)->create_trigger_condition(sm->create_variable("hands_out_end", .TRIGGER));
-
-    // Melee (katana slash)
-    melee_state := additive_layer->create_state("Attack_Melee_1_mIK_AL2", false);
-    additive_layer->create_transition(idle_state, melee_state, false)->create_trigger_condition(sm->create_variable("melee_AL", .TRIGGER));
-    additive_layer->create_transition(melee_state, idle_state, true);
 }

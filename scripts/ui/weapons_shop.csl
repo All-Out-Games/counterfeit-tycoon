@@ -255,6 +255,7 @@ draw_weapons_shop_button :: proc(player: Player) {
                     player.sell_shop_open = false;
                     player.managers_open = false;
                     player.harvester_upgrades_open = false;
+                    player.upgrades_open = false;
                 }
             }
         }
@@ -271,6 +272,7 @@ draw_weapons_shop_button :: proc(player: Player) {
                 player.sell_shop_open = false;
                 player.managers_open = false;
                 player.harvester_upgrades_open = false;
+                player.upgrades_open = false;
             }
         }
     }
@@ -367,9 +369,13 @@ draw_weapon_shop_item_card :: proc(player: Player, rect: Rect, wt: Weapon_Type) 
     config := get_weapon_config(wt);
     icon := get_asset(Texture_Asset, config.weapon_icon_path);
     cost := weapon_shop_price(wt);
+    can_afford := cost > 0 && Economy.can_withdraw_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost);
 
     bs := UI.default_button_settings();
-    bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_8.png"); // Grey
+    bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_2.png"); // Green
+    if !can_afford {
+        bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_3.png"); // Red
+    }
     bs.press_scaling = 0.25;
 
     ts := UI.default_text_settings();
@@ -409,9 +415,13 @@ draw_ammo_shop_item_card :: proc(player: Player, rect: Rect, ammo_type_index: s6
     info := get_ammo_info(ammo_type_index);
     icon := get_asset(Texture_Asset, info.icon_path);
     cost := ammo_shop_price(ammo_type_index);
+    can_afford := cost > 0 && Economy.can_withdraw_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost);
 
     bs := UI.default_button_settings();
-    bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_8.png"); // Grey
+    bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_2.png"); // Green
+    if !can_afford {
+        bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_3.png"); // Red
+    }
     bs.press_scaling = 0.25;
 
     ts := UI.default_text_settings();

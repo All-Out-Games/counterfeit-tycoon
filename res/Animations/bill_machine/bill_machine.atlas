@@ -1,0 +1,46 @@
+bill_machine.png
+	size: 1888, 388
+	filter: Linear, Linear
+	scale: 0.5
+Upgrade Machine/Conveyor L
+	bounds: 671, 209, 152, 171
+Upgrade Machine/Conveyor R
+	bounds: 513, 209, 152, 171
+Upgrade Machine/Gear 1
+	bounds: 1616, 294, 86, 85
+	rotate: 90
+Upgrade Machine/Gear 2
+	bounds: 969, 259, 120, 121
+	offsets: 14, 0, 134, 121
+Upgrade Machine/Smoke1
+	bounds: 1213, 264, 109, 116
+Upgrade Machine/Smoke2
+	bounds: 1434, 261, 94, 119
+	offsets: 0, 0, 98, 119
+Upgrade Machine/Smoke3
+	bounds: 1534, 264, 76, 116
+	offsets: 0, 0, 97, 116
+Upgrade Machine/Smoke4
+	bounds: 1707, 269, 58, 111
+	offsets: 0, 0, 89, 117
+Upgrade Machine/Upgrade machine body
+	bounds: 6, 6, 346, 374
+bills/BlankBills
+	bounds: 1095, 267, 112, 113
+	offsets: 8, 7, 128, 128
+bills/ColoredBills
+	bounds: 1328, 260, 120, 100
+	offsets: 4, 14, 128, 128
+	rotate: 90
+bills/FinishedBills
+	bounds: 358, 201, 179, 149
+	offsets: 0, 1, 180, 150
+	rotate: 90
+bills/Paper
+	bounds: 829, 239, 134, 141
+bills/Wood
+	bounds: 1771, 299, 81, 78
+	rotate: 90
+bills/shadow
+	bounds: 1855, 287, 93, 26
+	rotate: 90

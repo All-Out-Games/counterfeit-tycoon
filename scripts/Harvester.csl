@@ -509,7 +509,7 @@ Harvester :: class : Interactable {
         // - play "idle" when moving
         // - play "idle_pose" when stationary
         idle_pose_state := layer->create_state("idle_pose", true);
-        idle_state := layer->create_state("idle", true);
+        idle_state := layer->create_state("move", true);
         layer->set_initial_state(idle_pose_state);
 
         to_idle := layer->create_transition(idle_pose_state, idle_state, false);

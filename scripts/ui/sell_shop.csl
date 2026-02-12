@@ -208,6 +208,7 @@ draw_sell_shop_button :: proc(player: Player) {
                 player.managers_open = false;
                 player.harvester_upgrades_open = false;
                 player.weapons_shop_open = false;
+                player.upgrades_open = false;
             }
         }
     }

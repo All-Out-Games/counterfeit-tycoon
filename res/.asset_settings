@@ -1,5 +1,23 @@
 [
   {
+    "id": "Animations/bill_machine/bill_machine.png",
+    "texture": {
+      "resample_multiplier": 1
+    }
+  },
+  {
+    "id": "Animations/shredder/shredder.png",
+    "texture": {
+      "resample_multiplier": 1
+    }
+  },
+  {
+    "id": "Animations/tractor_spine/tractor.png",
+    "texture": {
+      "resample_multiplier": 1
+    }
+  },
+  {
     "id": "Buttons/tractor.png",
     "texture": {
       "resample_multiplier": 1

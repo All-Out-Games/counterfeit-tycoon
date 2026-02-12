@@ -17,6 +17,11 @@ Single_Shot_Ability :: class : Ability_Base {
     on_update :: proc(ability: Ability_Base, params: ref Ability_Update_Params) {
         p := ability.player.(Player);
         wt := p.equipped_weapon_type;
+        if wt == .NONE {
+            // No weapon equipped: don't enable mouse IK / facing.
+            p->set_mouse_ik_enabled(false);
+            return;
+        }
         config := get_weapon_config(wt);
 
         ability.icon = get_asset(Texture_Asset, config.weapon_icon_path);

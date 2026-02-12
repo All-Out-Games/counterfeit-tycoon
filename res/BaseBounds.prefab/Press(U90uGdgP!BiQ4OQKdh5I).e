@@ -1,5 +1,5 @@
 13
-55834574849
+98784247811
 92209426323471 1770161923589283400
 {
   "name": "Press",
@@ -41,7 +41,7 @@
     "prompt_offset": {
       "Y": 1
     },
-    "seconds_per_blank_bill": 4,
+    "seconds_per_blank_bill": 2.5000000000000000,
     "deposit_per_interact": 64,
     "collect_radius": 1.5000000000000000,
     "collect_cooldown": 2,

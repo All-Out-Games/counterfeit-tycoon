@@ -23,6 +23,11 @@ Beam_Ability :: class : Ability_Base {
         p := ability.player.(Player);
         self := ability.(Beam_Ability);
         wt := p.equipped_weapon_type;
+        if wt == .NONE {
+            // No weapon equipped: don't enable mouse IK / facing.
+            p->set_mouse_ik_enabled(false);
+            return;
+        }
         config := get_weapon_config(wt);
 
         ability.icon = get_asset(Texture_Asset, config.weapon_icon_path);

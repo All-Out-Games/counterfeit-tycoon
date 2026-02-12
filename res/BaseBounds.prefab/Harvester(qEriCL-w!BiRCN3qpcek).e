@@ -1,11 +1,11 @@
 13
-47244640257
+94489280515
 185039573270512 1770205877750843300
 {
   "name": "Harvester",
   "local_enabled": true,
   "local_position": {
-    "X": 4,
+    "X": -4,
     "Y": -6
   },
   "local_rotation": 0,

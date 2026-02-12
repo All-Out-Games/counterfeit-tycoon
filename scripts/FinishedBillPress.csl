@@ -28,6 +28,16 @@ Finished_Bill_Press :: class : Interactable {
     loot_spawn_radius: float @ao_serialize;         // radius around player where output spawns (edge of circle)
     lane_index: s64 @ao_serialize;                  // 0-based lane index (Lane 1 = 0)
 
+    // Upgrades (server authoritative, replicated)
+    upgrade_level: s64;                     // 1..10
+    base_seconds_per_finished_bill: float;  // captured from editor/default tuning at ao_start
+
+    // Spine visuals
+    // FinishedBillPress's spine is expected to live on a child entity. Assign that child to `spine_entity`.
+    // (Optional: assign the Spine_Animator directly if you prefer.)
+    spine_animator: Spine_Animator @ao_serialize;
+    spine_entity: Entity @ao_serialize;
+
     // World UI
     ui_offset: v2 @ao_serialize;
 
@@ -36,8 +46,17 @@ Finished_Bill_Press :: class : Interactable {
     stored_finished_bills: s64;
     convert_timer: float;
 
+    // Client-side UI smoothing (timer bar). These are re-initialized on clients
+    // after every state sync via ao_on_state_sync.
+    ui_timer_last_sync_time: float;
+    ui_timer_last_synced_convert_timer: float;
+    ui_timer_inited: bool;
+
     // Runtime
     last_collect_time: float;
+
+    spine: Spine_Animator;
+    spine_sm: State_Machine;
 
     // Save/load (server only)
     loaded_from_save: bool;
@@ -71,6 +90,17 @@ Finished_Bill_Press :: class : Interactable {
             lane_index = 0;
         }
 
+        // Capture base tuning for upgrade scaling.
+        base_seconds_per_finished_bill = seconds_per_finished_bill;
+        if base_seconds_per_finished_bill <= 0 {
+            base_seconds_per_finished_bill = 1.0;
+        }
+        // If we've already received replicated state from the server (common on clients),
+        // don't clobber it here.
+        if upgrade_level < 1 {
+            upgrade_level = 1;
+        }
+
         // Interaction prompt
         this->set_text("Deposit colored bills");
         this->set_hold_text("Depositing...");
@@ -90,6 +120,55 @@ Finished_Bill_Press :: class : Interactable {
 
         // If ownership was already assigned during spawn, load immediately.
         server_try_load_from_save();
+
+        // Ensure our derived speed is consistent with the current upgrade level.
+        // This covers cases where the GameManager applies upgrades before ao_start runs.
+        apply_upgrade_level(upgrade_level);
+
+        // Spine visuals
+        resolve_spine();
+        setup_spine_state_machine();
+        update_spine_state();
+    }
+
+    // Server-only: apply upgrade level to processing speed.
+    server_set_upgrade_level :: method(level: s64) {
+        if !Game.is_server() {
+            return;
+        }
+        apply_upgrade_level(level);
+    }
+
+    // Apply upgrade level locally (client or server). This is safe on clients because it only
+    // affects local presentation (e.g., world UI timer bar), while the server remains authoritative.
+    apply_upgrade_level :: method(level: s64) {
+
+        if level < 1 {
+            level = 1;
+        }
+        if level > 10 {
+            level = 10;
+        }
+
+        upgrade_level = level;
+
+        // If our base tuning hasn't been initialized yet (ao_start not run),
+        // don't attempt to recompute speed yet.
+        if base_seconds_per_finished_bill <= 0 {
+            return;
+        }
+
+        SPEED_MULT_PER_LEVEL :: 0.12;
+        lvl_f := (level - 1).(float);
+        mult := 1.0 + lvl_f * SPEED_MULT_PER_LEVEL;
+        if mult <= 0 {
+            mult = 1.0;
+        }
+
+        seconds_per_finished_bill = base_seconds_per_finished_bill / mult;
+        if seconds_per_finished_bill < 0.05 {
+            seconds_per_finished_bill = 0.05;
+        }
     }
 
     can_use :: method(player: Player) -> bool {
@@ -136,6 +215,10 @@ Finished_Bill_Press :: class : Interactable {
     }
 
     ao_update :: method(dt: float) {
+        // Keep spine state in sync with stored input (runs on server + clients).
+        // `stored_colored_bills` is replicated, so clients will update visuals correctly too.
+        update_spine_state();
+
         // Server authoritative conversion + collection.
         if Game.is_server() {
             server_try_load_from_save();
@@ -143,6 +226,75 @@ Finished_Bill_Press :: class : Interactable {
             try_auto_collect();
             server_try_save_to_save(force=false);
         }
+    }
+
+    resolve_spine :: method() {
+        spine = null;
+
+        if spine_animator != null {
+            spine = spine_animator;
+        }
+        else if spine_entity != null && spine_entity.self != null {
+            spine = spine_entity->get_component(Spine_Animator);
+        }
+        else {
+            spine = entity->get_component(Spine_Animator);
+        }
+
+        if spine != null {
+            spine->awaken();
+        }
+    }
+
+    setup_spine_state_machine :: method() {
+        if spine == null return;
+        if spine.instance == null return;
+        if spine_sm != null return;
+
+        spine_sm = State_Machine.create();
+
+        processing_var := spine_sm->create_variable("is_processing", .BOOL);
+        _ := processing_var;
+        layer := spine_sm->create_layer("main", 0);
+
+        // Note: state names must match animation names in the Spine rig.
+        idle_state := layer->create_state("bill_machine/Idle", true);
+        processing_state := layer->create_state("bill_machine/UpgradeFull", true);
+        layer->set_initial_state(idle_state);
+
+        idle_to_processing := layer->create_transition(idle_state, processing_state, false);
+        idle_to_processing->create_bool_condition(processing_var, true);
+
+        processing_to_idle := layer->create_transition(processing_state, idle_state, false);
+        processing_to_idle->create_bool_condition(processing_var, false);
+
+        spine.instance->set_state_machine(spine_sm, true); // transfer ownership to spine instance
+    }
+
+    update_spine_state :: method() {
+        // If animator was assigned after start, resolve lazily.
+        if spine == null {
+            resolve_spine();
+            setup_spine_state_machine();
+        }
+
+        if spine == null return;
+        if spine.instance == null return;
+        if spine.instance.state_machine == null return;
+
+        // Requirements:
+        // - play "bill_machine/Idle" when there are no input items
+        // - play "bill_machine/UpgradeFull" when there are more than 1 input item
+        is_processing := stored_colored_bills > 1;
+        spine.instance.state_machine->set_bool("is_processing", is_processing);
+    }
+
+    // Client-only hook: called immediately after this component's state sync.
+    // Used to make the timer bar advance smoothly between syncs.
+    ao_on_state_sync :: method() {
+        ui_timer_last_sync_time = get_time();
+        ui_timer_last_synced_convert_timer = convert_timer;
+        ui_timer_inited = true;
     }
 
     // Server-only: allow a non-player "manager" (e.g., Courier) to collect finished bills directly
@@ -533,79 +685,136 @@ Finished_Bill_Press :: class : Interactable {
         pos := entity.world_position + ui_offset;
 
         // Panel rect in world units (meters).
-        // We keep the CONTENT width stable, but stretch the BACKGROUND horizontally
-        // so the icons/counts don't shift when we widen the panel.
-        panel_bg := Rect{pos, pos}->grow(0.24, 0.90, 0.24, 0.90);       // wider background
-        panel_content := Rect{pos, pos}->grow(0.24, 0.75, 0.24, 0.75);  // stable content width
-        UI.quad(panel_bg, core_globals.white_sprite, {0, 0, 0, 0.6});
+        // Vertical station UI:
+        // - Header: Lv X
+        // - Input icon + count
+        // - UI/into.png
+        // - Timer bar (progress)
+        // - Output icon + stored output count
+        PANEL_HALF_H :: 0.96;
+        PANEL_BG_HALF_W :: 1.22;       // reduced width
+        PANEL_CONTENT_HALF_W :: 1.00;  // stable content width (reduced width)
 
-        // Extra inner padding so contents don't hug the panel background.
+        panel_bg := Rect{pos, pos}->grow(PANEL_HALF_H, PANEL_BG_HALF_W, PANEL_HALF_H, PANEL_BG_HALF_W);
+        panel_content := Rect{pos, pos}->grow(PANEL_HALF_H, PANEL_CONTENT_HALF_W, PANEL_HALF_H, PANEL_CONTENT_HALF_W);
+
+        // "Slate" background (tinted quad).
+        UI.quad(panel_bg, core_globals.white_sprite, {0.08, 0.09, 0.10, 0.78});
+
         content := panel_content->inset(0.06);
-        icons_row := content->cut_top(0.30);
-        bar_row := content;
 
-        row_pad :: 0.02;
-        icons_row = icons_row->inset(row_pad);
-        bar_row = bar_row->inset(row_pad);
+        gap :: 0.07;
+        into_timer_gap :: 0.03;
+        header_h :: 0.32;
+        input_h :: 0.38;
+        into_h :: 0.29;
+        timer_h :: 0.16;
+        output_h :: 0.38;
+        ICON_HALF :: 0.196;
 
-        // Icons row split.
-        // Add a small gap so the counts don't overlap.
-        icons_gap :: 0.16;
-        usable_w := max(0.0, icons_row->width() - icons_gap);
-        half_w := usable_w * 0.5;
+        header := content->cut_top(header_h);
+        _ := content->cut_top(gap);
+        input_row := content->cut_top(input_h);
+        _ := content->cut_top(gap);
+        into_row := content->cut_top(into_h);
+        _ := content->cut_top(into_timer_gap);
+        timer_row := content->cut_top(timer_h);
+        _ := content->cut_top(gap);
+        output_row := content->cut_top(output_h);
 
-        colored_side := icons_row->cut_left(half_w);
-        _ := icons_row->cut_left(icons_gap); // gap
-        finished_side := icons_row;
+        // Header background strip
+        UI.quad(header, core_globals.white_sprite, {0.12, 0.13, 0.15, 0.92});
 
-        ts := UI.default_text_settings();
-        ts.size = 0.34;
-        ts.halign = .LEFT;
-        ts.valign = .CENTER;
-        ts.do_outline = true;
-        ts.outline_thickness = 2;
-        ts.outline_color = {0, 0, 0, 1};
-        ts.color = {1, 1, 1, 1};
-        // More breathing room between the icon and the "xNN" text.
-        ts.offset = {0.05, 0};
+        ts_header := UI.default_text_settings();
+        ts_header.size = 0.46;
+        ts_header.halign = .CENTER;
+        ts_header.valign = .CENTER;
+        ts_header.do_outline = true;
+        ts_header.outline_thickness = 3;
+        ts_header.outline_color = {0, 0, 0, 1};
+        ts_header.color = {1, 1, 1, 1};
+        UI.text(header, ts_header, "Lv %", {upgrade_level});
 
-        // Colored Bills (input)
+        ts_row := UI.default_text_settings();
+        ts_row.size = 0.46;
+        ts_row.halign = .CENTER;
+        ts_row.valign = .CENTER;
+        ts_row.do_outline = true;
+        ts_row.outline_thickness = 3;
+        ts_row.outline_color = {0, 0, 0, 1};
+        ts_row.color = {1, 1, 1, 1};
+        ts_row.offset = {0, 0};
+
+        // Input: Colored Bills
         {
-            r := colored_side;
-            icon_rect := r->cut_left(0.26)->inset(0.01);
+            r := input_row->inset(0.02);
+            icon_box_w := ICON_HALF * 2 + 0.10;
+            icon_box := r->cut_left(icon_box_w);
+            icon_rect := icon_box->center_rect()->grow(ICON_HALF);
             text_rect := r;
 
             #static colored_icon := get_asset(Texture_Asset, "Items/ColoredBills.png");
             if colored_icon != null {
                 UI.quad(icon_rect->fit_aspect(colored_icon->get_aspect()), colored_icon);
             }
-            UI.text(text_rect, ts, "x%", {stored_colored_bills});
+            UI.text(text_rect, ts_row, "x%", {stored_colored_bills});
         }
 
-        // Finished Bills (output)
+        // Into arrow
         {
-            r := finished_side;
-            icon_rect := r->cut_left(0.26)->inset(0.01);
+            r := into_row->inset(0.02);
+            #static into_icon := get_asset(Texture_Asset, "UI/into.png");
+            if into_icon != null {
+                icon_rect := r->center_rect()->grow(ICON_HALF);
+                UI.quad(icon_rect->fit_aspect(into_icon->get_aspect()), into_icon);
+            }
+        }
+
+        // Timer bar (progress toward next finished bill)
+        {
+            bar := timer_row->inset(0.03);
+            UI.quad(bar, core_globals.white_sprite, {0, 0, 0, 0.65});
+
+            timer_val := convert_timer;
+            if !Game.is_server() {
+                if !ui_timer_inited {
+                    ui_timer_last_sync_time = get_time();
+                    ui_timer_last_synced_convert_timer = convert_timer;
+                    ui_timer_inited = true;
+                }
+
+                if stored_colored_bills > 0 && seconds_per_finished_bill > 0 {
+                    elapsed := get_time() - ui_timer_last_sync_time;
+                    if elapsed < 0 {
+                        elapsed = 0;
+                    }
+                    timer_val = ui_timer_last_synced_convert_timer + elapsed;
+                    timer_val = clamp(timer_val, 0.0, seconds_per_finished_bill);
+                }
+            }
+
+            progress := 0.0;
+            if stored_colored_bills > 0 && seconds_per_finished_bill > 0 {
+                progress = clamp(timer_val / seconds_per_finished_bill, 0.0, 1.0);
+            }
+            fill := bar->subrect(0, 0, progress, 1);
+            UI.quad(fill, core_globals.white_sprite, {0.2, 0.85, 0.25, 1});
+        }
+
+        // Output: Finished Bills
+        {
+            r := output_row->inset(0.02);
+            icon_box_w := ICON_HALF * 2 + 0.10;
+            icon_box := r->cut_left(icon_box_w);
+            icon_rect := icon_box->center_rect()->grow(ICON_HALF);
             text_rect := r;
 
             #static finished_icon := get_asset(Texture_Asset, "Items/FinishedBills.png");
             if finished_icon != null {
                 UI.quad(icon_rect->fit_aspect(finished_icon->get_aspect()), finished_icon);
             }
-            UI.text(text_rect, ts, "x%", {stored_finished_bills});
+            UI.text(text_rect, ts_row, "x%", {stored_finished_bills});
         }
-
-        // Timer bar (progress toward next finished bill)
-        bar := bar_row->inset(0.04);
-        UI.quad(bar, core_globals.white_sprite, {0, 0, 0, 0.7});
-
-        progress := 0.0;
-        if stored_colored_bills > 0 && seconds_per_finished_bill > 0 {
-            progress = clamp(convert_timer / seconds_per_finished_bill, 0.0, 1.0);
-        }
-
-        fill := bar->subrect(0, 0, progress, 1);
-        UI.quad(fill, core_globals.white_sprite, {0.2, 0.85, 0.25, 1});
     }
 }
 

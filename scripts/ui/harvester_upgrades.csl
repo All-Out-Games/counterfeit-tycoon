@@ -101,6 +101,7 @@ draw_harvester_upgrades_button :: proc(player: Player) {
                     player.managers_open = false;
                     player.sell_shop_open = false;
                     player.weapons_shop_open = false;
+                    player.upgrades_open = false;
                 }
             }
         }
@@ -117,6 +118,7 @@ draw_harvester_upgrades_button :: proc(player: Player) {
                 player.managers_open = false;
                 player.sell_shop_open = false;
                 player.weapons_shop_open = false;
+                player.upgrades_open = false;
             }
         }
     }
