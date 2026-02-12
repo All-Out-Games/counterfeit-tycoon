@@ -5,7 +5,8 @@ draw_truck_upgrades_button :: proc(player: Player) {
     if !player->is_local_or_server() return;
 
     safe := UI.get_safe_screen_rect();
-    btn_rect := safe->right_center_rect()->grow(60)->offset(-90, 240);
+    // Place this where the Managers button used to be.
+    btn_rect := safe->right_center_rect()->grow(60)->offset(-90, 120);
 
     bs := UI.default_button_settings();
     ts := UI.default_text_settings();

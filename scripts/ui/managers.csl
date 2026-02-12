@@ -5,11 +5,15 @@ MANAGERS_COIN_CURRENCY :: "Coins";
 MANAGERS_LANE_COUNT :: 4;
 MANAGERS_PER_LANE  :: 4;
 
+// Temporary: hide Managers button from HUD.
+SHOW_MANAGERS_BUTTON :: false;
+
 Manager_Kind :: enum {
     PRESS_OPERATOR;
     COLORIST;
     STAMPER;
     COURIER;
+    WOODCHIPPER;
 }
 
 manager_display_name :: proc(kind: Manager_Kind) -> string {
@@ -18,6 +22,7 @@ manager_display_name :: proc(kind: Manager_Kind) -> string {
         case .COLORIST:       return "Colorist";
         case .STAMPER:        return "Stamper";
         case .COURIER:        return "Courier";
+        case .WOODCHIPPER:    return "Woodchipper";
     }
     return "Manager";
 }
@@ -28,6 +33,7 @@ manager_unlock_cost :: proc(kind: Manager_Kind) -> s64 {
         case .COLORIST:       return 4000;
         case .STAMPER:        return 10000;
         case .COURIER:        return 50000;
+        case .WOODCHIPPER:    return 500; // Harvester manager (see `HARVESTER_UPGRADES_MANAGER_UNLOCK_COST`)
     }
     return 0;
 }
@@ -48,6 +54,7 @@ manager_bit :: proc(kind: Manager_Kind) -> s64 {
         case .COLORIST:       return 2;
         case .STAMPER:        return 4;
         case .COURIER:        return 8;
+        case .WOODCHIPPER:    return 0; // Not stored in per-lane mask (uses `player.harvester_manager_unlocked`)
     }
     return 0;
 }
@@ -59,6 +66,9 @@ managers_lane_save_key :: proc(lane_index: s64) -> string {
 
 is_manager_unlocked :: proc(player: Player, lane_index: s64, kind: Manager_Kind) -> bool {
     if player == null return false;
+    if kind == .WOODCHIPPER {
+        return player.harvester_manager_unlocked;
+    }
     if lane_index < 0 || lane_index >= MANAGERS_LANE_COUNT return false;
 
     mask := player.managers_lane_masks[lane_index];
@@ -69,6 +79,10 @@ is_manager_unlocked :: proc(player: Player, lane_index: s64, kind: Manager_Kind)
 server_try_unlock_manager :: proc(player: Player, lane_index: s64, kind: Manager_Kind) {
     if player == null return;
     if !Game.is_server() return;
+    if kind == .WOODCHIPPER {
+        // Harvester manager is unlocked via `server_try_unlock_harvester_manager`.
+        return;
+    }
     if lane_index < 0 || lane_index >= MANAGERS_LANE_COUNT return;
     // Must have the lane unlocked.
     if !lanes_is_unlocked(player, lane_index) {
@@ -158,6 +172,7 @@ draw_managers_unlock_lane_prompt :: proc(player: Player, rect: Rect, lane_index:
 draw_managers_button :: proc(player: Player) {
     if player == null return;
     if !player->is_local_or_server() return;
+    if !SHOW_MANAGERS_BUTTON return;
 
     safe := UI.get_safe_screen_rect();
     btn_rect := safe->right_center_rect()->grow(75)->offset(-100, 120);

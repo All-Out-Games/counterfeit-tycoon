@@ -1,0 +1,273 @@
+import "core:ao"
+
+MANAGER_UNLOCK_COIN_CURRENCY :: "Coins";
+
+ManagerUnlock :: class : Interactable {
+    // Which player this prompt belongs to (owner-only interaction).
+    owner: Player;
+    // 0-based lane index (0..3).
+    lane_index: s64;
+    // Manager kind to unlock.
+    kind: Manager_Kind;
+
+    ao_start :: method() {
+        this->set_listener(this);
+        refresh_prompt_text();
+        apply_spine_skin_and_crewchsia();
+        update_visuals_visibility_for_local_player();
+    }
+
+    ao_on_state_sync :: method() {
+        refresh_prompt_text();
+        apply_spine_skin_and_crewchsia();
+        update_visuals_visibility_for_local_player();
+    }
+
+    configure :: method(new_owner: Player, new_lane_index: s64, new_kind: Manager_Kind) {
+        owner = new_owner;
+        lane_index = new_lane_index;
+        kind = new_kind;
+        refresh_prompt_text();
+        apply_spine_skin_and_crewchsia();
+        update_visuals_visibility_for_local_player();
+    }
+
+    find_child_spine_animator :: method() -> Spine_Animator {
+        // Find the first descendant that has a Spine_Animator.
+        // (Prefab convention: Spine_Animator lives on a child entity.)
+        is_descendant_of :: proc(child: Entity, ancestor: Entity) -> bool {
+            if child == null return false;
+            if child.self == null return false;
+            if ancestor == null return false;
+            if ancestor.self == null return false;
+
+            cur := child;
+            for step: 0..48 {
+                _ := step;
+                if cur == null break;
+                if cur.self == null break;
+                if cur == ancestor return true;
+                cur = cur.parent;
+            }
+            return false;
+        }
+
+        foreach e: entity_iterator() {
+            if e == null continue;
+            if e.self == null continue;
+            if e == entity continue;
+            if !is_descendant_of(e, entity) continue;
+
+            sp := e->get_component(Spine_Animator);
+            if sp != null {
+                return sp;
+            }
+        }
+        return null;
+    }
+
+    apply_spine_skin_and_crewchsia :: method() {
+        // Cosmetic-only: do this client-side (and also safe on server if needed).
+        // We only touch visuals, no gameplay state.
+        sp := find_child_spine_animator();
+        if sp == null return;
+
+        // Required before accessing sp.instance when both start together.
+        sp->awaken();
+        if sp.instance == null return;
+
+        skin_name: string;
+        crewchsia := Color_Replace_Color.NONE;
+
+        switch kind {
+            case .PRESS_OPERATOR: {
+                crewchsia = .YELLOW;
+                skin_name = "body/cyclist_outfit";
+            }
+            case .COLORIST: {
+                crewchsia = .PINK;
+                skin_name = "body/artist_coat";
+            }
+            case .STAMPER: {
+                crewchsia = .BLACK;
+                skin_name = "body/armour_junk";
+            }
+            case .COURIER: {
+                crewchsia = .BROWN1;
+                skin_name = "body/military_soldier_fatigues";
+            }
+            case .WOODCHIPPER: {
+                crewchsia = .CYAN;
+                skin_name = "body/lumberjack_clothes";
+            }
+        }
+
+        // "Add" the skin (don't wipe any base skins configured in editor).
+        if skin_name.count > 0 {
+            sp.instance->enable_skin(skin_name);
+            sp.instance->refresh_skins();
+        }
+
+        // Apply the color replace ("Crewchsia") tint.
+        sp.instance->set_color_replace_color(crewchsia);
+    }
+
+    refresh_prompt_text :: method() {
+        name := manager_display_name(kind);
+        cost := manager_unlock_cost(kind);
+        this->set_text(format_string("Hire % for % Coins?", {name, cost}));
+    }
+
+    can_use :: method(player: Player) -> bool {
+        if player == null return false;
+        if owner == null return false;
+        if player != owner return false;
+        if kind != .WOODCHIPPER {
+            if lane_index < 0 || lane_index > 3 return false;
+        }
+
+        // Must have lane unlocked (woodchipper is tied to Harvester, but Lane 1 is always unlocked).
+        if kind != .WOODCHIPPER {
+            if !lanes_is_unlocked(player, lane_index) {
+                return false;
+            }
+        }
+
+        // Already unlocked?
+        if kind == .WOODCHIPPER {
+            if player.harvester_manager_unlocked {
+                return false;
+            }
+        }
+        else {
+            if is_manager_unlocked(player, lane_index, kind) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    on_interact :: method(player: Player) {
+        if player == null return;
+        if !Game.is_server() return;
+        if owner == null return;
+        if player != owner return;
+        if kind != .WOODCHIPPER {
+            if lane_index < 0 || lane_index > 3 return;
+        }
+
+        if kind == .WOODCHIPPER {
+            if player.harvester_manager_unlocked {
+                if entity != null && entity.self != null {
+                    entity->destroy();
+                }
+                return;
+            }
+
+            cost := manager_unlock_cost(.WOODCHIPPER);
+            if cost <= 0 return;
+
+            if !Economy.can_withdraw_currency(player, MANAGER_UNLOCK_COIN_CURRENCY, cost) {
+                Notifier.notify(player, "Not enough Coins!");
+                return;
+            }
+
+            server_try_unlock_harvester_manager(player);
+
+            if player.harvester_manager_unlocked {
+                gm := get_game_manager();
+                if gm != null {
+                    gm->server_spawn_woodchipper_at(player, entity.world_position);
+                    gm->server_reconcile_woodchipper_unlock_prompts();
+                }
+                if entity != null && entity.self != null {
+                    entity->destroy();
+                }
+            }
+            return;
+        }
+
+        // Must have lane unlocked.
+        if !lanes_is_unlocked(player, lane_index) {
+            Notifier.notify(player, "Lane % is locked.", {lane_index + 1});
+            return;
+        }
+
+        // Already unlocked?
+        if is_manager_unlocked(player, lane_index, kind) {
+            if entity != null && entity.self != null {
+                entity->destroy();
+            }
+            return;
+        }
+
+        cost := manager_unlock_cost(kind);
+        if cost <= 0 return;
+
+        if !Economy.can_withdraw_currency(player, MANAGER_UNLOCK_COIN_CURRENCY, cost) {
+            Notifier.notify(player, "Not enough Coins!");
+            return;
+        }
+
+        // Unlock (withdraws + saves).
+        server_try_unlock_manager(player, lane_index, kind);
+
+        // If unlock succeeded, spawn the manager at THIS unlock prompt's location.
+        if is_manager_unlocked(player, lane_index, kind) {
+            gm := get_game_manager();
+            if gm != null {
+                gm->server_spawn_manager_kind_at(player, lane_index, kind, entity.world_position);
+                gm->server_reconcile_manager_unlock_prompts_for_player(player);
+            }
+            if entity != null && entity.self != null {
+                entity->destroy();
+            }
+        }
+    }
+
+    update_visuals_visibility_for_local_player :: method() {
+        if Game.is_server() {
+            return;
+        }
+
+        visible := true;
+        if owner != null {
+            local_player, ok := Game.get_local_player();
+            if ok && local_player != null && local_player != owner {
+                visible = false;
+            }
+        }
+
+        is_descendant_of :: proc(child: Entity, ancestor: Entity) -> bool {
+            if child == null return false;
+            if child.self == null return false;
+            if ancestor == null return false;
+            if ancestor.self == null return false;
+
+            cur := child;
+            for step: 0..48 {
+                _ := step;
+                if cur == null break;
+                if cur.self == null break;
+                if cur == ancestor return true;
+                cur = cur.parent;
+            }
+            return false;
+        }
+
+        foreach e: entity_iterator() {
+            if e == null continue;
+            if e.self == null continue;
+            if e == entity continue;
+            if !is_descendant_of(e, entity) continue;
+
+            // Disable common visual components (Sprite_Renderer or Spine_Animator).
+            sr := e->get_component(Sprite_Renderer);
+            sp := e->get_component(Spine_Animator);
+            if sr == null && sp == null continue;
+            e->set_local_enabled(visible);
+        }
+    }
+}
+

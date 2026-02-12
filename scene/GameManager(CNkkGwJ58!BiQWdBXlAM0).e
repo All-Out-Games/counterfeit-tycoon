@@ -36,4 +36,13 @@
     "courier_prefab_path": "Courier.prefab",
     "woodchipper_prefab_path": "Woodchipper.prefab"
   }
+},
+{
+  "cid": 2,
+  "aoid": "225101443691586:1770919709753099000",
+  "component_type": "Internal_Component",
+  "internal_component_type": "MusicManager",
+  "data": {
+
+  }
 }

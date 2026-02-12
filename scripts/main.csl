@@ -363,6 +363,11 @@ Player :: class : Player_Base {
     // Runtime: spawned lane unlock prompt instance (one per player, next locked lane only).
     lane_unlock_prompt_entity: Entity;
     lane_unlock_prompt_lane_index: s64;
+    // Runtime: spawned manager unlock prompts (4 lanes * 4 managers).
+    // Indexing: idx = lane_index * 4 + manager_index (manager_index matches `manager_kind_from_index` ordering).
+    manager_unlock_prompt_entities: [16]Entity;
+    // Runtime: spawned woodchipper (harvester manager) unlock prompt (one per player).
+    woodchipper_unlock_prompt_entity: Entity;
 
     // PlayerBase ownership state (per-player, multiplayer safe)
     base_entity: Entity;
@@ -470,6 +475,16 @@ Player :: class : Player_Base {
         MaxHealth = 100;
         CurrentHealth = MaxHealth;
 
+        // Local-only: start background music once per client.
+        if this->is_local() {
+            #static music_manager_spawned: bool;
+            if !music_manager_spawned {
+                music_manager_spawned = true;
+                music_entity := Scene.create_entity();
+                _ := music_entity->add_component(MusicManager);
+            }
+        }
+
         sell_shop_open = false;
         sell_shop_movement_locked = false;
 
@@ -496,6 +511,10 @@ Player :: class : Player_Base {
             }
             lane_unlock_prompt_entity = null;
             lane_unlock_prompt_lane_index = -1;
+            for i: 0..15 {
+                manager_unlock_prompt_entities[i] = null;
+            }
+            woodchipper_unlock_prompt_entity = null;
         }
 
         harvester_upgrades_open = false;

@@ -1,0 +1,42 @@
+// Local-only music loop manager.
+//
+// Plays `SFX/Orbit.wav` and keeps its volume synced to the saved "music_volume" setting.
+
+MUSIC_TRACK_PATH :: "SFX/Orbit.wav";
+
+MusicManager :: class : Component {
+    orbit_sfx: SFX_Asset;
+    sound_id: u64;
+
+    ao_start :: method() {
+         if Game.is_server() {
+            return;
+        }
+
+        orbit_sfx = get_asset(SFX_Asset, MUSIC_TRACK_PATH);
+        sound_id = 0;
+
+        if sound_id == 0 {
+
+            desc := SFX.default_sfx_desc();
+            desc.positional = false;
+            desc.volume = 0.35;
+            desc.loop = true;
+            desc.channel = SFX_Channel.MUSIC;
+
+            sound_id = SFX.play(orbit_sfx, desc);
+        }
+    }
+
+    ao_update :: method(dt: float) {
+
+    }
+
+    ao_end :: method() {
+        if sound_id != 0 {
+            SFX.stop(sound_id);
+            sound_id = 0;
+        }
+    }
+}
+

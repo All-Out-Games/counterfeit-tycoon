@@ -25,6 +25,6 @@
       "base/crewchsia",
       "body/lumberjack_clothes"
     ],
-    "initial_crewchsia_color": 13
+    "initial_crewchsia_color": 2
   }
 }

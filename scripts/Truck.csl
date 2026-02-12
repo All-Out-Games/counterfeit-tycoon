@@ -118,6 +118,8 @@ Truck :: class : Interactable {
     state: Truck_State;
     carried_finished_bills: s64;
     owner_user_id: string;
+
+    notifyFlag : bool;
     
     // Delivery event (runtime / synced)
     // Updated on successful bank sale so the owner client can display a local notification.
@@ -149,6 +151,8 @@ Truck :: class : Interactable {
 
     ao_start :: method() {
         this->set_listener(this);
+
+        notifyFlag = false;
 
         // Defaults (only if not set in editor)
         if move_speed <= 0 {
@@ -313,7 +317,7 @@ Truck :: class : Interactable {
         drive_start_time = get_time();
 
         this->set_text("Truck in transit");
-        Notifier.notify(player, "Truck dispatched with % Finished Bills.", {take});
+        //Notifier.notify(player, "Truck dispatched with % Finished Bills.", {take});
     }
 
     ao_update :: method(dt: float) {
@@ -333,7 +337,10 @@ Truck :: class : Interactable {
         apply_owner_upgrade_stats();
         
         // Client-side (local) notification for successful deliveries (owner only).
-        try_notify_delivery_local();
+        if notifyFlag {
+            try_notify_delivery_local();
+            notifyFlag = false;
+        }
 
         // Movement target should be set on BOTH client and server (for smooth local motion),
         // but gameplay state changes remain server-authoritative.
@@ -354,9 +361,9 @@ Truck :: class : Interactable {
         }
 
         // From here on, only the server drives state transitions + economy.
-        if !Game.is_server() {
-            return;
-        }
+        //if !Game.is_server() {
+         //   return;
+        //}
 
         if state == .IDLE {
             return;
@@ -381,6 +388,7 @@ Truck :: class : Interactable {
         switch state {
             case .TO_BANK: {
                 if has_arrived(target_world_pos) {
+                    notifyFlag = true;
                     on_arrive_at_bank();
                 }
             }
