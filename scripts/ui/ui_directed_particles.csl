@@ -1,0 +1,157 @@
+// Screen-space UI directed particles (per-player).
+//
+// - Each player gets their own handler component instance.
+// - Particles are cosmetic-only: updated + drawn only on the local client.
+// - Positions are in screen-space pixels with origin at bottom-left.
+// - Particles move toward a destination and are removed when within kill_radius_px.
+
+UI_Directed_Particle :: struct {
+    pos: v2;
+    dest: v2;
+    speed_px_per_sec: float;
+    kill_radius_px: float;
+
+    texture: Texture_Asset;
+    size_px: v2; // unscaled pixels
+    color: v4;
+    layer: s64;
+}
+
+UI_Directed_Particle_Handler :: class : Component {
+    particles: [..]UI_Directed_Particle;
+
+    clear_particles :: method() {
+        particles->clear();
+    }
+
+    spawn :: method(
+        texture: Texture_Asset,
+        start_pos: v2,
+        dest_pos: v2,
+        size_px: v2 = {32, 32},
+        speed_px_per_sec: float = 900.0,
+        kill_radius_px: float = 12.0,
+        layer: s64 = 250,
+        color: v4 = {1, 1, 1, 1}
+    ) {
+        owner := entity->get_component(Player);
+        if owner == null return;
+        if !owner->is_local_or_server() return;
+        if texture == null return;
+
+        p: UI_Directed_Particle;
+        p.pos = start_pos;
+        p.dest = dest_pos;
+        p.speed_px_per_sec = max(0.0, speed_px_per_sec);
+        p.kill_radius_px = max(0.0, kill_radius_px);
+        p.texture = texture;
+        p.size_px = size_px;
+        p.color = color;
+        p.layer = layer;
+        particles->append(p);
+    }
+
+    spawn_from_path :: method(
+        texture_path: string,
+        start_pos: v2,
+        dest_pos: v2,
+        size_px: v2 = {32, 32},
+        speed_px_per_sec: float = 900.0,
+        kill_radius_px: float = 12.0,
+        layer: s64 = 250,
+        color: v4 = {1, 1, 1, 1}
+    ) {
+        owner := entity->get_component(Player);
+        if owner == null return;
+        if !owner->is_local_or_server() return;
+        if texture_path.count == 0 return;
+        texture := get_asset(Texture_Asset, texture_path);
+        spawn(texture, start_pos, dest_pos, size_px, speed_px_per_sec, kill_radius_px, layer, color);
+    }
+
+    update_and_draw :: method(dt: float) {
+        // Cosmetic-only: only draw/update on local client.
+        owner := entity->get_component(Player);
+        if owner == null return;
+        if !owner->is_local_or_server() return;
+
+        if dt <= 0 return;
+        if dt > 0.1 dt = 0.1;
+
+        UI.push_screen_draw_context();
+        defer UI.pop_draw_context();
+
+        i := 0;
+        while i < particles.count {
+            p := particles[i];
+
+            to := p.dest - p.pos;
+            dist_sq := (to.x * to.x) + (to.y * to.y);
+
+            kill_r := max(0.0, p.kill_radius_px);
+            if dist_sq <= (kill_r * kill_r) {
+                particles->unordered_remove_by_index(i);
+                continue;
+            }
+
+            dist := sqrt(dist_sq);
+            if dist > 0.0001 {
+                dir := v2{to.x / dist, to.y / dist};
+                step := p.speed_px_per_sec * dt;
+                if step > dist {
+                    step = dist;
+                }
+                p.pos = p.pos + dir * step;
+            }
+
+            if p.texture != null {
+                UI.push_layer(p.layer);
+                defer UI.pop_layer();
+
+                half_w := p.size_px.x * 0.5;
+                half_h := p.size_px.y * 0.5;
+                rect := Rect{p.pos, p.pos}->grow_unscaled(half_h, half_w, half_h, half_w);
+                UI.quad(rect, p.texture, p.color);
+            }
+
+            particles[i] = p;
+            i += 1;
+        }
+    }
+}
+
+// Convenience helpers (safe to call from anywhere; no-ops if not local).
+ui_directed_particles_spawn :: proc(
+    player: Player,
+    texture: Texture_Asset,
+    start_pos: v2,
+    dest_pos: v2,
+    size_px: v2 = {32, 32},
+    speed_px_per_sec: float = 900.0,
+    kill_radius_px: float = 12.0,
+    layer: s64 = 250,
+    color: v4 = {1, 1, 1, 1}
+) {
+    if player == null return;
+    if !player->is_local_or_server() return;
+    if player.ui_directed_particle_handler == null return;
+    player.ui_directed_particle_handler->spawn(texture, start_pos, dest_pos, size_px, speed_px_per_sec, kill_radius_px, layer, color);
+}
+
+ui_directed_particles_spawn_from_path :: proc(
+    player: Player,
+    texture_path: string,
+    start_pos: v2,
+    dest_pos: v2,
+    size_px: v2 = {32, 32},
+    speed_px_per_sec: float = 900.0,
+    kill_radius_px: float = 12.0,
+    layer: s64 = 250,
+    color: v4 = {1, 1, 1, 1}
+) {
+    if player == null return;
+    if !player->is_local_or_server() return;
+    if player.ui_directed_particle_handler == null return;
+    player.ui_directed_particle_handler->spawn_from_path(texture_path, start_pos, dest_pos, size_px, speed_px_per_sec, kill_radius_px, layer, color);
+}
+
