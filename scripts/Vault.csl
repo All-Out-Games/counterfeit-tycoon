@@ -15,8 +15,11 @@ VAULT_FINISHED_BILLS_STACK_MAX :: 64;
 // - Tune `radius` (inherited) for interaction range if needed.
 Vault :: class : Interactable {
     // Tuning
-    max_capacity: s64 @ao_serialize;         // max stored Finished Bills
+    max_capacity: s64 @ao_serialize;         // max stored Finished Bills (overridden by upgrade level)
     deposit_per_interact: s64 @ao_serialize; // best-effort per interaction
+
+    // Upgrades (server authoritative, replicated)
+    upgrade_level: s64;                      // 1..6
 
     // World UI
     ui_offset: v2 @ao_serialize;
@@ -33,8 +36,17 @@ Vault :: class : Interactable {
 
         // Defaults (only if not set in editor)
         if max_capacity <= 0 {
-            max_capacity = 5000;
+            max_capacity = 50;
         }
+
+        // If we've already received replicated state from the server (common on clients),
+        // don't clobber it here.
+        if upgrade_level < 1 {
+            upgrade_level = 1;
+        }
+
+        // Ensure capacity matches upgrade level.
+        apply_upgrade_level(upgrade_level);
         if deposit_per_interact <= 0 {
             deposit_per_interact = 25;
         }
@@ -67,6 +79,20 @@ Vault :: class : Interactable {
         if Game.is_server() {
             ensure_steal_interactable_exists();
         }
+    }
+
+    // Server-only: apply upgrade level to vault capacity.
+    server_set_upgrade_level :: method(level: s64) {
+        if !Game.is_server() return;
+        apply_upgrade_level(level);
+    }
+
+    // Apply upgrade level locally (client or server). Updates max_capacity from the level table.
+    apply_upgrade_level :: method(level: s64) {
+        if level < 1 level = 1;
+        if level > VAULT_MAX_LEVEL level = VAULT_MAX_LEVEL;
+        upgrade_level = level;
+        max_capacity = vault_capacity_for_level(level);
     }
 
     ao_update :: method(dt: float) {
@@ -107,7 +133,7 @@ Vault :: class : Interactable {
 
         cap := max_capacity;
         if cap <= 0 {
-            cap = 5000;
+            cap = vault_capacity_for_level(upgrade_level);
         }
 
         room := cap - stored_finished_bills;
@@ -165,7 +191,7 @@ Vault :: class : Interactable {
         server_try_load_from_save();
 
         if max_capacity <= 0 {
-            max_capacity = 5000;
+            max_capacity = vault_capacity_for_level(upgrade_level);
         }
 
         room := max_capacity - stored_finished_bills;
@@ -377,7 +403,7 @@ Vault :: class : Interactable {
 
         cap := max_capacity;
         if cap <= 0 {
-            cap = 5000;
+            cap = vault_capacity_for_level(upgrade_level);
         }
 
         saved := Save.get_int(owner, VAULT_SAVE_KEY_FINISHED_BILLS, 0);
@@ -500,9 +526,18 @@ Vault :: class : Interactable {
 
             cap := max_capacity;
             if cap <= 0 {
-                cap = 5000;
+                cap = vault_capacity_for_level(1);
             }
-            UI.text(text_rect, ts, "x% / %", {stored_finished_bills, cap});
+
+            // Color text based on fill ratio.
+            ts_vault := ts;
+            if cap > 0 && stored_finished_bills >= cap {
+                ts_vault.color = {1, 0.25, 0.25, 1}; // Red: full
+            }
+            else if cap > 0 && stored_finished_bills.(float) >= cap.(float) * 0.8 {
+                ts_vault.color = {1, 0.9, 0.2, 1}; // Yellow: 80%+
+            }
+            UI.text(text_rect, ts_vault, "% / %", {stored_finished_bills, cap});
         }
 
         // "Timer" bar used as fullness (stored / capacity)
@@ -512,7 +547,7 @@ Vault :: class : Interactable {
         progress := 0.0;
         cap := max_capacity;
         if cap <= 0 {
-            cap = 5000;
+            cap = vault_capacity_for_level(1);
         }
         if cap > 0 {
             progress = clamp(stored_finished_bills.(float) / cap.(float), 0.0, 1.0);

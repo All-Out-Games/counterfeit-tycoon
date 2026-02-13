@@ -24,6 +24,70 @@ machine_queue_cap_for_level :: proc(level: s64) -> s64 {
     return QUEUE_CAP_BASE + QUEUE_CAP_PER_LEVEL * lvl;
 }
 
+// Vault upgrade balance: 6 levels, capacity + cost tables.
+VAULT_MAX_LEVEL :: 6;
+
+vault_capacity_for_level :: proc(level: s64) -> s64 {
+    switch level {
+        case 1:  return 50;
+        case 2:  return 200;
+        case 3:  return 750;
+        case 4:  return 2000;
+        case 5:  return 6000;
+        case 6:  return 20000;
+    }
+    return 50;
+}
+
+vault_upgrade_cost_for_level :: proc(level: s64) -> s64 {
+    // Cost to upgrade from `level` to `level+1`. Level 1 is free (no cost to reach it).
+    switch level {
+        case 1:  return 2000;
+        case 2:  return 15000;
+        case 3:  return 100000;
+        case 4:  return 750000;
+        case 5:  return 5000000;
+    }
+    return 0; // max level or invalid
+}
+
+server_try_upgrade_vault :: proc(player: Player) {
+    if player == null return;
+    if !Game.is_server() return;
+
+    level := player.vault_level;
+    if level < 1 level = 1;
+    if level >= VAULT_MAX_LEVEL {
+        Notifier.notify(player, "Vault is already max level.");
+        return;
+    }
+
+    cost := vault_upgrade_cost_for_level(level);
+    if cost <= 0 {
+        Notifier.notify(player, "Can't upgrade right now.");
+        return;
+    }
+
+    if !Economy.can_withdraw_currency(player, UPGRADES_COIN_CURRENCY, cost) {
+        Notifier.notify(player, "Not enough Coins!");
+        return;
+    }
+
+    Economy.withdraw_currency(player, UPGRADES_COIN_CURRENCY, cost);
+
+    new_level := level + 1;
+    player.vault_level = new_level;
+    Save.set_int(player, "vault_level", new_level);
+
+    // Push new capacity into the actual vault component.
+    gm := get_game_manager();
+    if gm != null {
+        gm->server_apply_vault_level_for_player(player);
+    }
+
+    Notifier.notify(player, "Vault upgraded to Level %.", {new_level});
+}
+
 Station_Kind :: enum {
     SHREDDER;       // Paper_Mill
     PAPER_PRESS;    // Blank_Bill_Press
@@ -290,6 +354,8 @@ draw_upgrades_button :: proc(player: Player) {
     }
 }
 
+UPGRADES_TAB_VAULT :: 4; // upgrades_selected_lane == 4 means the Vault tab
+
 draw_upgrades_lane_header_buttons :: proc(player: Player, rect: Rect) {
     if player == null return;
 
@@ -309,15 +375,21 @@ draw_upgrades_lane_header_buttons :: proc(player: Player, rect: Rect) {
     bs_normal.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_8.png"); // Grey
     bs_normal.press_scaling = 0.35;
 
-    for i: 0..UPGRADES_LANE_COUNT-1 {
+    TAB_COUNT :: 5; // 4 lanes + 1 vault
+
+    for i: 0..TAB_COUNT-1 {
         UI.push_id("up_lane_btn_%", {i});
         defer UI.pop_id();
 
-        x1 := i.(float) / UPGRADES_LANE_COUNT.(float);
-        x2 := (i + 1).(float) / UPGRADES_LANE_COUNT.(float);
+        x1 := i.(float) / TAB_COUNT.(float);
+        x2 := (i + 1).(float) / TAB_COUNT.(float);
         btn := rect->subrect(x1, 0, x2, 1)->inset(8);
 
-        label := format_string("Lane %", {i + 1});
+        label := "Vault";
+        if i < UPGRADES_LANE_COUNT {
+            label = format_string("Lane %", {i + 1});
+        }
+
         is_selected := player.upgrades_selected_lane == i;
         bs := is_selected ? bs_selected : bs_normal;
 
@@ -421,6 +493,88 @@ draw_station_upgrade_card :: proc(player: Player, rect: Rect, lane_index: s64, k
     }
 }
 
+draw_vault_upgrade_card :: proc(player: Player, rect: Rect) {
+    if player == null return;
+
+    UI.quad(rect, core_globals.white_sprite, {0.08, 0.08, 0.08, 0.95});
+    inner := rect->inset(26);
+
+    // Title
+    title_rect := inner->cut_top(60);
+    ts_title := UI.default_text_settings();
+    ts_title.size = 44;
+    ts_title.halign = .CENTER;
+    ts_title.valign = .CENTER;
+    ts_title.do_outline = true;
+    ts_title.outline_thickness = 3;
+    ts_title.outline_color = {0, 0, 0, 1};
+    UI.text(title_rect, ts_title, "Vault");
+
+    _ := inner->cut_top(16);
+
+    level := player.vault_level;
+    if level < 1 level = 1;
+
+    cur_cap := vault_capacity_for_level(level);
+
+    // Info
+    info_rect := inner->cut_top(120)->inset(8);
+    ts_info := UI.default_text_settings();
+    ts_info.size = 34;
+    ts_info.halign = .LEFT;
+    ts_info.valign = .TOP;
+    ts_info.word_wrap = true;
+    ts_info.do_outline = true;
+    ts_info.outline_thickness = 2;
+    ts_info.outline_color = {0, 0, 0, 1};
+
+    if level >= VAULT_MAX_LEVEL {
+        UI.text(info_rect, ts_info, "Level: % / %\nCapacity: %", {level, VAULT_MAX_LEVEL, format_int_with_commas(cur_cap)});
+    }
+    else {
+        next_cap := vault_capacity_for_level(level + 1);
+        UI.text(info_rect, ts_info, "Level: % / %\nCapacity: % -> %", {level, VAULT_MAX_LEVEL, format_int_with_commas(cur_cap), format_int_with_commas(next_cap)});
+    }
+
+    _ := inner->cut_top(16);
+
+    // Button
+    btn_rect := inner->cut_top(90);
+
+    ts_btn := UI.default_text_settings();
+    ts_btn.size = 34;
+    ts_btn.halign = .CENTER;
+    ts_btn.valign = .CENTER;
+    ts_btn.do_outline = true;
+    ts_btn.outline_thickness = 2;
+    ts_btn.outline_color = {0, 0, 0, 1};
+
+    if level >= VAULT_MAX_LEVEL {
+        bs_max := UI.default_button_settings();
+        bs_max.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_8.png");
+        bs_max.press_scaling = 0.0;
+        UI.push_disabled(true);
+        defer UI.pop_disabled();
+        _ := UI.button(btn_rect->inset(6), bs_max, ts_btn, "Max Level");
+        return;
+    }
+
+    cost := vault_upgrade_cost_for_level(level);
+    can_afford := cost > 0 && Economy.can_withdraw_currency(player, UPGRADES_COIN_CURRENCY, cost);
+
+    bs := UI.default_button_settings();
+    bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_2.png");
+    if !can_afford {
+        bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_3.png");
+    }
+    bs.press_scaling = 0.4;
+
+    label := format_string("Upgrade ($%)", {format_int_with_commas(cost)});
+    if UI.button(btn_rect->inset(6), bs, ts_btn, label).clicked {
+        server_try_upgrade_vault(player);
+    }
+}
+
 draw_upgrades_modal :: proc(player: Player) {
     if player == null return;
 
@@ -483,6 +637,16 @@ draw_upgrades_modal :: proc(player: Player) {
     body := content->inset(10);
 
     lane := player.upgrades_selected_lane;
+
+    // Vault tab
+    if lane == UPGRADES_TAB_VAULT {
+        UI.push_id("up_vault", {});
+        defer UI.pop_id();
+        draw_vault_upgrade_card(player, body->inset(12));
+        return;
+    }
+
+    // Lane tabs (0..3)
     if lane < 0 || lane >= UPGRADES_LANE_COUNT {
         lane = 0;
     }
