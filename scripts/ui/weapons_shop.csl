@@ -8,46 +8,50 @@ Weapons_Shop_Tab :: enum {
     AMMO;
 }
 
-weapon_shop_weapon_types :: proc() -> [WEAPON_COUNT]Weapon_Type {
+WEAPONS_SHOP_WEAPON_COUNT :: 6;
+
+weapon_shop_weapon_types :: proc() -> [WEAPONS_SHOP_WEAPON_COUNT]Weapon_Type {
     return {
+        // Sorted by price (ascending)
         .PISTOL,
-        .ASSAULT_RIFLE,
         .SUBMACHINE_GUN,
-        .GATLING_GUN,
-        .BEAM_MACHINE,
-        .WATER_GUN,
-        .MISSILE_BARRAGE,
-        .BLUNDERBUSS,
-        .RAY_GUN,
-        .PLASMA_BURST,
-        .MEGA_BLADE,
-        .BUZZSHOT,
-        .EXPLOSIVE_SHOTGUN,
-        .SUNNY_SIDE_SHOTTY,
-        .GOLDEN_ROCKET_LAUNCHER,
-        .WATER_BALLOON_RPG,
-        .POISON_GRENADE,
-        .BOOMWHEEL,
-        .FIRE_RAY,
-        .ICE_LAUNCHER,
-        .GLACIATOR,
-        .SOLAR_SIPHONER,
-        .OCTO_SIPHONER,
-        .VOID_SPLITTER,
         .AKIMBO_PISTOLS,
-        .WIND_BLASTER,
-        .STORMS_EYE,
-        .HYDRO_CANNON,
+        .ASSAULT_RIFLE,
+        .EXPLOSIVE_SHOTGUN,
+        .GATLING_GUN,
     };
+}
+
+WEAPONS_SHOP_AMMO_COUNT :: 5;
+
+ammo_shop_ammo_types :: proc() -> [WEAPONS_SHOP_AMMO_COUNT]s64 {
+    return {
+        // Sorted by price (ascending) - only ammo used by shop weapons
+        10, // Pistol Ammo (Pistol)
+        1,  // Heavy Shots (Akimbo Pistols)
+        0,  // AR Rounds (Assault Rifle, SMG)
+        8,  // LMG Rounds (Gatling Gun)
+        2,  // Explosive Rounds (Explosive Shotgun)
+    };
+}
+
+server_request_purchase_fx :: proc(player: Player, icon_path: string) {
+    if player == null return;
+    if !Game.is_server() return;
+    if icon_path.count == 0 return;
+    player.purchase_fx_icon_path = icon_path;
+    player.purchase_fx_seq += 1;
 }
 
 weapon_shop_price :: proc(wt: Weapon_Type) -> s64 {
     // Tuned to be "early game affordable" for ammo, "mid game" for weapons.
     switch wt {
         case .PISTOL:                 return 0;
-        case .ASSAULT_RIFLE:          return 850;
-        case .SUBMACHINE_GUN:         return 5000;
-        case .GATLING_GUN:            return 1400;
+        case .SUBMACHINE_GUN:         return 3500;
+        case .AKIMBO_PISTOLS:         return 7500;
+        case .ASSAULT_RIFLE:          return 25000;
+        case .EXPLOSIVE_SHOTGUN:      return 50000;
+        case .GATLING_GUN:            return 100000;
         case .BEAM_MACHINE:           return 1600;
         case .WATER_GUN:              return 600;
         case .MISSILE_BARRAGE:        return 2200;
@@ -56,7 +60,6 @@ weapon_shop_price :: proc(wt: Weapon_Type) -> s64 {
         case .PLASMA_BURST:           return 1700;
         case .MEGA_BLADE:             return 1800;
         case .BUZZSHOT:               return 1650;
-        case .EXPLOSIVE_SHOTGUN:      return 2100;
         case .SUNNY_SIDE_SHOTTY:      return 2300;
         case .GOLDEN_ROCKET_LAUNCHER: return 3000;
         case .WATER_BALLOON_RPG:      return 1900;
@@ -68,7 +71,6 @@ weapon_shop_price :: proc(wt: Weapon_Type) -> s64 {
         case .SOLAR_SIPHONER:         return 2800;
         case .OCTO_SIPHONER:          return 2950;
         case .VOID_SPLITTER:          return 3200;
-        case .AKIMBO_PISTOLS:         return 1100;
         case .WIND_BLASTER:           return 1750;
         case .STORMS_EYE:             return 3400;
         case .HYDRO_CANNON:           return 1500;
@@ -80,15 +82,15 @@ weapon_shop_price :: proc(wt: Weapon_Type) -> s64 {
 ammo_shop_price :: proc(ammo_type_index: s64) -> s64 {
     // Price is for 100 units (WEAPONS_SHOP_AMMO_BUY_AMOUNT).
     switch ammo_type_index {
-        case 0: return 25;  // AR Rounds
-        case 1: return 45;  // Heavy Shots
-        case 2: return 70;  // Explosive Rounds
+        case 0: return 3000;  // AR Rounds
+        case 1: return 1200;  // Heavy Shots
+        case 2: return 6800;  // Explosive Rounds
         case 3: return 55;  // Cryo Cells
         case 4: return 50;  // Tornado Shots
         case 5: return 60;  // Energy Cells
         case 6: return 80;  // Solar Cores
         case 7: return 75;  // Sawblades
-        case 8: return 35;  // LMG Rounds
+        case 8: return 5000;  // LMG Rounds
         case 9: return 20;  // Water Balloons
         case 10: return 500; // Pistol Ammo
     }
@@ -155,6 +157,10 @@ server_try_buy_weapon :: proc(player: Player, wt: Weapon_Type) {
         else {
             Notifier.notify(player, "Claimed % (Free).", {defn->get_name()});
         }
+
+        // Cosmetic purchase FX (icon -> hotbar) on the owning client.
+        config := get_weapon_config(wt);
+        server_request_purchase_fx(player, config.weapon_icon_path);
     }
     else {
         Items.destroy_item_instance(item);
@@ -242,6 +248,9 @@ server_try_buy_ammo :: proc(player: Player, ammo_type_index: s64) {
     }
 
     Notifier.notify(player, "Bought % x% for % Coins.", {info.name, WEAPONS_SHOP_AMMO_BUY_AMOUNT, format_int_with_commas(cost)});
+
+    // Cosmetic purchase FX (icon -> hotbar) on the owning client.
+    server_request_purchase_fx(player, info.icon_path);
 }
 
 draw_weapons_shop_button :: proc(player: Player) {
@@ -550,11 +559,14 @@ draw_weapons_shop_modal :: proc(player: Player) {
     // Page controls
     page_controls := body->cut_top(64);
 
-    ITEMS_PER_PAGE :: 9;
+    // Pagination + grid layout
+    ITEMS_PER_PAGE :: 6;
+    GRID_COLS :: 3;
+    GRID_ROWS :: 2;
     // Tab: 0 = Weapons, 1 = Ammo
     if player.weapons_shop_tab == 0 {
         types := weapon_shop_weapon_types();
-        item_count := WEAPON_COUNT;
+        item_count := WEAPONS_SHOP_WEAPON_COUNT;
         page_count := (item_count + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE;
         draw_page_controls(player, page_controls, ref player.weapons_shop_weapon_page, page_count);
 
@@ -567,18 +579,18 @@ draw_weapons_shop_modal :: proc(player: Player) {
             end = item_count;
         }
 
-        // 3x3 grid
+        // GRID_COLS x GRID_ROWS grid
         for slot: 0..ITEMS_PER_PAGE-1 {
             idx := start + slot;
             if idx >= end break;
 
-            col := slot % 3;
-            row := slot / 3;
+            col := slot % GRID_COLS;
+            row := slot / GRID_COLS;
 
-            x1 := col.(float) / 3.0;
-            x2 := (col + 1).(float) / 3.0;
-            y1 := 1.0 - (row + 1).(float) / 3.0;
-            y2 := 1.0 - row.(float) / 3.0;
+            x1 := col.(float) / GRID_COLS.(float);
+            x2 := (col + 1).(float) / GRID_COLS.(float);
+            y1 := 1.0 - (row + 1).(float) / GRID_ROWS.(float);
+            y2 := 1.0 - row.(float) / GRID_ROWS.(float);
 
             card := grid->subrect(x1, y1, x2, y2)->inset(10);
             wt := types[idx];
@@ -589,7 +601,8 @@ draw_weapons_shop_modal :: proc(player: Player) {
         }
     }
     else {
-        item_count := AMMO_TYPE_COUNT;
+        ammo_types := ammo_shop_ammo_types();
+        item_count := WEAPONS_SHOP_AMMO_COUNT;
         page_count := (item_count + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE;
         draw_page_controls(player, page_controls, ref player.weapons_shop_ammo_page, page_count);
 
@@ -605,19 +618,21 @@ draw_weapons_shop_modal :: proc(player: Player) {
             idx := start + slot;
             if idx >= end break;
 
-            col := slot % 3;
-            row := slot / 3;
+            col := slot % GRID_COLS;
+            row := slot / GRID_COLS;
 
-            x1 := col.(float) / 3.0;
-            x2 := (col + 1).(float) / 3.0;
-            y1 := 1.0 - (row + 1).(float) / 3.0;
-            y2 := 1.0 - row.(float) / 3.0;
+            x1 := col.(float) / GRID_COLS.(float);
+            x2 := (col + 1).(float) / GRID_COLS.(float);
+            y1 := 1.0 - (row + 1).(float) / GRID_ROWS.(float);
+            y2 := 1.0 - row.(float) / GRID_ROWS.(float);
 
             card := grid->subrect(x1, y1, x2, y2)->inset(10);
 
-            UI.push_id("ammo_%", {idx});
+            ammo_type_index := ammo_types[idx];
+
+            UI.push_id("ammo_%", {ammo_type_index});
             defer UI.pop_id();
-            draw_ammo_shop_item_card(player, card, idx);
+            draw_ammo_shop_item_card(player, card, ammo_type_index);
         }
     }
 }

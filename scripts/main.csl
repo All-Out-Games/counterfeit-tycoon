@@ -345,6 +345,10 @@ Player :: class : Player_Base {
     // Screen-space UI particles (per-player, local-only draw)
     ui_directed_particle_handler: UI_Directed_Particle_Handler;
 
+    // Cosmetic: purchase FX (server sets these; local client plays particles + SFX)
+    purchase_fx_seq: s64;
+    purchase_fx_icon_path: string;
+
     // Reusable weapons shop UI (per-player, multiplayer safe)
     weapons_shop_open: bool;
     weapons_shop_movement_locked: bool;
@@ -587,6 +591,94 @@ Player :: class : Player_Base {
         entries[idx].last_balance = cur;
     }
 
+    client_purchase_fx_tick :: method(hotbar_rect: Rect) {
+        // Cosmetic-only: local feedback when we successfully buy weapons/ammo.
+        if !this->is_local_or_server() {
+            return;
+        }
+
+        uid := this->get_user_id();
+        if uid.count == 0 {
+            return;
+        }
+
+        Purchase_FX_Entry :: struct {
+            user_id: string;
+            last_seq: s64;
+            initialized: bool;
+        }
+
+        #static entries: [8]Purchase_FX_Entry;
+
+        idx := -1;
+        for i: 0..entries.count-1 {
+            if entries[i].user_id.count == 0 continue;
+            if entries[i].user_id == uid {
+                idx = i;
+                break;
+            }
+        }
+        if idx < 0 {
+            // Allocate slot
+            for i: 0..entries.count-1 {
+                if entries[i].user_id.count == 0 {
+                    idx = i;
+                    break;
+                }
+            }
+            if idx < 0 {
+                idx = 0;
+            }
+            entries[idx].user_id = uid;
+            entries[idx].initialized = false;
+            entries[idx].last_seq = 0;
+        }
+
+        cur_seq := purchase_fx_seq;
+        if !entries[idx].initialized {
+            entries[idx].initialized = true;
+            entries[idx].last_seq = cur_seq;
+            return;
+        }
+
+        if cur_seq == entries[idx].last_seq {
+            return;
+        }
+        entries[idx].last_seq = cur_seq;
+
+        if purchase_fx_icon_path.count == 0 {
+            return;
+        }
+
+        // Local purchase SFX
+        #static purchase_sfx := get_asset(SFX_Asset, "SFX/PurchaseSFX.wav");
+        if purchase_sfx != null {
+            desc := SFX.default_sfx_desc();
+            desc.entity_to_follow = entity.id;
+            desc.volume = 0.9;
+            desc.volume_perturb = 0.05;
+            desc.speed_perturb = 0.05;
+            SFX.play(purchase_sfx, desc);
+        }
+
+        // Start from screen center -> hotbar
+        safe := UI.get_safe_screen_rect();
+        start := safe->center();
+        dest := hotbar_rect->center();
+
+        ui_directed_particles_spawn_from_path(
+            this,
+            purchase_fx_icon_path,
+            start,
+            dest,
+            size_px = {128, 128},
+            speed_px_per_sec = 1400.0,
+            kill_radius_px = 14.0,
+            layer = 750,
+            color = {1, 1, 1, 1}
+        );
+    }
+
     // Death / respawn state (per-player, server authoritative)
     death_pickup_lockout: bool;
 
@@ -620,6 +712,12 @@ Player :: class : Player_Base {
 
         // Per-player UI particle handler (cosmetic-only; draws locally).
         ui_directed_particle_handler = entity->add_component(UI_Directed_Particle_Handler);
+
+        // Server authoritative init (replicated to clients).
+        if Game.is_server() {
+            purchase_fx_seq = 0;
+            purchase_fx_icon_path = "";
+        }
 
         sell_shop_open = false;
         sell_shop_movement_locked = false;
@@ -941,6 +1039,7 @@ Player :: class : Player_Base {
         options := Inventory_Draw_Options.default();
         hotbar := Items.draw_hotbar(this, default_inventory, options);
         handle_equipped_item_changing(hotbar.selected_item_index);
+        client_purchase_fx_tick(hotbar.entire_rect);
 
         // Allow dropping items from the hotbar. Apply server-side so it is authoritative.
         if Game.is_server() {

@@ -59,7 +59,8 @@ get_weapon_config :: proc(wt: Weapon_Type) -> Weapon_Config {
         case .ASSAULT_RIFLE: {
             config.fire_mode = .CONTINUOUS;
             config.hand_type = .TWO_HAND;
-            config.fire_rate = 0.2;
+            // 3 shots/sec (24 DPS => 8 damage/shot)
+            config.fire_rate = 1.0 / 3.0;
             config.base_damage = 8.0;
             config.projectile_speed = 17.0;
             config.weapon_skin = "weapons/assault_rifle";
@@ -83,7 +84,7 @@ get_weapon_config :: proc(wt: Weapon_Type) -> Weapon_Config {
             config.weapon_icon_path = "reusable_weapons/sprites/reusable-weapons/weapon_icons/weapon_icons_250x250/smg.png";
             config.item_id = "smg";
             config.item_name = "Submachine Gun";
-            config.ammo_type_index = 0;
+            config.ammo_type_index = 10; // Pistol Ammo
             config.ammo_first_pickup = 240;
             config.shoot_start_trigger = "shoot_fast_start";
             config.shoot_end_trigger = "shoot_fast_end";
@@ -93,7 +94,7 @@ get_weapon_config :: proc(wt: Weapon_Type) -> Weapon_Config {
             config.fire_mode = .CONTINUOUS;
             config.hand_type = .TWO_HAND;
             config.fire_rate = 0.1;
-            config.base_damage = 3.0;
+            config.base_damage = 15.0;
             config.projectile_speed = 17.0;
             config.weapon_skin = "weapons/gatling_gun";
             config.weapon_icon_path = "reusable_weapons/sprites/reusable-weapons/weapon_icons/weapon_icons_250x250/gatlinggun.png";
@@ -468,8 +469,9 @@ get_weapon_config :: proc(wt: Weapon_Type) -> Weapon_Config {
         case .AKIMBO_PISTOLS: {
             config.fire_mode = .SPECIAL;
             config.hand_type = .CUSTOM;
-            config.fire_rate = 0.6;
-            config.base_damage = 20.0;
+            // 3 shots/sec
+            config.fire_rate = 1.0 / 3.0;
+            config.base_damage = 16.0;
             config.projectile_speed = 17.0;
             config.weapon_skin = "weapons/akimbo_revolvers";
             config.weapon_icon_path = "reusable_weapons/sprites/reusable-weapons/weapon_icons/weapon_icons_250x250/akimbo_pistols.png";
