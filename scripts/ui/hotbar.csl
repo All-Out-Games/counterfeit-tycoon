@@ -44,7 +44,7 @@ draw_player_hotbar :: proc(player: Player) {
     // Dragging an item out of the hotbar/inventory drops it into the world.
     if result.dropped_item != null {
         drop_pos := player.entity.world_position + v2{0, 0.5};
-        _ := ItemDrops.spawn_from_inventory_item(drop_pos, result.dropped_item);
+        _ := ItemDrops.spawn_from_inventory_item_with_dropper_lockout(drop_pos, result.dropped_item, player, 7.0);
     }
 }
 

@@ -1,5 +1,5 @@
-WEAPON_COUNT :: 27;
-AMMO_TYPE_COUNT :: 10;
+WEAPON_COUNT :: 28;
+AMMO_TYPE_COUNT :: 11;
 
 g_weapon_item_defs: [WEAPON_COUNT]Item_Definition;
 g_ammo_item_defs: [AMMO_TYPE_COUNT]Item_Definition;
@@ -40,6 +40,7 @@ weapon_type_to_index :: proc(wt: Weapon_Type) -> s64 {
         case .WIND_BLASTER:           return 24;
         case .STORMS_EYE:             return 25;
         case .HYDRO_CANNON:           return 26;
+        case .PISTOL:                 return 27;
     }
     return -1;
 }
@@ -115,6 +116,12 @@ get_ammo_info :: proc(index: s64) -> Ammo_Info {
             info.icon_path = "reusable_weapons/sprites/reusable-weapons/ammo_icons/waterballoon.png";
             info.stack_size = 36;
         }
+        case 10: { // Pistol Ammo
+            info.id = "pistol_ammo";
+            info.name = "Pistol Ammo";
+            info.icon_path = "reusable_weapons/sprites/reusable-weapons/ammo_icons/bullet_alt.png";
+            info.stack_size = 360;
+        }
     }
     return info;
 }
@@ -167,6 +174,7 @@ init_weapon_items :: proc() {
     register_weapon(.WIND_BLASTER);
     register_weapon(.STORMS_EYE);
     register_weapon(.HYDRO_CANNON);
+    register_weapon(.PISTOL);
 
     // Load fire sounds for each weapon
     load_fire_sounds();
@@ -261,6 +269,9 @@ load_fire_sounds :: proc() {
     // Akimbo Pistols (4 sounds)
     load_sound_range(.AKIMBO_PISTOLS, "reusable_weapons/sounds/reusable-weapons/pistol_shoot_0", 4);
 
+    // Pistol (4 sounds - reuse same set as akimbo)
+    load_sound_range(.PISTOL, "reusable_weapons/sounds/reusable-weapons/pistol_shoot_0", 4);
+
     // Wind Blaster (1 sound)
     load_single_sound(.WIND_BLASTER, "reusable_weapons/sounds/reusable-weapons/fire_wind_blaster.wav");
 
@@ -322,6 +333,7 @@ get_weapon_type_for_item :: proc(item_def: Item_Definition) -> Weapon_Type {
                 case 24: return .WIND_BLASTER;
                 case 25: return .STORMS_EYE;
                 case 26: return .HYDRO_CANNON;
+                case 27: return .PISTOL;
             }
         }
         i += 1;

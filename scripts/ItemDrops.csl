@@ -38,6 +38,12 @@ Item_Drop_Magnet :: class : Component {
     // can't instantly re-collect your own loot before respawning.)
     blocked_player_user_id: string;
 
+    // Optional: when a player drops an item from their own inventory/hotbar,
+    // prevent them from attracting it and picking it back up for a short period.
+    // (Other players are still allowed.)
+    dropped_by_player_user_id: string;
+    dropped_by_lockout_end_time: float;
+
     // Server chooses an attraction target; replicated for consistent client smoothing.
     target_player_user_id: string;
 
@@ -120,6 +126,13 @@ Item_Drop_Magnet :: class : Component {
                 }
             }
 
+            // Dropper lockout: prevent the player who dropped this from attracting it briefly.
+            if dropped_by_player_user_id.count > 0 {
+                if p->get_user_id() == dropped_by_player_user_id && get_time() < dropped_by_lockout_end_time {
+                    continue;
+                }
+            }
+
             delta := p.entity.world_position - origin;
             d2 := length_squared(delta);
             if d2 > best_d2 continue;
@@ -147,6 +160,13 @@ Item_Drop_Magnet :: class : Component {
         // Death lockout: the blocked player can't pick this up until they respawn.
         if blocked_player_user_id.count > 0 {
             if player->get_user_id() == blocked_player_user_id && player.death_pickup_lockout {
+                return false;
+            }
+        }
+
+        // Dropper lockout: the player who dropped this can't pick it back up yet.
+        if dropped_by_player_user_id.count > 0 {
+            if player->get_user_id() == dropped_by_player_user_id && get_time() < dropped_by_lockout_end_time {
                 return false;
             }
         }
@@ -484,17 +504,48 @@ ItemDrops :: struct {
     // Convenience: remove an item from its inventory (if any) and spawn it as a world drop.
     // Useful when dropping from a player's hotbar/inventory.
     spawn_from_inventory_item :: proc(position: v2, item: Item_Instance) -> Item_Drop_Magnet {
-        assert(item != null, "ItemDrops.spawn_from_inventory_item: item was null", {});
-        // NOTE: Item instance counts / custom data are not readable from CSL currently.
-        // We convert to a definition-based drop (count=1) to avoid holding the instance pointer.
+        if item == null {
+            return null;
+        }
+        if item.self == null {
+            return null;
+        }
+        // NOTE: We intentionally do NOT hold an Item_Instance reference for world drops.
+        // We capture the definition + quantity now, destroy the instance, then recreate at pickup time.
         defn := item->get_definition();
-        assert(defn != null, "ItemDrops.spawn_from_inventory_item: item had no definition", {});
+        if defn == null {
+            return null;
+        }
+
+        qty := item.quantity;
+        if qty <= 0 {
+            qty = 1;
+        }
         if item.inventory != null {
             Items.remove_item_from_inventory(item, item.inventory);
         }
         // Destroy the original instance; the world drop will recreate on pickup.
         Items.destroy_item_instance(item);
-        return ItemDrops.spawn_from_definition(position, defn, 1);
+        return ItemDrops.spawn_from_definition(position, defn, qty);
+    }
+
+    // Spawn a world drop from an inventory item, and temporarily lock out the dropping player
+    // from attracting/picking it up again.
+    spawn_from_inventory_item_with_dropper_lockout :: proc(position: v2, item: Item_Instance, dropped_by: Player, lockout_seconds: float = 7.0) -> Item_Drop_Magnet {
+        dropped := ItemDrops.spawn_from_inventory_item(position, item);
+        if dropped == null return null;
+        if dropped.self == null return null;
+
+        if dropped_by == null return dropped;
+        if dropped_by.self == null return dropped;
+
+        dropped.dropped_by_player_user_id = dropped_by->get_user_id();
+        if lockout_seconds < 0.0 {
+            lockout_seconds = 0.0;
+        }
+        dropped.dropped_by_lockout_end_time = get_time() + lockout_seconds;
+
+        return dropped;
     }
 }
 

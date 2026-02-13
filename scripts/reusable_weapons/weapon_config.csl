@@ -75,8 +75,9 @@ get_weapon_config :: proc(wt: Weapon_Type) -> Weapon_Config {
         case .SUBMACHINE_GUN: {
             config.fire_mode = .CONTINUOUS;
             config.hand_type = .TWO_HAND;
-            config.fire_rate = 0.15;
-            config.base_damage = 5.0;
+            // 4 shots/sec
+            config.fire_rate = 0.25;
+            config.base_damage = 12.0;
             config.projectile_speed = 17.0;
             config.weapon_skin = "weapons/smg";
             config.weapon_icon_path = "reusable_weapons/sprites/reusable-weapons/weapon_icons/weapon_icons_250x250/smg.png";
@@ -478,6 +479,23 @@ get_weapon_config :: proc(wt: Weapon_Type) -> Weapon_Config {
             config.ammo_first_pickup = 30;
             config.shoot_trigger = "shoot_akimbo_pistols";
             config.use_ik_var = "use_2h_ik";
+        }
+        case .PISTOL: {
+            config.fire_mode = .CONTINUOUS;
+            config.hand_type = .ONE_HAND;
+            // 2.2 shots/sec -> ~0.4545s between shots
+            config.fire_rate = 1.0 / 2.2;
+            config.base_damage = 10.0;
+            config.projectile_speed = 17.0;
+            config.weapon_skin = "weapons/pistol";
+            config.weapon_icon_path = "Items/pistol.png";
+            config.item_id = "pistol";
+            config.item_name = "Pistol";
+            config.ammo_type_index = 10; // Pistol Ammo
+            config.ammo_first_pickup = 240;
+            // Use 1-handed shooting animation (additive one-shot)
+            config.shoot_trigger = "shoot_1h_weapon";
+            config.use_ik_var = "use_1h_ik";
         }
         case .WIND_BLASTER: {
             config.fire_mode = .SPECIAL;

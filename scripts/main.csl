@@ -942,6 +942,14 @@ Player :: class : Player_Base {
         hotbar := Items.draw_hotbar(this, default_inventory, options);
         handle_equipped_item_changing(hotbar.selected_item_index);
 
+        // Allow dropping items from the hotbar. Apply server-side so it is authoritative.
+        if Game.is_server() {
+            if hotbar.dropped_item != null {
+                drop_pos := entity.world_position + v2{0, 0.5};
+                _ := ItemDrops.spawn_from_inventory_item_with_dropper_lockout(drop_pos, hotbar.dropped_item, this, 7.0);
+            }
+        }
+
         // Currency HUD
         draw_coin_currency_hud(this);
         client_coin_gain_particles_tick();

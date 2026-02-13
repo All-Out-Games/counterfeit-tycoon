@@ -70,6 +70,9 @@ Continuous_Fire_Ability :: class : Ability_Base {
                     case .GATLING_GUN: {
                         weapon_spawn_standard_projectile(p, aiming.aim_direction, wt);
                     }
+                    case .PISTOL: {
+                        weapon_spawn_standard_projectile(p, aiming.aim_direction, wt);
+                    }
                     case .WATER_GUN: {
                         spawn_water_gun_projectile(p, aiming.aim_direction, wt);
                     }

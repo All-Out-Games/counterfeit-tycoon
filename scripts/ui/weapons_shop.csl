@@ -8,8 +8,9 @@ Weapons_Shop_Tab :: enum {
     AMMO;
 }
 
-weapon_shop_weapon_types :: proc() -> [27]Weapon_Type {
+weapon_shop_weapon_types :: proc() -> [WEAPON_COUNT]Weapon_Type {
     return {
+        .PISTOL,
         .ASSAULT_RIFLE,
         .SUBMACHINE_GUN,
         .GATLING_GUN,
@@ -43,8 +44,9 @@ weapon_shop_weapon_types :: proc() -> [27]Weapon_Type {
 weapon_shop_price :: proc(wt: Weapon_Type) -> s64 {
     // Tuned to be "early game affordable" for ammo, "mid game" for weapons.
     switch wt {
+        case .PISTOL:                 return 0;
         case .ASSAULT_RIFLE:          return 850;
-        case .SUBMACHINE_GUN:         return 900;
+        case .SUBMACHINE_GUN:         return 5000;
         case .GATLING_GUN:            return 1400;
         case .BEAM_MACHINE:           return 1600;
         case .WATER_GUN:              return 600;
@@ -88,6 +90,7 @@ ammo_shop_price :: proc(ammo_type_index: s64) -> s64 {
         case 7: return 75;  // Sawblades
         case 8: return 35;  // LMG Rounds
         case 9: return 20;  // Water Balloons
+        case 10: return 25; // Pistol Ammo
     }
     return 0;
 }
@@ -118,23 +121,27 @@ server_try_buy_weapon :: proc(player: Player, wt: Weapon_Type) {
     }
 
     cost := weapon_shop_price(wt);
-    if cost <= 0 {
+    if cost < 0 {
         Notifier.notify(player, "Can't buy that weapon right now.");
         return;
     }
 
-    if !Economy.can_withdraw_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost) {
-        Notifier.notify(player, "Not enough Coins!");
-        return;
-    }
+    if cost > 0 {
+        if !Economy.can_withdraw_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost) {
+            Notifier.notify(player, "Not enough Coins!");
+            return;
+        }
 
-    // Withdraw before granting to avoid double-spend edge cases.
-    Economy.withdraw_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost);
+        // Withdraw before granting to avoid double-spend edge cases.
+        Economy.withdraw_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost);
+    }
 
     item := Items.create_item_instance(defn, 1);
     if item == null || item.self == null {
         // Refund if creation failed.
-        Economy.deposit_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost);
+        if cost > 0 {
+            Economy.deposit_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost);
+        }
         Notifier.notify(player, "Purchase failed.");
         return;
     }
@@ -142,11 +149,18 @@ server_try_buy_weapon :: proc(player: Player, wt: Weapon_Type) {
     will_destroy: bool;
     if Items.can_move_item_to_inventory(item, inv, ref will_destroy) {
         Items.move_item_to_inventory(item, inv);
-        Notifier.notify(player, "Bought % for % Coins.", {defn->get_name(), cost});
+        if cost > 0 {
+            Notifier.notify(player, "Bought % for % Coins.", {defn->get_name(), cost});
+        }
+        else {
+            Notifier.notify(player, "Claimed % (Free).", {defn->get_name()});
+        }
     }
     else {
         Items.destroy_item_instance(item);
-        Economy.deposit_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost);
+        if cost > 0 {
+            Economy.deposit_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost);
+        }
         Notifier.notify(player, "Inventory full!");
     }
 }
@@ -371,7 +385,7 @@ draw_weapon_shop_item_card :: proc(player: Player, rect: Rect, wt: Weapon_Type) 
     config := get_weapon_config(wt);
     icon := get_asset(Texture_Asset, config.weapon_icon_path);
     cost := weapon_shop_price(wt);
-    can_afford := cost > 0 && Economy.can_withdraw_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost);
+    can_afford := cost == 0 || (cost > 0 && Economy.can_withdraw_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost));
 
     bs := UI.default_button_settings();
     bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_2.png"); // Green
@@ -403,7 +417,12 @@ draw_weapon_shop_item_card :: proc(player: Player, rect: Rect, wt: Weapon_Type) 
             UI.quad(top, core_globals.white_sprite, {0.2, 0.2, 0.2, 1});
         }
 
-        UI.text(inner, ts, "%\n$%", {config.item_name, cost});
+        if cost == 0 {
+            UI.text(inner, ts, "%\nFree", {config.item_name});
+        }
+        else {
+            UI.text(inner, ts, "%\n$%", {config.item_name, cost});
+        }
     }
 
     if result.clicked {
