@@ -161,7 +161,9 @@ Colored_Bill_Press :: class : Interactable {
 
     can_use :: method(player: Player) -> bool {
         // Only the owning player (from our parent entity's PlayerBase) may use this press.
-        return is_owner_of_parent_base(entity, player);
+        if !is_owner_of_parent_base(entity, player) return false;
+        // Only show prompt if the player has blank bills to deposit.
+        return player_has_item_id(player, "blank_bills");
     }
 
     on_interact :: method(player: Player) {
@@ -181,8 +183,21 @@ Colored_Bill_Press :: class : Interactable {
         // Ensure we don't overwrite an existing save with a default 0.
         server_try_load_from_save();
 
+        // Enforce input queue cap based on machine level.
+        cap := machine_queue_cap_for_level(upgrade_level);
+        room := cap - stored_blank_bills;
+        if room <= 0 {
+            Notifier.notify(player, "Machine queue is full!");
+            return;
+        }
+
+        max_take := deposit_per_interact;
+        if max_take > room {
+            max_take = room;
+        }
+
         taken := 0;
-        for i: 1..deposit_per_interact {
+        for i: 1..max_take {
             _ := i;
             if !try_take_one_blank_bill(player) {
                 break;
@@ -292,12 +307,30 @@ Colored_Bill_Press :: class : Interactable {
 
         server_try_load_from_save();
 
-        stored_blank_bills += amount;
+        // Enforce input queue cap.
+        cap := machine_queue_cap_for_level(upgrade_level);
+        room := cap - stored_blank_bills;
+        if room <= 0 {
+            return 0;
+        }
+
+        to_add := amount;
+        if to_add > room {
+            to_add = room;
+        }
+        if to_add <= 0 {
+            return 0;
+        }
+
+        stored_blank_bills += to_add;
+        if stored_blank_bills > cap {
+            stored_blank_bills = cap;
+        }
         if stored_blank_bills < 0 {
             stored_blank_bills = 0;
         }
         save_dirty = true;
-        return amount;
+        return to_add;
     }
 
     ao_late_update :: method(dt: float) {
@@ -697,7 +730,17 @@ Colored_Bill_Press :: class : Interactable {
             if blank_icon != null {
                 UI.quad(icon_rect->fit_aspect(blank_icon->get_aspect()), blank_icon);
             }
-            UI.text(text_rect, ts_row, "x%", {stored_blank_bills});
+
+            // Color the input count based on how full the queue is.
+            input_cap := machine_queue_cap_for_level(upgrade_level);
+            ts_input := ts_row;
+            if input_cap > 0 && stored_blank_bills >= input_cap {
+                ts_input.color = {1, 0.25, 0.25, 1}; // Red: full
+            }
+            else if input_cap > 0 && stored_blank_bills.(float) >= input_cap.(float) * 0.8 {
+                ts_input.color = {1, 0.9, 0.2, 1}; // Yellow: 80%+
+            }
+            UI.text(text_rect, ts_input, "%/%", {stored_blank_bills, input_cap});
         }
 
         // Into arrow
@@ -753,7 +796,7 @@ Colored_Bill_Press :: class : Interactable {
             if colored_icon != null {
                 UI.quad(icon_rect->fit_aspect(colored_icon->get_aspect()), colored_icon);
             }
-            UI.text(text_rect, ts_row, "x%", {stored_colored_bills});
+            UI.text(text_rect, ts_row, "%", {stored_colored_bills});
         }
     }
 }

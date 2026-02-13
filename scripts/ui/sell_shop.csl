@@ -186,6 +186,7 @@ sell_all_of_type :: proc(player: Player, item_id: string) {
     }
 }
 
+
 draw_sell_shop_button :: proc(player: Player) {
     if player == null return;
     if !player->is_local_or_server() return;
@@ -433,6 +434,7 @@ draw_sell_shop_modal :: proc(player: Player) {
             }
             _ := panel->cut_top(8);
         }
+
     }
 }
 

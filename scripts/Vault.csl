@@ -142,7 +142,9 @@ Vault :: class : Interactable {
 
     can_use :: method(player: Player) -> bool {
         // Deposit interactable is owner-only.
-        return is_owner_of_parent_base(entity, player);
+        if !is_owner_of_parent_base(entity, player) return false;
+        // Only show prompt if the player has finished bills to deposit.
+        return player_has_item_id(player, "finished_bills");
     }
 
     on_interact :: method(player: Player) {

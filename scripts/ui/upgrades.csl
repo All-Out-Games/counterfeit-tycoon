@@ -9,6 +9,21 @@ UPGRADES_MAX_LEVEL :: 10;
 // Keep these in sync with the tuning in station scripts.
 UPGRADES_SPEED_MULT_PER_LEVEL :: 0.12;
 
+// Input queue cap per machine level. Formula: 15 + 5 * level.
+QUEUE_CAP_BASE :: 15;
+QUEUE_CAP_PER_LEVEL :: 5;
+
+machine_queue_cap_for_level :: proc(level: s64) -> s64 {
+    lvl := level;
+    if lvl < 1 {
+        lvl = 1;
+    }
+    if lvl > UPGRADES_MAX_LEVEL {
+        lvl = UPGRADES_MAX_LEVEL;
+    }
+    return QUEUE_CAP_BASE + QUEUE_CAP_PER_LEVEL * lvl;
+}
+
 Station_Kind :: enum {
     SHREDDER;       // Paper_Mill
     PAPER_PRESS;    // Blank_Bill_Press
@@ -337,7 +352,7 @@ draw_station_upgrade_card :: proc(player: Player, rect: Rect, lane_index: s64, k
     lvl_f := (level - 1).(float);
     speed_mult := 1.0 + lvl_f * UPGRADES_SPEED_MULT_PER_LEVEL;
 
-    info_rect := inner->cut_top_unscaled(inner->height() * 0.62)->inset(8);
+    info_rect := inner->cut_top_unscaled(inner->height() * 0.78)->inset(8);
     ts_info := UI.default_text_settings();
     ts_info.size = 30;
     ts_info.halign = .LEFT;
@@ -347,12 +362,14 @@ draw_station_upgrade_card :: proc(player: Player, rect: Rect, lane_index: s64, k
     ts_info.outline_thickness = 2;
     ts_info.outline_color = {0, 0, 0, 1};
 
+    cur_cap := machine_queue_cap_for_level(level);
     if level >= UPGRADES_MAX_LEVEL {
-        UI.text(info_rect, ts_info, "Level: % / %\nSpeed Mult: %x", {level, UPGRADES_MAX_LEVEL, format_float(speed_mult, decimals=2)});
+        UI.text(info_rect, ts_info, "Level: % / %\nSpeed Mult: %x\nQueue Cap: %", {level, UPGRADES_MAX_LEVEL, format_float(speed_mult, decimals=2), cur_cap});
     }
     else {
         next_mult := 1.0 + ((level).(float)) * UPGRADES_SPEED_MULT_PER_LEVEL;
-        UI.text(info_rect, ts_info, "Level: % / %\nSpeed Mult: %x -> %x", {level, UPGRADES_MAX_LEVEL, format_float(speed_mult, decimals=2), format_float(next_mult, decimals=2)});
+        next_cap := machine_queue_cap_for_level(level + 1);
+        UI.text(info_rect, ts_info, "Level: % / %\nSpeed Mult: %x -> %x\nQueue Cap: % -> %", {level, UPGRADES_MAX_LEVEL, format_float(speed_mult, decimals=2), format_float(next_mult, decimals=2), cur_cap, next_cap});
     }
 
     _ := inner->cut_top(10);

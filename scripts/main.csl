@@ -257,6 +257,50 @@ migrate_legacy_coin_items_to_currency :: proc(player: Player) {
     }
 }
 
+draw_finished_bills_per_sec_hud :: proc(player: Player) {
+    if player == null return;
+    if !player->is_local_or_server() return;
+
+    // Sum production rate across all Finished_Bill_Press instances owned by this player.
+    total_rate := 0.0;
+    foreach press: component_iterator(Finished_Bill_Press) {
+        if press == null continue;
+        if press.entity == null || press.entity.self == null continue;
+        if !press.entity->get_world_enabled() continue;
+        if !is_owner_of_parent_base(press.entity, player) continue;
+
+        // A press only produces when it has colored bills queued.
+        if press.stored_colored_bills <= 0 continue;
+        if press.seconds_per_finished_bill <= 0 continue;
+
+        total_rate += 1.0 / press.seconds_per_finished_bill;
+    }
+
+    safe := UI.get_safe_screen_rect();
+
+    // Position just above the coin HUD panel.
+    panel := safe->bottom_left_rect()->grow(28, 100, 28, 100)->offset(150, 170);
+    UI.quad(panel, core_globals.white_sprite, {0.06, 0.06, 0.06, 0.7});
+
+    inner := panel->inset(8);
+    icon_rect := inner->cut_left_unscaled(40);
+    _ := inner->cut_left_unscaled(8);
+
+    #static fb_icon := get_asset(Texture_Asset, "Items/FinishedBills.png");
+    if fb_icon != null {
+        UI.quad(icon_rect->fit_aspect(fb_icon->get_aspect()), fb_icon);
+    }
+
+    ts := UI.default_text_settings();
+    ts.size = 28;
+    ts.halign = .LEFT;
+    ts.valign = .CENTER;
+    ts.do_outline = true;
+    ts.outline_thickness = 2;
+    ts.outline_color = {0, 0, 0, 1};
+    UI.text(inner, ts, "%/s", {format_float(total_rate, decimals=1)});
+}
+
 draw_coin_currency_hud :: proc(player: Player) {
     if player == null return;
     if !player->is_local_or_server() return;
@@ -1104,6 +1148,7 @@ Player :: class : Player_Base {
         // Do it here (late update) so it's stable and not tied to replicated/nameplate rect state.
         if this->is_local() {
             draw_all_players_health_bars_local();
+            draw_all_players_carried_bills_local();
             draw_all_truck_health_bars_local();
         }
 
@@ -1139,6 +1184,7 @@ Player :: class : Player_Base {
 
         // Currency HUD
         draw_coin_currency_hud(this);
+        draw_finished_bills_per_sec_hud(this);
         client_coin_gain_particles_tick();
 
         // Draw weapons shop button + modal UI.

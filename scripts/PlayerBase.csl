@@ -134,3 +134,27 @@ is_owner_of_parent_base :: proc(child_entity: Entity, player: Player) -> bool {
     if pb == null return false;
     return pb->is_owner(player);
 }
+
+// Convenience: check if `player` has at least one item with the given `item_id` in their inventory.
+player_has_item_id :: proc(player: Player, item_id: string) -> bool {
+    if player == null return false;
+    if item_id.count <= 0 return false;
+
+    inv := player.default_inventory;
+    if inv == null || inv.self == null || inv.capacity <= 0 {
+        return false;
+    }
+
+    for i: 0..inv.capacity-1 {
+        item := inv->get_item(i);
+        if item == null continue;
+        if item.self == null continue;
+        defn := item->get_definition();
+        if defn == null continue;
+        if defn->get_id() == item_id {
+            return true;
+        }
+    }
+
+    return false;
+}
