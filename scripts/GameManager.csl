@@ -327,6 +327,7 @@ GameManager :: class : Component {
             foreach p: component_iterator(Player) {
                 if p == null continue;
                 this->server_apply_station_upgrade_levels_for_player(p);
+                this->server_apply_vault_level_for_player(p);
             }
         }
 
@@ -535,6 +536,7 @@ GameManager :: class : Component {
                 gm := ud.gm;
                 if gm != null && ud.player != null {
                     gm->apply_station_upgrade_levels_for_player(ud.player);
+                    gm->apply_vault_level_for_player(ud.player);
                     // Lane spawned + repositioned: rebuild navmesh ASAP on server.
                     gm->mark_navmesh_for_rebuild();
                 }
@@ -1357,6 +1359,35 @@ GameManager :: class : Component {
         }
     }
 
+    server_apply_vault_level_for_player :: method(player: Player) {
+        if !Game.is_server() return;
+        apply_vault_level_for_player(player);
+    }
+
+    apply_vault_level_for_player :: method(player: Player) {
+        if player == null return;
+        if player.base_entity == null || player.base_entity.self == null return;
+
+        pb := player.base_entity->get_component(PlayerBase);
+        if pb == null return;
+
+        lvl := player.vault_level;
+        if lvl < 1 lvl = 1;
+        if lvl > VAULT_MAX_LEVEL lvl = VAULT_MAX_LEVEL;
+
+        foreach v: component_iterator(Vault) {
+            if v == null continue;
+            if v.entity == null || v.entity.self == null continue;
+            if get_parent_player_base(v.entity) != pb continue;
+            if Game.is_server() {
+                v->server_set_upgrade_level(lvl);
+            }
+            else {
+                v->apply_upgrade_level(lvl);
+            }
+        }
+    }
+
     server_on_player_left :: method(player: Player) {
         if !Game.is_server() return;
         if player == null return;
@@ -2128,6 +2159,7 @@ GameManager :: class : Component {
 
                 // Existing base assignment: ensure stations reflect saved upgrade levels.
                 this->server_apply_station_upgrade_levels_for_player(p);
+                this->server_apply_vault_level_for_player(p);
             }
             else {
                 // Reserved index but no base entity (e.g., prefab missing or base destroyed)
@@ -2242,6 +2274,7 @@ GameManager :: class : Component {
                     gm := ud.gm;
                     if gm != null {
                         gm->server_apply_station_upgrade_levels_for_player(player);
+                        gm->server_apply_vault_level_for_player(player);
                         // Base spawned: rebuild navmesh ASAP on server.
                         gm->mark_navmesh_for_rebuild();
                     }

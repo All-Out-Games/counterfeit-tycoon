@@ -423,6 +423,9 @@ Player :: class : Player_Base {
     // Flat storage: index = lane_index * 4 + station_index (0..3). Values are 1..10.
     station_upgrade_levels: [16]s64;
 
+    // Vault upgrade level (per-player, multiplayer safe; NOT lane-based — one vault per player)
+    vault_level: s64;                     // 1..6
+
     // Truck upgrades UI + levels (per-player, multiplayer safe)
     truck_upgrades_open: bool;
     truck_upgrades_selected_kind: s64;    // 0=Capacity, 1=HP, 2=Speed
@@ -826,6 +829,7 @@ Player :: class : Player_Base {
             for i: 0..15 {
                 station_upgrade_levels[i] = 1;
             }
+            vault_level = 1;
         }
 
         truck_upgrades_open = false;
@@ -926,6 +930,14 @@ Player :: class : Player_Base {
                         station_upgrade_levels[idx] = lvl;
                     }
                 }
+            }
+
+            // Load vault upgrade level (server authoritative, replicates to clients).
+            {
+                vlvl := Save.get_int(this, "vault_level", 1);
+                if vlvl < 1 vlvl = 1;
+                if vlvl > 6 vlvl = 6;
+                vault_level = vlvl;
             }
 
             // Load truck upgrade levels (server authoritative, replicates to clients).
@@ -1117,6 +1129,7 @@ Player :: class : Player_Base {
         gm := get_game_manager();
         if gm != null {
             gm->apply_station_upgrade_levels_for_player(this);
+            gm->apply_vault_level_for_player(this);
         }
     }
 
