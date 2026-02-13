@@ -19,7 +19,7 @@
   "component_type": "Internal_Component",
   "internal_component_type": "Woodchipper",
   "data": {
-    "move_speed": 100,
+    "move_speed": 200,
     "arrive_radius": 0.3499999940395355,
     "max_wood_capacity": 250,
     "collect_interval": 3,

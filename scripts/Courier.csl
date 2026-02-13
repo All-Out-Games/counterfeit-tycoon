@@ -86,6 +86,7 @@ Courier :: class : Component {
     last_action_time: float;
     pause_until_time: float;
     break_variant: s64; // 1 or 2, controls Idle_Break_1 vs Idle_Break_2
+    vault_full_notified_this_stop: bool;
 
     spine: Spine_Animator;
     spine_sm: State_Machine;
@@ -150,6 +151,7 @@ Courier :: class : Component {
             last_action_time = 0;
             pause_until_time = 0;
             break_variant = 0;
+            vault_full_notified_this_stop = false;
         }
     }
 
@@ -522,6 +524,7 @@ Courier :: class : Component {
                     state = .WAIT_AT_VAULT;
                     drive_start_time = 0;
                     last_action_time = 0;
+                    vault_full_notified_this_stop = false;
                 }
             }
             case .WAIT_AT_VAULT: {
@@ -554,6 +557,13 @@ Courier :: class : Component {
                 }
                 else if vault.max_capacity > 0 && vault.stored_finished_bills >= vault.max_capacity {
                     // Vault is full; don't wait here forever.
+                    if !vault_full_notified_this_stop {
+                        owner := pb != null ? pb->get_owner() : null;
+                        if owner != null {
+                            Notifier.notify(owner, "Vault is full! Courier couldn't deposit Finished Bills.");
+                        }
+                        vault_full_notified_this_stop = true;
+                    }
                     server_begin_pause(.TO_SOURCE);
                 }
             }

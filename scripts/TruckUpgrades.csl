@@ -100,23 +100,30 @@ truck_capacity_for_level :: proc(level: s64) -> s64 {
 }
 
 // HP scaling:
-// - Level 1: 100 HP
-// - Level 10: 5000 HP
-// We use linear scaling between endpoints.
+// Static per-level max HP values (Levels 1..10).
 truck_max_hp_for_level :: proc(level: s64) -> s64 {
-    if level <= 1 return 100;
-    if level >= TRUCK_UPGRADES_MAX_LEVEL return 5000;
+    if level < 1 {
+        level = 1;
+    }
+    if level > TRUCK_UPGRADES_MAX_LEVEL {
+        level = TRUCK_UPGRADES_MAX_LEVEL;
+    }
 
-    t := (level - 1).(float) / (TRUCK_UPGRADES_MAX_LEVEL - 1).(float); // 0..1
-    val_f := lerp(100.0, 5000.0, t);
-    val := (val_f + 0.5).(s64);
-    if val < 100 {
-        val = 100;
+    switch level {
+        case 1:  return 100;
+        case 2:  return 200;
+        case 3:  return 350;
+        case 4:  return 500;
+        case 5:  return 750;
+        case 6:  return 1000;
+        case 7:  return 1500;
+        case 8:  return 2000;
+        case 9:  return 3000;
+        case 10: return 5000;
     }
-    if val > 5000 {
-        val = 5000;
-    }
-    return val;
+
+    // Fallback (shouldn't happen due to clamping above)
+    return 100;
 }
 
 // Speed scaling:

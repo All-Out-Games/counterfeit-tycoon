@@ -452,7 +452,8 @@ Vault :: class : Interactable {
         pos := entity.world_position + ui_offset;
 
         // Panel rect in world units (meters).
-        panel_bg := Rect{pos, pos}->grow(0.24, 0.90, 0.24, 0.90);
+        BG_SCALE :: 1.25;
+        panel_bg := Rect{pos, pos}->grow(0.24 * BG_SCALE, 0.90 * BG_SCALE, 0.24 * BG_SCALE, 0.90 * BG_SCALE);
         panel_content := Rect{pos, pos}->grow(0.24, 0.75, 0.24, 0.75);
         UI.quad(panel_bg, core_globals.white_sprite, {0, 0, 0, 0.6});
 
@@ -466,19 +467,29 @@ Vault :: class : Interactable {
 
         ts := UI.default_text_settings();
         ts.size = 0.34;
-        ts.halign = .LEFT;
+        ts.halign = .CENTER;
         ts.valign = .CENTER;
         ts.do_outline = true;
         ts.outline_thickness = 2;
         ts.outline_color = {0, 0, 0, 1};
         ts.color = {1, 1, 1, 1};
-        ts.offset = {0.05, 0};
+        ts.offset = {0, 0};
 
         // Finished Bills
         {
-            r := icon_row;
-            icon_rect := r->cut_left(0.26)->inset(0.01);
-            text_rect := r;
+            ICON_W :: 0.26;
+            ICON_PAD :: 0.05;
+            TEXT_GAP :: 0.03;
+
+            // Anchor the icon to the left edge of the background panel.
+            icon_cx := panel_bg.min.x + ICON_PAD + (ICON_W / 2);
+            icon_cy := icon_row->center().y;
+            icon_center := v2{icon_cx, icon_cy};
+            icon_rect := Rect{icon_center, icon_center}->grow(icon_row->height() / 2, ICON_W / 2, icon_row->height() / 2, ICON_W / 2)->inset(0.01);
+
+            // Keep the counts centered, but prevent overlap with the icon.
+            avoid_left := max(0.0, (icon_rect.max.x - icon_row.min.x) + TEXT_GAP);
+            text_rect := icon_row->inset(0, 0, 0, avoid_left);
 
             #static finished_icon := get_asset(Texture_Asset, "Items/FinishedBills.png");
             if finished_icon != null {

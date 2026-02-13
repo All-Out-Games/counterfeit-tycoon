@@ -31,6 +31,7 @@ Treecutting_Tree :: class : Interactable {
     is_falling: bool;
     fall_finished: bool;
     poof_spawned: bool;
+    treefall_sfx_played: bool;
     hit_shake_time: float;
     last_hit_fx_time: float;
     fall_start_time: float;
@@ -106,6 +107,7 @@ Treecutting_Tree :: class : Interactable {
         is_falling = true;
         fall_finished = false;
         poof_spawned = false;
+        treefall_sfx_played = false;
         fall_start_time = get_time();
 
         start_rotation = entity.local_rotation;
@@ -195,6 +197,23 @@ Treecutting_Tree :: class : Interactable {
                 poof_at = 0;
             }
 
+            // Play the tree fall SFX shortly before the poof spawns.
+            TREEFALL_SFX_LEAD :: 0.35;
+            sfx_at := poof_at - TREEFALL_SFX_LEAD;
+            if sfx_at < 0 {
+                sfx_at = 0;
+            }
+            if !treefall_sfx_played && elapsed >= sfx_at {
+                treefall_sfx_played = true;
+                #static treefall_sfx := get_asset(SFX_Asset, "SFX/treefall.wav");
+                if treefall_sfx != null {
+                    desc := SFX.default_sfx_desc();
+                    desc.volume = 0.4;
+                    desc->set_position(entity.world_position);
+                    SFX.play(treefall_sfx, desc);
+                }
+            }
+
             if elapsed >= poof_at {
                 poof_spawned = true;
                 spawn_tree_poof();
@@ -244,8 +263,17 @@ Treecutting_Tree :: class : Interactable {
             return;
         }
 
-        fx->set_local_position(entity.world_position + v2{0, 0.5});
+        pos := entity.world_position + v2{0, 0.5};
+        fx->set_local_position(pos);
         fx->queue_for_destruction(0.3);
+
+        // SFX: play chop sound at the hit position.
+        #static chop_sfx := get_asset(SFX_Asset, "SFX/chop.wav");
+        if chop_sfx != null {
+            desc := SFX.default_sfx_desc();
+            desc->set_position(pos);
+            SFX.play(chop_sfx, desc);
+        }
     }
 
     spawn_wood_drops :: method() {

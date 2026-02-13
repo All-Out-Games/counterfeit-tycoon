@@ -152,20 +152,22 @@ Finished_Bill_Press :: class : Interactable {
 
         upgrade_level = level;
 
-        // If our base tuning hasn't been initialized yet (ao_start not run),
-        // don't attempt to recompute speed yet.
-        if base_seconds_per_finished_bill <= 0 {
-            return;
+        // NOTE: Stamp Machine speed is specified as an explicit seconds-per-item table by level.
+        // This intentionally overrides any editor tuning in `base_seconds_per_finished_bill`.
+        seconds_per_finished_bill = 3.0; // default/fallback
+        switch level {
+            case 1:  seconds_per_finished_bill = 3.0;
+            case 2:  seconds_per_finished_bill = 2.75;
+            case 3:  seconds_per_finished_bill = 2.5;
+            case 4:  seconds_per_finished_bill = 2.25;
+            case 5:  seconds_per_finished_bill = 2.0;
+            case 6:  seconds_per_finished_bill = 1.9;
+            case 7:  seconds_per_finished_bill = 1.7;
+            case 8:  seconds_per_finished_bill = 1.5;
+            case 9:  seconds_per_finished_bill = 1.25;
+            case 10: seconds_per_finished_bill = 1.0;
         }
 
-        SPEED_MULT_PER_LEVEL :: 0.12;
-        lvl_f := (level - 1).(float);
-        mult := 1.0 + lvl_f * SPEED_MULT_PER_LEVEL;
-        if mult <= 0 {
-            mult = 1.0;
-        }
-
-        seconds_per_finished_bill = base_seconds_per_finished_bill / mult;
         if seconds_per_finished_bill < 0.05 {
             seconds_per_finished_bill = 0.05;
         }

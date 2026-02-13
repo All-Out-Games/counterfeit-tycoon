@@ -41,6 +41,9 @@ ao_late_update :: proc(dt: float) {
 
 COIN_CURRENCY :: "Coins";
 
+STARTER_COINS_AMOUNT :: 500;
+STARTER_COINS_GRANTED_SAVE_KEY :: "starter_coins_granted";
+
 // ---------------------------------------------------------------------------
 // Lanes progression (per-player, saved)
 //
@@ -380,6 +383,10 @@ Player :: class : Player_Base {
     truck_upgrades_open: bool;
     truck_upgrades_selected_kind: s64;    // 0=Capacity, 1=HP, 2=Speed
     truck_upgrade_levels: [3]s64;         // Values are 1..10 (same order as selected_kind)
+
+    // Tutorial progression (per-player, server authoritative, replicated)
+    tutorial_step: s64;
+    tutorial_last_truck_delivery_seq: s64;
 
     // Lane unlock progression (per-player, server authoritative, replicated)
     // lane_unlock_mask uses bits for lanes 0..3 (see helpers above).
@@ -755,6 +762,12 @@ Player :: class : Player_Base {
             woodchipper_unlock_prompt_entity = null;
         }
 
+        // Tutorial (server authoritative, loaded from Save and replicated).
+        if Game.is_server() {
+            tutorial_step = 0;
+            tutorial_last_truck_delivery_seq = 0;
+        }
+
         harvester_upgrades_open = false;
         // Server authoritative (loaded from Save and replicated).
         if Game.is_server() {
@@ -793,6 +806,22 @@ Player :: class : Player_Base {
             init_weapon_items();
 
             migrate_legacy_coin_items_to_currency(this);
+
+            // First-ever join bonus:
+            // Grant starter Coins only for players with no existing save data yet.
+            // (We use presence of older per-player keys as a proxy for "has played before".)
+            if Save.get_int(this, STARTER_COINS_GRANTED_SAVE_KEY, 0) == 0 {
+                has_tutorial_key := Save.get_int(this, "tutorial_step", -1) != -1;
+                has_lanes_key := Save.get_int(this, LANES_UNLOCK_SAVE_KEY, -1) != -1;
+                cur_coins := Economy.get_balance(this, COIN_CURRENCY);
+
+                if !has_tutorial_key && !has_lanes_key && cur_coins <= 0 {
+                    Economy.deposit_currency(this, COIN_CURRENCY, STARTER_COINS_AMOUNT);
+                }
+
+                // Always set so existing players don't ever get the bonus later.
+                Save.set_int(this, STARTER_COINS_GRANTED_SAVE_KEY, 1);
+            }
 
             // Load per-player lane unlock mask (server authoritative, replicates to clients).
             {
@@ -872,6 +901,21 @@ Player :: class : Player_Base {
                 if spd_lvl < 1 spd_lvl = 1;
                 if spd_lvl > 10 spd_lvl = 10;
                 truck_upgrade_levels[2] = spd_lvl;
+            }
+
+            // Load tutorial progression (server authoritative, replicates to clients).
+            {
+                // 0..11, where 11 == done.
+                step := Save.get_int(this, "tutorial_step", 0);
+                if step < 0 { step = 0; }
+                if step > 11 { step = 11; }
+                tutorial_step = step;
+                Save.set_int(this, "tutorial_step", step);
+
+                seq := Save.get_int(this, "tutorial_last_truck_delivery_seq", 0);
+                if seq < 0 { seq = 0; }
+                tutorial_last_truck_delivery_seq = seq;
+                Save.set_int(this, "tutorial_last_truck_delivery_seq", seq);
             }
 
             // Joining player: ask the GameManager to assign bases (or warp to 0,0 if full).
@@ -1001,6 +1045,9 @@ Player :: class : Player_Base {
                     vault_theft_owner_notified = false;
                 }
             }
+
+            // Server-authoritative tutorial progression.
+            tutorial_server_tick();
         }
 
         // Compute a shared "is_moving" flag from the movement agent's velocity.
@@ -1099,9 +1146,363 @@ Player :: class : Player_Base {
         // Draw station upgrades button + modal UI.
         draw_upgrades_ui(this);
 
+        // Tutorial HUD (text + arrow).
+        draw_tutorial_hud();
+
         // Cosmetic: draw per-player screen-space particles on top.
         if ui_directed_particle_handler != null {
             ui_directed_particle_handler->update_and_draw(dt);
+        }
+    }
+
+    tutorial_has_item_id :: method(item_id: string) -> bool {
+        if item_id.count <= 0 return false;
+        inv := default_inventory;
+        if inv == null || inv.self == null || inv.capacity <= 0 {
+            return false;
+        }
+
+        for i: 0..inv.capacity-1 {
+            item := inv->get_item(i);
+            if item == null continue;
+            if item.self == null continue;
+            defn := item->get_definition();
+            if defn == null continue;
+            if defn->get_id() == item_id {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    tutorial_find_owned_paper_mill_lane0 :: method() -> Paper_Mill {
+        foreach m: component_iterator(Paper_Mill) {
+            if m == null continue;
+            if m.entity == null || m.entity.self == null continue;
+            if !m.entity->get_world_enabled() continue;
+            if m.lane_index != 0 continue;
+            if is_owner_of_parent_base(m.entity, this) {
+                return m;
+            }
+        }
+        return null;
+    }
+
+    tutorial_find_owned_blank_bill_press_lane0 :: method() -> Blank_Bill_Press {
+        foreach p: component_iterator(Blank_Bill_Press) {
+            if p == null continue;
+            if p.entity == null || p.entity.self == null continue;
+            if !p.entity->get_world_enabled() continue;
+            if p.lane_index != 0 continue;
+            if is_owner_of_parent_base(p.entity, this) {
+                return p;
+            }
+        }
+        return null;
+    }
+
+    tutorial_find_owned_colored_bill_press_lane0 :: method() -> Colored_Bill_Press {
+        foreach p: component_iterator(Colored_Bill_Press) {
+            if p == null continue;
+            if p.entity == null || p.entity.self == null continue;
+            if !p.entity->get_world_enabled() continue;
+            if p.lane_index != 0 continue;
+            if is_owner_of_parent_base(p.entity, this) {
+                return p;
+            }
+        }
+        return null;
+    }
+
+    tutorial_find_owned_finished_bill_press_lane0 :: method() -> Finished_Bill_Press {
+        foreach p: component_iterator(Finished_Bill_Press) {
+            if p == null continue;
+            if p.entity == null || p.entity.self == null continue;
+            if !p.entity->get_world_enabled() continue;
+            if p.lane_index != 0 continue;
+            if is_owner_of_parent_base(p.entity, this) {
+                return p;
+            }
+        }
+        return null;
+    }
+
+    tutorial_find_owned_vault :: method() -> Vault {
+        foreach v: component_iterator(Vault) {
+            if v == null continue;
+            if v.entity == null || v.entity.self == null continue;
+            if !v.entity->get_world_enabled() continue;
+            if is_owner_of_parent_base(v.entity, this) {
+                return v;
+            }
+        }
+        return null;
+    }
+
+    tutorial_find_owned_truck :: method() -> Truck {
+        foreach t: component_iterator(Truck) {
+            if t == null continue;
+            if t.entity == null || t.entity.self == null continue;
+            if !t.entity->get_world_enabled() continue;
+            if is_owner_of_parent_base(t.entity, this) {
+                return t;
+            }
+        }
+        return null;
+    }
+
+    tutorial_step_get_text :: method(step: s64) -> string {
+        switch step {
+            case 0:  return "Chop Down a Tree";
+            case 1:  return "Deposit Wood into your Paper Mill";
+            case 2:  return "Collect Paper from your Paper Mill";
+            case 3:  return "Deposit Paper into your Blank Bill Press";
+            case 4:  return "Collect Blank Bills";
+            case 5:  return "Deposit Blank Bills into your Colored Bill Press";
+            case 6:  return "Collect Colored Bills";
+            case 7:  return "Deposit Colored Bills into your Finished Bill Press";
+            case 8:  return "Collect Finished Bills";
+            case 9:  return "Deposit Finished Bills into your Vault";
+            case 10: return "Send your Truck to the Bank";
+            case 11: return "Tutorial Complete";
+        }
+        return "";
+    }
+
+    tutorial_step_get_target_world :: method(step: s64) -> v2, bool {
+        if entity == null || entity.self == null {
+            return {}, false;
+        }
+
+        switch step {
+            case 0: {
+                tree := find_closest_treecutting_tree_to_position(entity.world_position);
+                if tree != null && tree.entity != null && tree.entity.self != null && tree.entity->get_world_enabled() {
+                    return tree.entity.world_position, true;
+                }
+                return {}, false;
+            }
+            case 1: {
+                pm := tutorial_find_owned_paper_mill_lane0();
+                if pm != null && pm.entity != null && pm.entity.self != null {
+                    return pm.entity.world_position, true;
+                }
+            }
+            case 2: {
+                pm := tutorial_find_owned_paper_mill_lane0();
+                if pm != null && pm.entity != null && pm.entity.self != null {
+                    return pm.entity.world_position, true;
+                }
+            }
+            case 3: {
+                press := tutorial_find_owned_blank_bill_press_lane0();
+                if press != null && press.entity != null && press.entity.self != null {
+                    return press.entity.world_position, true;
+                }
+            }
+            case 4: {
+                press := tutorial_find_owned_blank_bill_press_lane0();
+                if press != null && press.entity != null && press.entity.self != null {
+                    return press.entity.world_position, true;
+                }
+            }
+            case 5: {
+                press := tutorial_find_owned_colored_bill_press_lane0();
+                if press != null && press.entity != null && press.entity.self != null {
+                    return press.entity.world_position, true;
+                }
+            }
+            case 6: {
+                press := tutorial_find_owned_colored_bill_press_lane0();
+                if press != null && press.entity != null && press.entity.self != null {
+                    return press.entity.world_position, true;
+                }
+            }
+            case 7: {
+                press := tutorial_find_owned_finished_bill_press_lane0();
+                if press != null && press.entity != null && press.entity.self != null {
+                    return press.entity.world_position, true;
+                }
+            }
+            case 8: {
+                press := tutorial_find_owned_finished_bill_press_lane0();
+                if press != null && press.entity != null && press.entity.self != null {
+                    return press.entity.world_position, true;
+                }
+            }
+            case 9: {
+                v := tutorial_find_owned_vault();
+                if v != null && v.entity != null && v.entity.self != null {
+                    return v.entity.world_position, true;
+                }
+            }
+            case 10: {
+                t := tutorial_find_owned_truck();
+                if t != null && t.entity != null && t.entity.self != null {
+                    return t.entity.world_position, true;
+                }
+            }
+        }
+
+        return {}, false;
+    }
+
+    tutorial_set_step :: method(step: s64) {
+        if !Game.is_server() {
+            return;
+        }
+        if step < 0 { step = 0; }
+        if step > 11 { step = 11; }
+
+        // If entering the truck step, baseline delivery_seq so the player must do a fresh delivery.
+        if step == 10 {
+            truck := tutorial_find_owned_truck();
+            if truck != null {
+                tutorial_last_truck_delivery_seq = truck.delivery_seq;
+                Save.set_int(this, "tutorial_last_truck_delivery_seq", tutorial_last_truck_delivery_seq);
+            }
+        }
+
+        tutorial_step = step;
+        Save.set_int(this, "tutorial_step", tutorial_step);
+    }
+
+    tutorial_try_advance_once :: method() -> bool {
+        if !Game.is_server() {
+            return false;
+        }
+
+        step := tutorial_step;
+        if step >= 11 {
+            return false;
+        }
+
+        switch step {
+            case 0: {
+                if tutorial_has_item_id("wood") {
+                    tutorial_set_step(1);
+                    return true;
+                }
+            }
+            case 1: {
+                pm := tutorial_find_owned_paper_mill_lane0();
+                if pm != null && pm.stored_wood > 0 {
+                    tutorial_set_step(2);
+                    return true;
+                }
+            }
+            case 2: {
+                if tutorial_has_item_id("paper") {
+                    tutorial_set_step(3);
+                    return true;
+                }
+            }
+            case 3: {
+                press := tutorial_find_owned_blank_bill_press_lane0();
+                if press != null && press.stored_paper > 0 {
+                    tutorial_set_step(4);
+                    return true;
+                }
+            }
+            case 4: {
+                if tutorial_has_item_id("blank_bills") {
+                    tutorial_set_step(5);
+                    return true;
+                }
+            }
+            case 5: {
+                press := tutorial_find_owned_colored_bill_press_lane0();
+                if press != null && press.stored_blank_bills > 0 {
+                    tutorial_set_step(6);
+                    return true;
+                }
+            }
+            case 6: {
+                if tutorial_has_item_id("colored_bills") {
+                    tutorial_set_step(7);
+                    return true;
+                }
+            }
+            case 7: {
+                press := tutorial_find_owned_finished_bill_press_lane0();
+                if press != null && press.stored_colored_bills > 0 {
+                    tutorial_set_step(8);
+                    return true;
+                }
+            }
+            case 8: {
+                if tutorial_has_item_id("finished_bills") {
+                    tutorial_set_step(9);
+                    return true;
+                }
+            }
+            case 9: {
+                v := tutorial_find_owned_vault();
+                if v != null && v.stored_finished_bills > 0 {
+                    tutorial_set_step(10);
+                    return true;
+                }
+            }
+            case 10: {
+                truck := tutorial_find_owned_truck();
+                if truck != null {
+                    // Completion: any new successful delivery.
+                    if truck.delivery_seq > tutorial_last_truck_delivery_seq {
+                        tutorial_last_truck_delivery_seq = truck.delivery_seq;
+                        Save.set_int(this, "tutorial_last_truck_delivery_seq", tutorial_last_truck_delivery_seq);
+                        tutorial_set_step(11);
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    tutorial_server_tick :: method() {
+        if !Game.is_server() {
+            return;
+        }
+
+        // Allow multiple steps to auto-complete if the player already has items / has already progressed.
+        for _i: 0..15 {
+            if !tutorial_try_advance_once() {
+                break;
+            }
+        }
+    }
+
+    draw_tutorial_hud :: method() {
+        // UI is already gated by is_local_or_server() in ao_late_update.
+        if tutorial_step >= 11 {
+            return;
+        }
+
+        UI.push_layer(900);
+        defer UI.pop_layer();
+
+        safe := UI.get_safe_screen_rect();
+
+        // Top-center banner.
+        banner := safe->top_center_rect()->grow(52, 520, 0, 520)->offset(0, -90);
+        UI.quad(banner, core_globals.white_sprite, {0, 0, 0, 0.55});
+
+        ts := UI.default_text_settings();
+        ts.size = 52;
+        ts.color = {1, 1, 1, 1};
+        ts.halign = .CENTER;
+        ts.valign = .CENTER;
+        ts.do_outline = true;
+        ts.outline_thickness = 3;
+        ts.outline_color = {0, 0, 0, 1};
+
+        UI.text(banner, ts, "%", {tutorial_step_get_text(tutorial_step)});
+
+        target, ok := tutorial_step_get_target_world(tutorial_step);
+        if ok {
+            this->DrawArrowToPosition(target);
         }
     }
 
@@ -1607,16 +2008,96 @@ Player :: class : Player_Base {
     }
 
     // Draw a directional arrow in the HUD pointing from this player toward a world-space target.
-    // Uses the built-in Tutorial_Arrow helper so near/far behavior and off-screen targets work correctly.
+    // Note: we keep this as a compatibility wrapper, but the actual implementation
+    // is in `DrawArrowToPosition` below (ported from C#).
     draw_arrow_to_position :: proc(using this: Player, target_world: v2) {
-        options := Tutorial_Arrow.default_options();
-        options.alpha = 1.0;
-        options.far = true;   // Show arrow when the target is far away
-        options.near = true;  // Also show when close so the direction stays clear
-        options.bob_scale = 0.5;
-        options.bob_bias = 1.5;
+        this->DrawArrowToPosition(target_world);
+    }
 
-        Tutorial_Arrow.draw(this, target_world, options);
+    // Port of the provided C# DrawArrowToPosition.
+    // Draws a screen-space arrow pointing toward a world-space `position`.
+    DrawArrowToPosition :: proc(using this: Player, position: v2) {
+        if this == null return;
+        if entity == null || entity.self == null return;
+
+        // Screen-space overlay so it can't be occluded by world sprites.
+        UI.push_screen_draw_context();
+        defer UI.pop_draw_context();
+
+        // Above almost everything else in the HUD.
+        UI.push_layer(800);
+        defer UI.pop_layer();
+
+        safe := UI.get_safe_screen_rect();
+        h := 1080.0;
+        if h <= 0 {
+            return;
+        }
+        aspect := 1920.0 / h;
+        if aspect <= 0 {
+            aspect = 1.0;
+        }
+
+        world_offset := position - entity.world_position;
+        distance := length(world_offset);
+
+        target_screen := world_to_screen(position + v2{0, 1.5});
+        player_screen := world_to_screen(entity.world_position + v2{0, 1.5});
+
+        delta_screen := target_screen - player_screen;
+        dir := normalize(delta_screen);
+        if length_squared(dir) < 0.00001 {
+            dir = {1, 0};
+        }
+
+        arrow_size_px :: 40.0;
+        anim := pow(abs(sin(PI * get_time())), 0.75);
+
+        // distanceThreshold = ((dir * threshold) / (1, aspect)).Length
+        distance_threshold_world :: 8.5;
+        dvec := v2{dir.x * distance_threshold_world, dir.y * distance_threshold_world};
+        scaled := v2{dvec.x, dvec.y / aspect};
+        distance_threshold := length(scaled);
+
+        #static arrow_tex := get_asset(Texture_Asset, "UI/Arrow.png");
+        if arrow_tex == null {
+            return;
+        }
+
+        if distance >= (distance_threshold + 0.5) {
+            t := 1.0 - Ease.T(distance - distance_threshold, 1.0);
+            t = clamp(t, 0.0, 1.0);
+
+            arrow_screen := Rect{player_screen, player_screen}->offset_unscaled(dir.x * 300.0, dir.y * 300.0)->center();
+            arrow_screen = lerp(arrow_screen, target_screen, t);
+
+            rect := Rect{arrow_screen, arrow_screen}->grow(arrow_size_px);
+            rotation := to_degrees(atan2(dir.y, dir.x));
+
+            // Rotate around rect center via UI matrix.
+            c := rect->center();
+            UI.push_matrix(Matrix4.translate(v3{c.x, c.y, 0}));
+            defer UI.pop_matrix();
+            UI.push_matrix(Matrix4.rotate(rotation, v3{0, 0, 1}));
+            defer UI.pop_matrix();
+            UI.push_matrix(Matrix4.translate(v3{-c.x, -c.y, 0}));
+            defer UI.pop_matrix();
+            UI.quad(rect, arrow_tex, {1, 1, 1, 1});
+        }
+        else {
+            rect := Rect{target_screen, target_screen}->grow(arrow_size_px);
+            rect = rect->offset_unscaled(0, anim * 50.0);
+
+            // Near target: fixed "down" arrow (270 degrees).
+            c := rect->center();
+            UI.push_matrix(Matrix4.translate(v3{c.x, c.y, 0}));
+            defer UI.pop_matrix();
+            UI.push_matrix(Matrix4.rotate(270, v3{0, 0, 1}));
+            defer UI.pop_matrix();
+            UI.push_matrix(Matrix4.translate(v3{-c.x, -c.y, 0}));
+            defer UI.pop_matrix();
+            UI.quad(rect, arrow_tex, {1, 1, 1, 1});
+        }
     }
 
     handle_equipped_item_changing :: method(selected_index: s64) {
