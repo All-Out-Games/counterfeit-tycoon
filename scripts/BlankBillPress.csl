@@ -376,6 +376,22 @@ Blank_Bill_Press :: class : Interactable {
 
     ao_late_update :: method(dt: float) {
         _ := dt;
+        if Game.is_server() {
+            return;
+        }
+        local_player := get_local_player();
+        if local_player == null {
+            return;
+        }
+        if local_player.entity == null || local_player.entity.self == null {
+            return;
+        }
+
+        UI_CULL_DISTANCE :: 20.0;
+        delta := local_player.entity.world_position - entity.world_position;
+        if length_squared(delta) > UI_CULL_DISTANCE * UI_CULL_DISTANCE {
+            return;
+        }
         draw_world_status();
     }
 

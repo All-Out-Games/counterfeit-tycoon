@@ -32,6 +32,7 @@ AOE_Projectile :: class : Component {
     max_lifetime: float;
     aoe_radius: float;
     aoe_damage: float;
+    weapon_type: Weapon_Type;
 
     ao_update :: method(dt: float) {
         lifetime += dt;
@@ -65,6 +66,10 @@ AOE_Projectile :: class : Component {
                     sfx_desc := SFX.default_sfx_desc();
                     sfx_desc->set_position(pos);
                     sfx_desc.range_multiplier = 3.0;
+                    if weapon_type == .EXPLOSIVE_SHOTGUN {
+                        // Lower Explosive Shotgun explosion volume by 70%.
+                        sfx_desc.volume = 0.3;
+                    }
                     SFX.play(sfx, sfx_desc);
 
                     entity->destroy();
@@ -84,6 +89,10 @@ AOE_Projectile :: class : Component {
                     sfx_desc := SFX.default_sfx_desc();
                     sfx_desc->set_position(pos);
                     sfx_desc.range_multiplier = 3.0;
+                    if weapon_type == .EXPLOSIVE_SHOTGUN {
+                        // Lower Explosive Shotgun explosion volume by 70%.
+                        sfx_desc.volume = 0.3;
+                    }
                     SFX.play(sfx, sfx_desc);
 
                     entity->destroy();
@@ -120,4 +129,5 @@ spawn_aoe_projectile :: proc(player: Player, direction: v2, wt: Weapon_Type) {
     proj.max_lifetime = config.projectile_lifetime;
     proj.aoe_radius = config.aoe_radius;
     proj.aoe_damage = config.aoe_damage;
+    proj.weapon_type = wt;
 }
