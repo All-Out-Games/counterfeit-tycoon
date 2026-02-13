@@ -151,7 +151,7 @@ Death_Effect :: class : Effect_Base {
 
             // Play KO animation (replicates via synced animator/state machine).
             if player.animator != null && player.animator.instance != null && player.animator.instance.state_machine != null {
-                player.animator.instance.state_machine->set_trigger("KO");
+                player.animator.instance.state_machine->set_trigger("Death_No_HP");
             }
         }
     }

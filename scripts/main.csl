@@ -329,6 +329,10 @@ Player :: class : Player_Base {
 
     base_state_machine: State_Machine;
 
+    // Cosmetic: flash the base animator red briefly after taking damage.
+    // Set server-side in take_damage; clients use replicated start time to drive flicker.
+    damage_flash_start_time: float;
+
     equipped_weapon_type: Weapon_Type;
     // Reusable weapons: per-player spawned attachment for Boomwheel.
     boomwheel_cannon: Boomwheel_Cannon;
@@ -930,6 +934,30 @@ Player :: class : Player_Base {
         // No weapon equipped: ensure mouse IK/facing is disabled (it can otherwise remain enabled after unequip).
         if equipped_weapon_type == .NONE {
             this->set_mouse_ik_enabled(false);
+        }
+
+        // Damage flash (runs on server + clients so everyone sees it).
+        {
+            FLASH_DURATION :: 0.5;
+            FLASH_HZ :: 20.0; // toggles ~10 times over 0.5s
+
+            now := get_time();
+            flashing := (damage_flash_start_time > 0.0) && (now - damage_flash_start_time <= FLASH_DURATION);
+
+            if animator != null && animator.instance != null {
+                if flashing {
+                    tick := ((now - damage_flash_start_time) * FLASH_HZ).(int);
+                    if (tick % 2) == 0 {
+                        animator.instance.color_multiplier = {1, 1, 1, 1};
+                    }
+                    else {
+                        animator.instance.color_multiplier = {1, 0.2, 0.2, 1};
+                    }
+                }
+                else {
+                    animator.instance.color_multiplier = {1, 1, 1, 1};
+                }
+            }
         }
 
         // Ensure the player can't move while the Sell Shop modal is open.
@@ -1656,6 +1684,9 @@ Player :: class : Player_Base {
             CurrentHealth = 0;
         }
 
+        // Start a damage flash on this player's rig for visual feedback (replicated via player state).
+        damage_flash_start_time = get_time();
+
         // Spawn a simple damage number above this player.
         gm := get_game_manager();
         if gm != null {
@@ -1679,10 +1710,6 @@ Player :: class : Player_Base {
 
             gm.damage_numbers->append(dn);
         }
-
-        // Start a damage flicker on this player's rig for visual feedback.
-        //flash := new(Damage_Flash_Effect);
-        //entity->add_passive_effect(flash);
 
         // Death trigger.
         if CurrentHealth <= 0 {

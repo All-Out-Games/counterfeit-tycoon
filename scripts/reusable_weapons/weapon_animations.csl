@@ -1,6 +1,10 @@
 setup_reusable_weapons_player_state_machine :: proc(player: Player) {
     sm := player.animator.instance.state_machine;
     base_layer := sm->try_get_layer("main");
+    // Already configured? (avoid duplicate layers/states if called again)
+    if sm->try_get_layer("additive_layer") != null {
+        return;
+    }
     additive_layer := sm->create_layer("additive_layer", 1);
 
     ao_idle := base_layer->try_get_state("Idle");
@@ -32,6 +36,19 @@ setup_reusable_weapons_player_state_machine :: proc(player: Player) {
     base_layer->create_transition(aim_idle_1h, aim_run_1h, false)->create_bool_condition(moving_var, true);
     base_layer->create_transition(aim_idle_1h, ao_idle, false)->create_bool_condition(use_1h_ik, false);
     base_layer->create_transition(aim_run_1h, ao_run, false)->create_bool_condition(use_1h_ik, false);
+
+    // --- Base Layer: Death --- //
+    // We add this in code so DeathEffect can trigger it via the state machine.
+    // Hold the last frame until respawn cancels/replaces it.
+    death_no_hp_state := base_layer->create_state("Death_No_HP", false);
+    base_layer->create_global_transition(death_no_hp_state, false)->create_trigger_condition(sm->create_variable("Death_No_HP", .TRIGGER));
+
+    // Ensure respawn can always return to Idle (respawn code fires "cancel_all" on server).
+    cancel_all := sm->try_get_variable("cancel_all");
+    if cancel_all == null {
+        cancel_all = sm->create_variable("cancel_all", .TRIGGER);
+    }
+    base_layer->create_transition(death_no_hp_state, ao_idle, false)->create_trigger_condition(cancel_all);
 
     //--- Additive Layer ---//
     idle_state := additive_layer->create_state("__CLEAR_TRACK__", true);
