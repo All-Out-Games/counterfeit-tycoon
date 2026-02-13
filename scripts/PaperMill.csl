@@ -174,7 +174,9 @@ Paper_Mill :: class : Interactable {
 
     can_use :: method(player: Player) -> bool {
         // Only the owning player (from our parent entity's PlayerBase) may use this mill.
-        return is_owner_of_parent_base(entity, player);
+        if !is_owner_of_parent_base(entity, player) return false;
+        // Only show prompt if the player has wood to deposit.
+        return player_has_item_id(player, "wood");
     }
 
     on_interact :: method(player: Player) {
@@ -194,8 +196,21 @@ Paper_Mill :: class : Interactable {
         // Ensure we don't overwrite an existing save with a default 0.
         server_try_load_from_save();
 
+        // Enforce input queue cap based on machine level.
+        cap := machine_queue_cap_for_level(upgrade_level);
+        room := cap - stored_wood;
+        if room <= 0 {
+            Notifier.notify(player, "Machine queue is full!");
+            return;
+        }
+
+        max_take := deposit_per_interact;
+        if max_take > room {
+            max_take = room;
+        }
+
         taken := 0;
-        for i: 1..deposit_per_interact {
+        for i: 1..max_take {
             _ := i;
             if !try_take_one_wood(player) {
                 break;
@@ -367,12 +382,30 @@ Paper_Mill :: class : Interactable {
         // Ensure we don't overwrite an existing save with a default 0.
         server_try_load_from_save();
 
-        stored_wood += amount;
+        // Enforce input queue cap.
+        cap := machine_queue_cap_for_level(upgrade_level);
+        room := cap - stored_wood;
+        if room <= 0 {
+            return 0;
+        }
+
+        to_add := amount;
+        if to_add > room {
+            to_add = room;
+        }
+        if to_add <= 0 {
+            return 0;
+        }
+
+        stored_wood += to_add;
+        if stored_wood > cap {
+            stored_wood = cap;
+        }
         if stored_wood < 0 {
             stored_wood = 0;
         }
         save_dirty = true;
-        return amount;
+        return to_add;
     }
 
     ao_late_update :: method(dt: float) {
@@ -768,7 +801,17 @@ Paper_Mill :: class : Interactable {
             if wood_icon != null {
                 UI.quad(icon_rect->fit_aspect(wood_icon->get_aspect()), wood_icon);
             }
-            UI.text(text_rect, ts_row, "x%", {stored_wood});
+
+            // Color the input count based on how full the queue is.
+            input_cap := machine_queue_cap_for_level(upgrade_level);
+            ts_input := ts_row;
+            if input_cap > 0 && stored_wood >= input_cap {
+                ts_input.color = {1, 0.25, 0.25, 1}; // Red: full
+            }
+            else if input_cap > 0 && stored_wood.(float) >= input_cap.(float) * 0.8 {
+                ts_input.color = {1, 0.9, 0.2, 1}; // Yellow: 80%+
+            }
+            UI.text(text_rect, ts_input, "%/%", {stored_wood, input_cap});
         }
 
         // Into arrow
@@ -824,7 +867,7 @@ Paper_Mill :: class : Interactable {
             if paper_icon != null {
                 UI.quad(icon_rect->fit_aspect(paper_icon->get_aspect()), paper_icon);
             }
-            UI.text(text_rect, ts_row, "x%", {stored_paper});
+            UI.text(text_rect, ts_row, "%", {stored_paper});
         }
     }
 }
