@@ -7,8 +7,6 @@ apply_aoe_damage :: proc(pos: v2, owner_id: u64, radius: float, damage: float) {
 
     for p: nearby {
         if p.entity.id == owner_id continue;
-        // Base safe zone: explosions cannot damage players inside their own base box.
-        if player_is_in_own_base_safe_zone(p) continue;
         p->take_damage(damage, null, true);
     }
 
@@ -53,9 +51,7 @@ AOE_Projectile :: class : Component {
             if found && hit_player != null {
                 if hit_player.entity.id != owner_id {
                     // Direct hit damage
-                    if !player_is_in_own_base_safe_zone(hit_player) {
-                        hit_player->take_damage(damage, null, true);
-                    }
+                    hit_player->take_damage(damage, null, true);
 
                     // AOE damage
                     if aoe_radius > 0 {

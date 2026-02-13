@@ -105,13 +105,6 @@ Hydro_Cannon_Geyser :: class : Component {
             }
             if already_hit continue;
 
-            // Base safe zone: geysers cannot damage players inside their own base box.
-            // Don't record a hit if we didn't deal damage, so leaving the safe zone while the geyser
-            // is still active can still result in damage.
-            if player_is_in_own_base_safe_zone(target) {
-                continue;
-            }
-
             // Record hit and apply damage
             if hit_count < 32 {
                 hit_ids[hit_count] = target.entity.id;

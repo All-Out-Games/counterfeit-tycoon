@@ -22,10 +22,6 @@ beam_line_damage :: proc(player: Player, origin: v2, direction: v2, range: float
         perp_dist := length(perp);
 
         if perp_dist <= width {
-            // Base safe zone: beams cannot deal damage while the target is in their own base box.
-            if player_is_in_own_base_safe_zone(target) {
-                continue;
-            }
             target->take_damage(damage, player, true);
         }
     }
@@ -82,10 +78,6 @@ beam_cone_damage :: proc(player: Player, origin: v2, direction: v2, range: float
         cos_half := cos(half_angle);
 
         if dot >= cos_half {
-            // Base safe zone: beams cannot deal damage while the target is in their own base box.
-            if player_is_in_own_base_safe_zone(target) {
-                continue;
-            }
             target->take_damage(damage, player, true);
         }
     }
@@ -124,10 +116,6 @@ beam_radius_damage :: proc(player: Player, origin: v2, range: float, damage: flo
     for target: nearby {
         if target.entity.id == player.entity.id continue;
         if target.CurrentHealth <= 0 continue;
-        // Base safe zone: beams cannot deal damage while the target is in their own base box.
-        if player_is_in_own_base_safe_zone(target) {
-            continue;
-        }
         target->take_damage(damage, player, true);
         hit_count += 1;
     }

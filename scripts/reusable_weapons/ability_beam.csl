@@ -14,6 +14,7 @@ Beam_Ability :: class : Ability_Base {
     can_use :: proc(ability: Ability_Base) -> bool {
         p := ability.player.(Player);
         if p.equipped_weapon_type == .NONE return false;
+        if weapon_is_blocked_by_ui_modal(p) return false;
         config := get_weapon_config(p.equipped_weapon_type);
         if config.fire_mode != .BEAM return false;
         return weapon_has_ammo(p, p.equipped_weapon_type);
@@ -23,6 +24,31 @@ Beam_Ability :: class : Ability_Base {
         p := ability.player.(Player);
         self := ability.(Beam_Ability);
         wt := p.equipped_weapon_type;
+        if weapon_is_blocked_by_ui_modal(p) {
+            p->set_mouse_ik_enabled(false);
+            if wt != .NONE && self.was_shooting {
+                weapon_stop_shoot_anim(p, wt);
+
+                // Octo Siphoner: stop loop sound + play end sound for a clean cutoff.
+                if wt == .OCTO_SIPHONER {
+                    if self.octo_loop_sound_id != 0 {
+                        SFX.stop(self.octo_loop_sound_id);
+                        self.octo_loop_sound_id = 0;
+                    }
+                    end_desc := SFX.default_sfx_desc();
+                    end_desc.entity_to_follow = p.entity.id;
+                    end_desc.volume = 0.7;
+                    SFX.play(get_asset(SFX_Asset, "reusable_weapons/sounds/reusable-weapons/octosiphoner_end.wav"), end_desc);
+                }
+
+                self.was_shooting = false;
+                self.beams_spawned = false;
+                if Game.is_server() {
+                    destroy_player_beams(p.entity.id);
+                }
+            }
+            return;
+        }
         if wt == .NONE {
             // No weapon equipped: don't enable mouse IK / facing.
             p->set_mouse_ik_enabled(false);

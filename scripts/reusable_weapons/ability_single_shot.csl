@@ -9,6 +9,7 @@ Single_Shot_Ability :: class : Ability_Base {
     can_use :: proc(ability: Ability_Base) -> bool {
         p := ability.player.(Player);
         if p.equipped_weapon_type == .NONE return false;
+        if weapon_is_blocked_by_ui_modal(p) return false;
         config := get_weapon_config(p.equipped_weapon_type);
         if config.fire_mode != .SINGLE_SHOT return false;
         return weapon_has_ammo(p, p.equipped_weapon_type);
@@ -16,6 +17,10 @@ Single_Shot_Ability :: class : Ability_Base {
 
     on_update :: proc(ability: Ability_Base, params: ref Ability_Update_Params) {
         p := ability.player.(Player);
+        if weapon_is_blocked_by_ui_modal(p) {
+            p->set_mouse_ik_enabled(false);
+            return;
+        }
         wt := p.equipped_weapon_type;
         if wt == .NONE {
             // No weapon equipped: don't enable mouse IK / facing.

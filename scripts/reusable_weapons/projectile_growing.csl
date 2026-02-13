@@ -55,11 +55,6 @@ Growing_Projectile :: class : Component {
                     hit_id_count += 1;
                 }
 
-                // Base safe zone: bullets cannot deal damage while the target is in their own base box.
-                if player_is_in_own_base_safe_zone(hit_player) {
-                    continue;
-                }
-
                 hit_player->take_damage(damage, null, true);
 
                 // Grow on hit

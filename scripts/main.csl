@@ -305,9 +305,10 @@ coin_currency_hud_get_text_anchor :: proc(player: Player) -> v2 {
 
 // Base safe zone:
 // If a player is within this axis-aligned box (width/height) centered on their own `base_entity`,
-// they cannot take weapon/bullet damage (when the damage source opts into the check).
+// they regenerate health over time.
 BASE_SAFE_ZONE_BOX_SIZE :: 15.0;
 BASE_SAFE_ZONE_BOX_HALF :: (BASE_SAFE_ZONE_BOX_SIZE * 0.5);
+BASE_SAFE_ZONE_REGEN_HP_PER_SEC :: 10.0;
 
 player_is_in_own_base_safe_zone :: proc(player: Player) -> bool {
     if player == null return false;
@@ -980,6 +981,18 @@ Player :: class : Player_Base {
             this->set_mouse_ik_enabled(false);
         }
 
+        // Base safe zone regen (server-authoritative).
+        if Game.is_server() {
+            if !death_pickup_lockout && CurrentHealth > 0 && CurrentHealth < MaxHealth {
+                if player_is_in_own_base_safe_zone(this) {
+                    CurrentHealth += BASE_SAFE_ZONE_REGEN_HP_PER_SEC * dt;
+                    if CurrentHealth > MaxHealth {
+                        CurrentHealth = MaxHealth;
+                    }
+                }
+            }
+        }
+
         // Damage flash (runs on server + clients so everyone sees it).
         {
             FLASH_DURATION :: 0.5;
@@ -1540,6 +1553,13 @@ Player :: class : Player_Base {
 
     ao_can_use_interactable :: method(interactable: Interactable) -> bool {
         // Called to determine if the player is allowed to use the given interactable
+        _ := interactable;
+
+        // Block ALL interactables while dead/dying (until respawn).
+        // `death_pickup_lockout` is set server-side at death start and cleared on respawn.
+        if death_pickup_lockout return false;
+        if CurrentHealth <= 0 return false;
+
         return true;
     }
 
@@ -2155,10 +2175,7 @@ Player :: class : Player_Base {
             return;
         }
 
-        // Optional: weapon/bullet damage is blocked when the player is in their own base safe zone.
-        if blocked_by_base_safe_zone && player_is_in_own_base_safe_zone(this) {
-            return;
-        }
+        _ := blocked_by_base_safe_zone;
 
         CurrentHealth -= amount;
         if CurrentHealth < 0 {

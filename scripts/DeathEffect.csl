@@ -164,6 +164,9 @@ Death_Effect :: class : Effect_Base {
         if Game.is_server() && !has_respawned && get_elapsed_time() >= DEATH_RESPAWN_DELAY_SECONDS {
             server_respawn_player_at_owned_base(player);
             has_respawned = true;
+
+            // Allow interactions again immediately upon respawn (death sequence is over for gameplay).
+            player.death_pickup_lockout = false;
         }
     }
 
@@ -213,8 +216,7 @@ Death_Effect :: class : Effect_Base {
             if !has_respawned {
                 server_respawn_player_at_owned_base(player);
             }
-
-            // End pickup lockout now that we're back.
+            // Safety: ensure lockout is cleared even if interrupted before respawn.
             player.death_pickup_lockout = false;
         }
     }

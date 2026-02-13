@@ -1,3 +1,22 @@
+// ---------------------------------------------------------------------------
+// UI modal input blocking
+//
+// While any of these per-player modals are open, we don't want to allow
+// equipped weapons to shoot (prevents shooting "through" shop/upgrade screens).
+//
+// These flags live on `Player` and are server-authoritative / replicated.
+// ---------------------------------------------------------------------------
+weapon_is_blocked_by_ui_modal :: proc(player: Player) -> bool {
+    if player == null return false;
+    return
+        player.sell_shop_open ||
+        player.weapons_shop_open ||
+        player.upgrades_open ||
+        player.harvester_upgrades_open ||
+        player.truck_upgrades_open ||
+        player.managers_open;
+}
+
 give_weapon :: proc(wt: Weapon_Type, inventory: Inventory) {
     weapon_def := get_weapon_item_def(wt);
     if weapon_def == null return;
