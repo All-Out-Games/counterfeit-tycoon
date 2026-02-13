@@ -29,11 +29,20 @@ Treecutting_Tree :: class : Interactable {
 
     // Runtime state (synced)
     is_falling: bool;
+    fall_finished: bool;
+    poof_spawned: bool;
+    hit_shake_time: float;
+    last_hit_fx_time: float;
     fall_start_time: float;
     start_rotation: float;
     target_rotation: float;
     start_local_position: v2;
     pivot_anchor_local: v2; // pivot point in parent-local space (where we keep pivot fixed)
+
+    // Runtime (not synced)
+    rest_local_rotation: float;
+    rest_local_scale: v2;
+    hit_shake_was_active: bool;
 
     ao_start :: method() {
         this->set_listener(this);
@@ -64,6 +73,16 @@ Treecutting_Tree :: class : Interactable {
         // Prompt text
         this->set_text("Chop tree");
         this->set_hold_text("Chopping...");
+
+        // Cache rest pose so we can do hit shake without drifting.
+        rest_local_rotation = entity.local_rotation;
+        rest_local_scale = entity.local_scale;
+        if rest_local_scale.x == 0 { rest_local_scale.x = 1; }
+        if rest_local_scale.y == 0 { rest_local_scale.y = 1; }
+
+        hit_shake_time = -99999.0;
+        last_hit_fx_time = -99999.0;
+        hit_shake_was_active = false;
     }
 
     can_use :: method(player: Player) -> bool {
@@ -81,7 +100,12 @@ Treecutting_Tree :: class : Interactable {
             return;
         }
 
+        // Ensure we start the fall from the rest pose (not mid-shake).
+        restore_rest_pose();
+
         is_falling = true;
+        fall_finished = false;
+        poof_spawned = false;
         fall_start_time = get_time();
 
         start_rotation = entity.local_rotation;
@@ -98,11 +122,61 @@ Treecutting_Tree :: class : Interactable {
         pivot_anchor_local = start_local_position + rotate_v2(pivot_local, deg_to_rad(start_rotation));
     }
 
+    // Called once per frame while a player is holding on this interactable.
+    on_holding :: method(player: Player) {
+        _ := player;
+        if is_falling return;
+        if !Game.is_server() return;
+
+        now := get_time();
+
+        // Rate limit hit FX so we don't spawn one every frame.
+        HIT_FX_INTERVAL :: 0.3;
+        if now - last_hit_fx_time < HIT_FX_INTERVAL {
+            return;
+        }
+        last_hit_fx_time = now;
+
+        // Drive shake timing (replicated) so all peers can animate smoothly.
+        hit_shake_time = now;
+
+        spawn_tree_hit_fx();
+    }
+
     ao_update :: method(dt: float) {
         _ := dt;
-        if !is_falling return;
+        now := get_time();
 
-        t := Ease.out_quart(Ease.T(get_time() - fall_start_time, fall_duration));
+        // Idle hit-shake (runs on all peers; driven by replicated hit_shake_time).
+        if !is_falling {
+            HIT_SHAKE_SECONDS :: 0.18;
+            since_hit := now - hit_shake_time;
+            active := since_hit >= 0 && since_hit <= HIT_SHAKE_SECONDS;
+
+            if active || hit_shake_was_active {
+                // Damped oscillation
+                // p: 1 -> 0 over duration
+                p := 1.0 - clamp(since_hit / HIT_SHAKE_SECONDS, 0.0, 1.0);
+                phase := since_hit * 45.0;
+
+                ROT_MAG_DEG :: 6.0;
+                rot_offset := sin(phase) * p * ROT_MAG_DEG;
+
+                // Small squash/stretch (keeps volume-ish)
+                S_MAG :: 0.06;
+                s := sin(phase * 1.35) * p * S_MAG;
+                scale := v2{rest_local_scale.x * (1.0 + s), rest_local_scale.y * (1.0 - s)};
+
+                entity->set_local_rotation(rest_local_rotation + rot_offset);
+                entity->set_local_scale(scale);
+            }
+
+            hit_shake_was_active = active;
+            return;
+        }
+
+        elapsed := now - fall_start_time;
+        t := Ease.out_quart(Ease.T(elapsed, fall_duration));
         rot := lerp(start_rotation, target_rotation, t);
 
         entity->set_local_rotation(rot);
@@ -113,11 +187,65 @@ Treecutting_Tree :: class : Interactable {
             entity->set_local_position(pos);
         }
 
-        // Only the server should spawn drops and destroy the tree.
-        if Game.is_server() && t >= 1.0 {
-            spawn_wood_drops();
-            entity->destroy();
+        // Poof VFX slightly BEFORE the fall finishes (server authoritative).
+        if Game.is_server() && !poof_spawned {
+            poof_early_seconds :: 0.5;
+            poof_at := fall_duration - poof_early_seconds;
+            if poof_at < 0 {
+                poof_at = 0;
+            }
+
+            if elapsed >= poof_at {
+                poof_spawned = true;
+                spawn_tree_poof();
+            }
         }
+
+        // Only the server should spawn drops and destroy the tree (at the end of the fall).
+        if Game.is_server() && t >= 1.0 && !fall_finished {
+            fall_finished = true;
+            spawn_wood_drops();
+            // Despawn slightly AFTER the fall finishes, so VFX timing feels immediate
+            // (and avoids "poof shows up only after tree disappears" on some peers).
+            entity->queue_for_destruction(0.05);
+        }
+    }
+
+    restore_rest_pose :: method() {
+        // Clear any residual hit-shake and return to the "rest" transform.
+        hit_shake_was_active = false;
+        entity->set_local_rotation(rest_local_rotation);
+        entity->set_local_scale(rest_local_scale);
+    }
+
+    spawn_tree_poof :: method() {
+        poof_prefab := get_asset(Prefab_Asset, "TreePoof.prefab");
+        if poof_prefab == null {
+            return;
+        }
+
+        fx := Scene.instantiate(poof_prefab);
+        if fx == null || fx.self == null {
+            return;
+        }
+
+        fx->set_local_position(entity.world_position + v2{1.25, 0});
+        fx->queue_for_destruction(1.5);
+    }
+
+    spawn_tree_hit_fx :: method() {
+        hit_prefab := get_asset(Prefab_Asset, "TreeHit.prefab");
+        if hit_prefab == null {
+            return;
+        }
+
+        fx := Scene.instantiate(hit_prefab);
+        if fx == null || fx.self == null {
+            return;
+        }
+
+        fx->set_local_position(entity.world_position + v2{0, 0.5});
+        fx->queue_for_destruction(0.3);
     }
 
     spawn_wood_drops :: method() {

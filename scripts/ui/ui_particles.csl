@@ -1,0 +1,324 @@
+import "core:ao"
+
+// ---------------------------------------------------------------------------
+// Screen-space UI particles
+//
+// - Local-only cosmetic system: call `ui_particles_update_and_draw(dt)` from
+//   Player.ao_late_update gated by `player->is_local()`.
+// - Spawn particles using screen-space positions (same coordinate space as UI rect points).
+// - Particles move toward a destination and are destroyed when within kill_radius pixels.
+// ---------------------------------------------------------------------------
+
+UI_Particle :: struct {
+    id: u64;
+    texture: Texture_Asset;
+    pos: v2;
+    dest: v2;
+    speed_px_per_sec: float;
+    kill_radius_px: float;
+    min_lifetime_seconds: float; // Never remove before this age
+    age_seconds: float;          // Lifetime accumulator
+    linger_seconds: float;       // How long to remain visible once within kill radius
+    time_in_kill_radius: float;  // Accumulator
+    size_px: v2;                 // Width/height in pixels (unscaled)
+    keep_aspect: bool;           // If true, fit sprite aspect inside size_px
+    tint: v4;                    // RGBA (0..1)
+    layer: s64;                  // UI layer to draw on
+    frames_alive: s64;           // For debugging / ensuring 1 frame of visibility
+}
+
+// Client/server-local particle system owned by a Player.
+// IMPORTANT: we keep this out of replicated component/entity state so it won't be
+// wiped by server sync. We key it by the player's user id so it is multiplayer-safe
+// when running on the server.
+UI_Particle_System :: class {
+    particles: [..]UI_Particle;
+    next_id: u64;
+    heartbeat_accum: float;
+    debug_spawn_logs: bool;
+    debug_heartbeat_logs: bool;
+    debug_removal_logs: bool;
+}
+
+UI_Particle_System_Entry :: struct {
+    user_id: string;
+    sys: UI_Particle_System;
+}
+
+ui_particles__get_system_for_player :: proc(player: Player) -> UI_Particle_System {
+    // Only for the local player on clients; on server, valid for all players.
+    if player == null return null;
+    if !player->is_local_or_server() return null;
+
+    uid := player->get_user_id();
+    if uid.count == 0 return null;
+
+    // On clients, guard against the server context by requiring local player.
+    // `is_local_or_server()` is true on the local client and on the server simulation.
+    // For pure cosmetic UI particles we still only want a system for the local player on clients.
+    if !Game.is_server() && !player->is_local() {
+        return null;
+    }
+
+    #static entries: [16]UI_Particle_System_Entry;
+
+    // Find existing.
+    for i: 0..entries.count-1 {
+        if entries[i].user_id.count == 0 continue;
+        if entries[i].user_id == uid && entries[i].sys != null {
+            return entries[i].sys;
+        }
+    }
+
+    // Allocate slot.
+    slot := -1;
+    for i: 0..entries.count-1 {
+        if entries[i].user_id.count == 0 {
+            slot = i;
+            break;
+        }
+    }
+    if slot < 0 {
+        // Overwrite slot 0 if full (shouldn't happen with normal player counts).
+        slot = 0;
+    }
+
+    sys := new(UI_Particle_System);
+    sys.particles->clear();
+    sys.next_id = 1;
+    sys.heartbeat_accum = 0.0;
+
+    // Default debug config (can be changed later if needed).
+    sys.debug_spawn_logs = true;
+    sys.debug_heartbeat_logs = false;
+    sys.debug_removal_logs = true;
+
+    entries[slot].user_id = uid;
+    entries[slot].sys = sys;
+    return sys;
+}
+
+ui_particles__alloc_id :: proc(sys: UI_Particle_System) -> u64 {
+    if sys == null {
+        return 0;
+    }
+    if sys.next_id == 0 {
+        sys.next_id = 1;
+    }
+    id := sys.next_id;
+    sys.next_id += 1;
+    return id;
+}
+
+ui_particles_spawn_for_player :: proc(
+    player: Player,
+    texture: Texture_Asset,
+    start_pos: v2,
+    dest_pos: v2,
+    speed_px_per_sec: float = 800.0,
+    kill_radius_px: float = 20.0,
+    min_lifetime_seconds: float = 0.15,
+    linger_seconds: float = 0.25,
+    size_px: v2 = {32, 32},
+    layer: s64 = 500,
+    tint: v4 = {1, 1, 1, 1},
+    keep_aspect: bool = true
+) -> u64 {
+    sys := ui_particles__get_system_for_player(player);
+    if sys == null return 0;
+
+    // Can't render without a sprite.
+    if texture == null {
+        if sys.debug_spawn_logs {
+            log_info("[ui_particles] spawn skipped (null texture)", {});
+        }
+        return 0;
+    }
+
+    p: UI_Particle;
+    p.id = ui_particles__alloc_id(sys);
+    p.texture = texture;
+    p.pos = start_pos;
+    p.dest = dest_pos;
+    p.speed_px_per_sec = speed_px_per_sec;
+    p.kill_radius_px = kill_radius_px;
+    p.min_lifetime_seconds = min_lifetime_seconds;
+    p.age_seconds = 0.0;
+    p.linger_seconds = linger_seconds;
+    p.time_in_kill_radius = 0.0;
+    p.size_px = size_px;
+    p.keep_aspect = keep_aspect;
+    p.tint = tint;
+    p.layer = layer;
+    p.frames_alive = 0;
+
+    sys.particles->append(p);
+
+    if sys.debug_spawn_logs {
+        log_info(
+            "[ui_particles] spawn id=% count=% pos=(%,%) dest=(%,%) speed=% kill_r=% min=% linger=% size=(%,%) layer=%",
+            {
+                p.id,
+                sys.particles.count,
+                p.pos.x.(int), p.pos.y.(int),
+                p.dest.x.(int), p.dest.y.(int),
+                format_float(p.speed_px_per_sec, decimals=1),
+                format_float(p.kill_radius_px, decimals=1),
+                format_float(p.min_lifetime_seconds, decimals=2),
+                format_float(p.linger_seconds, decimals=2),
+                p.size_px.x.(int), p.size_px.y.(int),
+                p.layer
+            }
+        );
+    }
+
+    return p.id;
+}
+
+ui_particles_clear_for_player :: proc(player: Player) {
+    sys := ui_particles__get_system_for_player(player);
+    if sys == null return;
+    sys.particles->clear();
+}
+
+ui_particles_count_for_player :: proc(player: Player) -> s64 {
+    sys := ui_particles__get_system_for_player(player);
+    if sys == null return 0;
+    return sys.particles.count;
+}
+
+ui_particles_set_destination_for_player :: proc(player: Player, id: u64, dest_pos: v2) -> bool {
+    sys := ui_particles__get_system_for_player(player);
+    if sys == null return false;
+    if id == 0 return false;
+
+    for i: 0..sys.particles.count-1 {
+        if sys.particles[i].id == id {
+            sys.particles[i].dest = dest_pos;
+            return true;
+        }
+    }
+    return false;
+}
+
+ui_particles_update_and_draw_for_player :: proc(player: Player, dt: float) {
+    sys := ui_particles__get_system_for_player(player);
+    if sys == null return;
+    if sys.particles.count <= 0 return;
+
+    UI.push_screen_draw_context();
+    defer UI.pop_draw_context();
+
+    if dt <= 0 dt = 0.0;
+    if dt > 0.1 dt = 0.1;
+
+    if sys.debug_heartbeat_logs {
+        sys.heartbeat_accum += dt;
+        if sys.heartbeat_accum >= 0.25 {
+            sys.heartbeat_accum = 0.0;
+            log_info("[ui_particles] heartbeat count=%", {sys.particles.count});
+        }
+    }
+
+    for i: 0..sys.particles.count-1 #reverse {
+        tex := sys.particles[i].texture;
+        if tex == null {
+            if sys.debug_removal_logs {
+                log_info("[ui_particles] remove (null texture) id=%", {sys.particles[i].id});
+            }
+            sys.particles->unordered_remove_by_index(i);
+            continue;
+        }
+
+        sys.particles[i].age_seconds += dt;
+
+        MAX_LIFETIME :: 6.0;
+        if sys.particles[i].age_seconds >= MAX_LIFETIME {
+            if sys.debug_removal_logs {
+                log_info(
+                    "[ui_particles] remove (max lifetime) id=% age=%",
+                    {sys.particles[i].id, format_float(sys.particles[i].age_seconds, decimals=3)}
+                );
+            }
+            sys.particles->unordered_remove_by_index(i);
+            continue;
+        }
+
+        pos := sys.particles[i].pos;
+        dest := sys.particles[i].dest;
+
+        diff := dest - pos;
+        dist_sq := diff.x * diff.x + diff.y * diff.y;
+
+        kill_r := sys.particles[i].kill_radius_px;
+        if kill_r < 0 kill_r = 0;
+
+        if dist_sq <= kill_r * kill_r {
+            pos = dest;
+            sys.particles[i].pos = pos;
+            sys.particles[i].time_in_kill_radius += dt;
+
+            linger := sys.particles[i].linger_seconds;
+            if linger < 0 linger = 0;
+
+            min_life := sys.particles[i].min_lifetime_seconds;
+            if min_life < 0 min_life = 0;
+
+            if sys.particles[i].frames_alive > 0 && sys.particles[i].age_seconds >= min_life && sys.particles[i].time_in_kill_radius >= linger {
+                if sys.debug_removal_logs {
+                    log_info(
+                        "[ui_particles] remove (arrived) id=% age=% in_kill=% linger=% min=%",
+                        {
+                            sys.particles[i].id,
+                            format_float(sys.particles[i].age_seconds, decimals=3),
+                            format_float(sys.particles[i].time_in_kill_radius, decimals=3),
+                            format_float(linger, decimals=3),
+                            format_float(min_life, decimals=3),
+                        }
+                    );
+                }
+                sys.particles->unordered_remove_by_index(i);
+                continue;
+            }
+        }
+        else {
+            speed := sys.particles[i].speed_px_per_sec;
+            if speed < 0 speed = 0;
+
+            step := speed * dt;
+            if step > 0 && dist_sq > 0 {
+                dist := sqrt(dist_sq);
+                if step >= dist {
+                    pos = dest;
+                }
+                else {
+                    dir := diff * (1.0 / dist);
+                    pos += dir * step;
+                }
+                sys.particles[i].pos = pos;
+            }
+        }
+
+        size := sys.particles[i].size_px;
+        if size.x < 1 size.x = 1;
+        if size.y < 1 size.y = 1;
+
+        half_w := size.x * 0.5;
+        half_h := size.y * 0.5;
+
+        rect := Rect{pos, pos};
+        rect = rect->grow_unscaled(half_h, half_w, half_h, half_w);
+
+        draw_rect := rect;
+        if sys.particles[i].keep_aspect {
+            draw_rect = rect->fit_aspect(tex->get_aspect());
+        }
+
+        UI.push_layer(sys.particles[i].layer);
+        UI.quad(draw_rect, tex, sys.particles[i].tint);
+        UI.pop_layer();
+
+        sys.particles[i].frames_alive += 1;
+    }
+}
+

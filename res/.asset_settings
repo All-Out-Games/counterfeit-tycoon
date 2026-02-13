@@ -1,5 +1,11 @@
 [
   {
+    "id": "Animations/hit_vfx/483bfcf30c2df14b.png",
+    "texture": {
+      "resample_multiplier": 1
+    }
+  },
+  {
     "id": "Animations/bill_machine/bill_machine.png",
     "texture": {
       "resample_multiplier": 1
