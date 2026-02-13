@@ -90,7 +90,7 @@ ammo_shop_price :: proc(ammo_type_index: s64) -> s64 {
         case 7: return 75;  // Sawblades
         case 8: return 35;  // LMG Rounds
         case 9: return 20;  // Water Balloons
-        case 10: return 25; // Pistol Ammo
+        case 10: return 500; // Pistol Ammo
     }
     return 0;
 }
@@ -150,7 +150,7 @@ server_try_buy_weapon :: proc(player: Player, wt: Weapon_Type) {
     if Items.can_move_item_to_inventory(item, inv, ref will_destroy) {
         Items.move_item_to_inventory(item, inv);
         if cost > 0 {
-            Notifier.notify(player, "Bought % for % Coins.", {defn->get_name(), cost});
+            Notifier.notify(player, "Bought % for % Coins.", {defn->get_name(), format_int_with_commas(cost)});
         }
         else {
             Notifier.notify(player, "Claimed % (Free).", {defn->get_name()});
@@ -241,7 +241,7 @@ server_try_buy_ammo :: proc(player: Player, ammo_type_index: s64) {
         remaining -= chunk;
     }
 
-    Notifier.notify(player, "Bought % x% for % Coins.", {info.name, WEAPONS_SHOP_AMMO_BUY_AMOUNT, cost});
+    Notifier.notify(player, "Bought % x% for % Coins.", {info.name, WEAPONS_SHOP_AMMO_BUY_AMOUNT, format_int_with_commas(cost)});
 }
 
 draw_weapons_shop_button :: proc(player: Player) {
@@ -421,7 +421,7 @@ draw_weapon_shop_item_card :: proc(player: Player, rect: Rect, wt: Weapon_Type) 
             UI.text(inner, ts, "%\nFree", {config.item_name});
         }
         else {
-            UI.text(inner, ts, "%\n$%", {config.item_name, cost});
+            UI.text(inner, ts, "%\n$%", {config.item_name, format_int_with_commas(cost)});
         }
     }
 
@@ -468,7 +468,7 @@ draw_ammo_shop_item_card :: proc(player: Player, rect: Rect, ammo_type_index: s6
             UI.quad(top, core_globals.white_sprite, {0.2, 0.2, 0.2, 1});
         }
 
-        UI.text(inner, ts, "%\n% for $%", {info.name, WEAPONS_SHOP_AMMO_BUY_AMOUNT, cost});
+        UI.text(inner, ts, "%\n% for $%", {info.name, WEAPONS_SHOP_AMMO_BUY_AMOUNT, format_int_with_commas(cost)});
     }
 
     if result.clicked {
@@ -519,7 +519,7 @@ draw_weapons_shop_modal :: proc(player: Player) {
     ts_bal.do_outline = true;
     ts_bal.outline_thickness = 2;
     ts_bal.outline_color = {0, 0, 0, 1};
-    UI.text(balance_rect, ts_bal, "Coins: %", {coins});
+    UI.text(balance_rect, ts_bal, "Coins: %", {format_int_with_commas(coins)});
 
     // Content
     content := window->inset(30);

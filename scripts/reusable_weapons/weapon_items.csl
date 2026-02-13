@@ -119,7 +119,7 @@ get_ammo_info :: proc(index: s64) -> Ammo_Info {
         case 10: { // Pistol Ammo
             info.id = "pistol_ammo";
             info.name = "Pistol Ammo";
-            info.icon_path = "reusable_weapons/sprites/reusable-weapons/ammo_icons/bullet_alt.png";
+            info.icon_path = "Items/PistolAmmo.png";
             info.stack_size = 360;
         }
     }

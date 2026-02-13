@@ -31,7 +31,7 @@ LaneUnlock :: class : Interactable {
         // Interactable prompt text shown to nearby players.
         cost := lanes_unlock_cost(lane_index);
         lane_number := lane_index + 1;
-        this->set_text(format_string("Unlock Lane % for $% Coins?", {lane_number, cost}));
+        this->set_text(format_string("Unlock Lane % for $% Coins?", {lane_number, format_int_with_commas(cost)}));
     }
 
     can_use :: method(player: Player) -> bool {

@@ -163,7 +163,7 @@ draw_managers_unlock_lane_prompt :: proc(player: Player, rect: Rect, lane_index:
         bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_3.png"); // Red
     }
 
-    label := format_string("Unlock ($%)", {cost});
+    label := format_string("Unlock ($%)", {format_int_with_commas(cost)});
     if UI.button(button_row->inset(10), bs, ts_btn, label).clicked {
         server_try_unlock_lane(player, lane_index);
     }
@@ -312,7 +312,7 @@ draw_manager_card :: proc(player: Player, rect: Rect, lane_index: s64, kind: Man
             _ := UI.button(btn_rect->inset(6), bs, ts, "Lane Locked");
         }
         else {
-            label := format_string("Unlock $%", {cost});
+            label := format_string("Unlock $%", {format_int_with_commas(cost)});
             if UI.button(btn_rect->inset(6), bs, ts, label).clicked {
                 server_try_unlock_manager(player, lane_index, kind);
             }

@@ -115,7 +115,7 @@ ManagerUnlock :: class : Interactable {
     refresh_prompt_text :: method() {
         name := manager_display_name(kind);
         cost := manager_unlock_cost(kind);
-        this->set_text(format_string("Hire % for % Coins?", {name, cost}));
+        this->set_text(format_string("Hire % for % Coins?", {name, format_int_with_commas(cost)}));
     }
 
     can_use :: method(player: Player) -> bool {

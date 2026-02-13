@@ -187,7 +187,7 @@ draw_truck_upgrade_panel :: proc(player: Player, rect: Rect, kind: Truck_Upgrade
     }
     bs.press_scaling = 0.4;
 
-    label := format_string("Upgrade ($%)", {cost});
+    label := format_string("Upgrade ($%)", {format_int_with_commas(cost)});
     if UI.button(btn_rect->inset(6), bs, ts_btn, label).clicked {
         server_try_upgrade_truck(player, kind);
     }
