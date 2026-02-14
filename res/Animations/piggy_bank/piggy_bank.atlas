@@ -1,0 +1,72 @@
+5e3e2f5f6a0d71ef.png
+	size: 1476, 1476
+	filter: Linear, Linear
+Piggy_Bank
+	bounds: 623, 44, 339, 349
+	offsets: 1, 1, 341, 355
+	rotate: 90
+Piggy_Bankglow
+	bounds: 723, 846, 310, 154
+	offsets: 24, 3, 341, 355
+	rotate: 90
+bank_fragment1
+	bounds: 1006, 1341, 126, 136
+	offsets: 1, 1, 128, 138
+	rotate: 90
+bank_fragment2
+	bounds: 883, 1007, 149, 162
+	offsets: 1, 1, 151, 164
+	rotate: 90
+bank_fragment_interior
+	bounds: 883, 911, 97, 90
+	offsets: 1, 1, 99, 92
+bank_fragment_small
+	bounds: 1148, 1402, 72, 65
+	offsets: 2, 1, 75, 67
+bank_fragment_tiny
+	bounds: 6, 6, 37, 32
+	offsets: 1, 1, 39, 34
+bill1
+	bounds: 1116, 1257, 87, 78
+	offsets: 1, 1, 89, 80
+bill2
+	bounds: 1006, 1165, 87, 73
+	offsets: 1, 1, 89, 75
+bill3
+	bounds: 1051, 1079, 86, 80
+	offsets: 1, 1, 88, 82
+bill4
+	bounds: 986, 919, 92, 82
+	offsets: 2, 1, 95, 84
+bill_green
+	bounds: 1006, 1244, 91, 104
+	offsets: 1, 1, 93, 106
+	rotate: 90
+booster
+	bounds: 1148, 1341, 55, 57
+	offsets: 16, 15, 91, 86
+	rotate: 90
+cloud
+	bounds: 235, 20, 382, 363
+	offsets: 10, 9, 401, 382
+coin
+	bounds: 1116, 1206, 45, 50
+	offsets: 1, 1, 47, 51
+	rotate: 90
+cracks1
+	bounds: 723, 601, 304, 239
+	offsets: 1, 1, 306, 241
+cracks2
+	bounds: 723, 1162, 305, 277
+	offsets: 1, 1, 307, 279
+	rotate: 90
+debris
+	bounds: 49, 23, 16, 15
+	offsets: 1, 1, 18, 17
+nomu_dust
+	bounds: 235, 389, 1078, 482
+	offsets: 3, 4, 1084, 490
+	rotate: 90
+rocket_smoke
+	bounds: 6, 44, 223, 1423
+	offsets: 4, 5, 231, 1433

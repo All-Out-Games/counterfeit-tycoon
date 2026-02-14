@@ -1,5 +1,17 @@
 [
   {
+    "id": "dirt_path_horizontal_end_cap.png",
+    "texture": {
+      "resample_multiplier": 1
+    }
+  },
+  {
+    "id": "dirt_path_horizontal_0a34c7e5fdc31aa8.png",
+    "texture": {
+      "resample_multiplier": 1
+    }
+  },
+  {
     "id": "Animations/hit_vfx/483bfcf30c2df14b.png",
     "texture": {
       "resample_multiplier": 1

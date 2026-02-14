@@ -1,5 +1,5 @@
 13
-90194313219
+115964116994
 162510489722853 1770195210522183700
 {
   "name": "Vault",
@@ -28,13 +28,15 @@
     "prompt_offset": {
       "Y": 1
     },
-    "max_capacity": 5000,
-    "deposit_per_interact": 64
+    "max_capacity": 50,
+    "deposit_per_interact": 64,
+    "spine_animator": "449462421451476:1771025941292413900"
   }
 },
 {
   "cid": 2,
   "aoid": "162606480832458:1770195255973110900",
+  "enabled": false,
   "component_type": "Internal_Component",
   "internal_component_type": "Sprite_Renderer",
   "data": {

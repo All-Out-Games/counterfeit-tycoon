@@ -22,7 +22,7 @@
   "internal_component_type": "Sprite_Renderer",
   "data": {
     "texture": "grassfloor_1.png",
-    "layer": -2,
+    "layer": -5,
     "scale": {
       "X": 60,
       "Y": 60

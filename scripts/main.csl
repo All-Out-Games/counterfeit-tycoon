@@ -269,6 +269,9 @@ draw_finished_bills_per_sec_hud :: proc(player: Player) {
         if !press.entity->get_world_enabled() continue;
         if !is_owner_of_parent_base(press.entity, player) continue;
 
+        // When the Vault is full we pause production entirely.
+        if vault_owner_has_full_vault(press.entity) continue;
+
         // A press only produces when it has colored bills queued.
         if press.stored_colored_bills <= 0 continue;
         if press.seconds_per_finished_bill <= 0 continue;

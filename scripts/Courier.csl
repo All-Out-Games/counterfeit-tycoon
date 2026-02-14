@@ -495,7 +495,19 @@ Courier :: class : Component {
                     break_variant = 0;
                 }
 
-                if carried_finished_bills < max_finished_bills_capacity {
+                // If the vault is full, don't collect more finished bills.
+                vault_full := false;
+                if vault != null {
+                    cap := vault.max_capacity;
+                    if cap <= 0 {
+                        cap = vault_capacity_for_level(vault.upgrade_level);
+                    }
+                    if cap > 0 && vault.stored_finished_bills >= cap {
+                        vault_full = true;
+                    }
+                }
+
+                if !vault_full && carried_finished_bills < max_finished_bills_capacity {
                     if last_action_time <= 0 || get_time() - last_action_time >= collect_interval {
                         room := max_finished_bills_capacity - carried_finished_bills;
                         taken := source->server_collect_finished_bills_for_manager(owner_user_id, room);
@@ -550,21 +562,26 @@ Courier :: class : Component {
                     last_action_time = get_time();
                 }
 
-                // If we deposited all, head back. If we couldn't deposit (vault full), still head back
-                // (otherwise we can get stuck forever at the vault).
+                // If we deposited all, head back.
                 if carried_finished_bills <= 0 {
                     server_begin_pause(.TO_SOURCE);
                 }
-                else if vault.max_capacity > 0 && vault.stored_finished_bills >= vault.max_capacity {
-                    // Vault is full; don't wait here forever.
-                    if !vault_full_notified_this_stop {
-                        owner := pb != null ? pb->get_owner() : null;
-                        if owner != null {
-                            Notifier.notify(owner, "Vault is full! Courier couldn't deposit Finished Bills.");
-                        }
-                        vault_full_notified_this_stop = true;
+                else {
+                    // Vault is full; wait here until space frees up.
+                    cap := vault.max_capacity;
+                    if cap <= 0 {
+                        cap = vault_capacity_for_level(vault.upgrade_level);
                     }
-                    server_begin_pause(.TO_SOURCE);
+                    if cap > 0 && vault.stored_finished_bills >= cap {
+                        if !vault_full_notified_this_stop {
+                            owner := pb != null ? pb->get_owner() : null;
+                            if owner != null {
+                                Notifier.notify(owner, "Vault is full! Courier is paused until there is space.");
+                            }
+                            vault_full_notified_this_stop = true;
+                        }
+                        return;
+                    }
                 }
             }
             case .PAUSE_BEFORE_TO_VAULT: {

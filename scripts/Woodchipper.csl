@@ -117,6 +117,11 @@ Woodchipper :: class : Component {
     pause_until_time: float;
     break_variant: s64; // 1 or 2, controls Idle_Break_1 vs Idle_Break_2
 
+    // Cache the spot we were standing when we FIRST successfully dispatched the Harvester.
+    // When returning to "wait for Harvester", we go back to this point.
+    harvester_dispatch_origin_world_pos: v2;
+    harvester_dispatch_origin_set: bool;
+
     spine: Spine_Animator;
     spine_sm: State_Machine;
     spine_base_scale: v2;
@@ -185,6 +190,8 @@ Woodchipper :: class : Component {
             last_action_time = 0;
             pause_until_time = 0;
             break_variant = 0;
+            harvester_dispatch_origin_set = false;
+            harvester_dispatch_origin_world_pos = entity.world_position;
         }
     }
 
@@ -201,12 +208,21 @@ Woodchipper :: class : Component {
         last_action_time = 0;
         pause_until_time = 0;
         break_variant = 0;
+        harvester_dispatch_origin_set = false;
+        harvester_dispatch_origin_world_pos = entity.world_position;
     }
 
     target_pos_for_harvester :: method(h: Harvester) -> v2 {
         if h == null return entity.world_position;
         // Path to the Harvester "home" location so we don't chase it while it works.
         return h.home_world_pos + v2{0, -1.0};
+    }
+
+    target_pos_for_waiting_on_harvester :: method(h: Harvester) -> v2 {
+        if harvester_dispatch_origin_set {
+            return harvester_dispatch_origin_world_pos;
+        }
+        return target_pos_for_harvester(h);
     }
 
     target_pos_for_mill :: method(m: Paper_Mill) -> v2 {
@@ -523,7 +539,7 @@ Woodchipper :: class : Component {
             switch state {
                 case .TO_HARVESTER: {
                     if harvester != null {
-                        _ := agent->set_path_target(target_pos_for_harvester(harvester), move_speed);
+                        _ := agent->set_path_target(target_pos_for_waiting_on_harvester(harvester), move_speed);
                     }
                 }
                 case .TO_MILL: {
@@ -566,7 +582,7 @@ Woodchipper :: class : Component {
                     last_action_time = 0;
                     return;
                 }
-                if has_arrived(target_pos_for_harvester(harvester)) {
+                if has_arrived(target_pos_for_waiting_on_harvester(harvester)) {
                     state = .WAIT_AT_HARVESTER;
                     drive_start_time = 0;
                     last_action_time = 0;
@@ -594,7 +610,11 @@ Woodchipper :: class : Component {
 
                 // Always try to keep the Harvester working if it's idle+empty at home.
                 // (This is cheap after the first dispatch since the method will early-out while busy.)
-                _ := harvester->server_dispatch_for_manager(owner_user_id);
+                dispatched := harvester->server_dispatch_for_manager(owner_user_id);
+                if dispatched && !harvester_dispatch_origin_set {
+                    harvester_dispatch_origin_world_pos = entity.world_position;
+                    harvester_dispatch_origin_set = true;
+                }
 
                 // If we have room, try to collect wood from the Harvester when it's home.
                 if last_action_time <= 0 || get_time() - last_action_time >= collect_interval {

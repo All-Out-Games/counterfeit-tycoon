@@ -5,6 +5,45 @@ VAULT_STEAL_HOLD_SECONDS :: 8.0;
 VAULT_STEAL_PERCENT :: 33; // 33% of stored_finished_bills
 VAULT_FINISHED_BILLS_STACK_MAX :: 64;
 
+// ---------------------------------------------------------------------------
+// Production pause helpers
+//
+// When a player's Vault is full, we pause production on ALL of their station machines.
+// These helpers are intentionally usable on BOTH server + clients (purely derived from
+// replicated Vault state), so station UI smoothing can also freeze correctly.
+// ---------------------------------------------------------------------------
+vault_is_full_for_base :: proc(base: PlayerBase) -> bool {
+    if base == null return false;
+    if base.entity == null || base.entity.self == null return false;
+
+    foreach v: component_iterator(Vault) {
+        if v == null continue;
+        if v.entity == null || v.entity.self == null continue;
+        if !v.entity->get_world_enabled() continue;
+
+        pb := get_parent_player_base(v.entity);
+        if pb != base continue;
+
+        cap := v.max_capacity;
+        if cap <= 0 {
+            cap = vault_capacity_for_level(v.upgrade_level);
+        }
+        if cap <= 0 {
+            return false;
+        }
+
+        return v.stored_finished_bills >= cap;
+    }
+
+    return false;
+}
+
+vault_owner_has_full_vault :: proc(child_entity: Entity) -> bool {
+    pb := get_parent_player_base(child_entity);
+    if pb == null return false;
+    return vault_is_full_for_base(pb);
+}
+
 // Vault:
 // - Players can interact to deposit Finished Bills from their inventory.
 // - The Vault does NOT produce output; it only stores up to a max capacity.
@@ -20,6 +59,12 @@ Vault :: class : Interactable {
 
     // Upgrades (server authoritative, replicated)
     upgrade_level: s64;                      // 1..6
+
+    // Visuals (client-only)
+    // Optional: assign a Spine_Animator on the same entity in the editor.
+    spine_animator: Spine_Animator @ao_serialize;
+    client_spine_ready: bool;
+    client_last_stored_finished_bills: s64;
 
     // World UI
     ui_offset: v2 @ao_serialize;
@@ -72,6 +117,12 @@ Vault :: class : Interactable {
         loaded_from_save = false;
         loaded_for_user_id = {};
 
+        // Client-only: initialize deposit animation tracking from current replicated value.
+        // Note: this runs on every client (but not on the server).
+        if !Game.is_server() {
+            client_last_stored_finished_bills = stored_finished_bills;
+        }
+
         // If ownership was already assigned during spawn, load immediately.
         server_try_load_from_save();
 
@@ -101,6 +152,57 @@ Vault :: class : Interactable {
         if Game.is_server() {
             ensure_steal_interactable_exists();
         }
+
+        // Client-only: play a vault animation whenever finished bills are deposited.
+        client_update_deposit_animation();
+    }
+
+    client_update_deposit_animation :: method() {
+       // if Game.is_server() {
+       //     return;
+       // }
+
+        // Lazily bind animator if not assigned in editor.
+        if spine_animator == null {
+            spine_animator = entity->get_component(Spine_Animator);
+        }
+
+        // Setup a minimal state machine to handle add_money -> idle automatically.
+        if !client_spine_ready {
+            if spine_animator != null {
+                spine_animator->awaken();
+
+                // Build a tiny state machine:
+                // - idle (loop)
+                // - add_money (one-shot), triggered via "add_money" trigger
+                sm := State_Machine.create();
+                add_money_trigger := sm->create_variable("add_money", .TRIGGER);
+                layer := sm->create_layer("main", 0);
+                idle_state := layer->create_state("idle", true);
+                add_state := layer->create_state("add_money", false);
+                layer->set_initial_state(idle_state);
+
+                to_add := layer->create_global_transition(add_state, false);
+                to_add->create_trigger_condition(add_money_trigger);
+                layer->create_transition(add_state, idle_state, true);
+
+                spine_animator.instance->set_state_machine(sm, true);
+                client_spine_ready = true;
+            }
+
+            // Always keep last value synced, even if we can't animate yet.
+            client_last_stored_finished_bills = stored_finished_bills;
+            return;
+        }
+
+        // Detect deposits (increase only). Steals/decreases should not play this animation.
+        if stored_finished_bills > client_last_stored_finished_bills {
+            if spine_animator != null && spine_animator.instance != null && spine_animator.instance.state_machine != null {
+                spine_animator.instance.state_machine->set_trigger("add_money");
+            }
+        }
+
+        client_last_stored_finished_bills = stored_finished_bills;
     }
 
     // Server-only: allow a non-player "manager" (e.g., Courier) to deposit finished bills directly

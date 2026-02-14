@@ -239,6 +239,13 @@ Blank_Bill_Press :: class : Interactable {
         // Server authoritative conversion + collection.
         if Game.is_server() {
             server_try_load_from_save();
+
+            // If the owning player's Vault is full, pause ALL production for this player's stations.
+            if vault_owner_has_full_vault(entity) {
+                server_try_save_to_save(force=false);
+                return;
+            }
+
             update_conversion(dt);
             try_auto_collect();
             server_try_save_to_save(force=false);
@@ -302,7 +309,7 @@ Blank_Bill_Press :: class : Interactable {
         // Requirements:
         // - play "idle" when there is no paper in the press
         // - play "crush_paper" when the press has input paper
-        has_input := stored_paper > 0;
+        has_input := stored_paper > 0 && !vault_owner_has_full_vault(entity);
         spine.instance.state_machine->set_bool("has_input", has_input);
     }
 
@@ -731,6 +738,7 @@ Blank_Bill_Press :: class : Interactable {
         defer UI.pop_z();
 
         pos := entity.world_position + ui_offset;
+        paused_due_to_vault_full := vault_owner_has_full_vault(entity);
 
         // Panel rect in world units (meters).
         // Vertical station UI:
@@ -842,7 +850,7 @@ Blank_Bill_Press :: class : Interactable {
                     ui_timer_inited = true;
                 }
 
-                if stored_paper > 0 && seconds_per_blank_bill > 0 {
+                if !paused_due_to_vault_full && stored_paper > 0 && seconds_per_blank_bill > 0 {
                     elapsed := get_time() - ui_timer_last_sync_time;
                     if elapsed < 0 {
                         elapsed = 0;
@@ -853,7 +861,7 @@ Blank_Bill_Press :: class : Interactable {
             }
 
             progress := 0.0;
-            if stored_paper > 0 && seconds_per_blank_bill > 0 {
+            if !paused_due_to_vault_full && stored_paper > 0 && seconds_per_blank_bill > 0 {
                 progress = clamp(timer_val / seconds_per_blank_bill, 0.0, 1.0);
             }
             fill := bar->subrect(0, 0, progress, 1);

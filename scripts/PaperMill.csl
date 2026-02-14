@@ -238,6 +238,12 @@ Paper_Mill :: class : Interactable {
         if Game.is_server() {
             server_try_load_from_save();
 
+            // If the owning player's Vault is full, pause ALL production for this player's stations.
+            if vault_owner_has_full_vault(entity) {
+                server_try_save_to_save(force=false);
+                return;
+            }
+
             // Server authoritative conversion + collection.
             update_conversion(dt);
             try_auto_collect();
@@ -302,7 +308,7 @@ Paper_Mill :: class : Interactable {
         // Requirements:
         // - play "shredder_idle" when there is no wood being processed
         // - play "wood" when there is more than 1 input item
-        is_processing := stored_wood > 1;
+        is_processing := stored_wood > 1 && !vault_owner_has_full_vault(entity);
         spine.instance.state_machine->set_bool("is_processing", is_processing);
     }
 
@@ -726,6 +732,7 @@ Paper_Mill :: class : Interactable {
         defer UI.pop_z();
 
         pos := entity.world_position + ui_offset;
+        paused_due_to_vault_full := vault_owner_has_full_vault(entity);
 
         // Panel rect in world units (meters).
         // Vertical station UI:
@@ -837,7 +844,7 @@ Paper_Mill :: class : Interactable {
                     ui_timer_inited = true;
                 }
 
-                if stored_wood > 0 && seconds_per_paper > 0 {
+                if !paused_due_to_vault_full && stored_wood > 0 && seconds_per_paper > 0 {
                     elapsed := get_time() - ui_timer_last_sync_time;
                     if elapsed < 0 {
                         elapsed = 0;
@@ -848,7 +855,7 @@ Paper_Mill :: class : Interactable {
             }
 
             progress := 0.0;
-            if stored_wood > 0 && seconds_per_paper > 0 {
+            if !paused_due_to_vault_full && stored_wood > 0 && seconds_per_paper > 0 {
                 progress = clamp(timer_val / seconds_per_paper, 0.0, 1.0);
             }
             fill := bar->subrect(0, 0, progress, 1);
