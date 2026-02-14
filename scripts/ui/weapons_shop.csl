@@ -158,6 +158,9 @@ server_try_buy_weapon :: proc(player: Player, wt: Weapon_Type) {
             Notifier.notify(player, "Claimed % (Free).", {defn->get_name()});
         }
 
+        // Quest tracking: weapon bought.
+        quest_on_weapon_bought(player);
+
         // Cosmetic purchase FX (icon -> hotbar) on the owning client.
         config := get_weapon_config(wt);
         server_request_purchase_fx(player, config.weapon_icon_path);

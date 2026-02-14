@@ -113,6 +113,9 @@ server_try_unlock_manager :: proc(player: Player, lane_index: s64, kind: Manager
 
     Save.set_int(player, managers_lane_save_key(lane_index), new_mask);
     Notifier.notify(player, "Unlocked % (Lane %).", {manager_display_name(kind), lane_index + 1});
+
+    // Quest tracking: manager hired.
+    quest_on_manager_hired(player);
 }
 
 draw_managers_unlock_lane_prompt :: proc(player: Player, rect: Rect, lane_index: s64) {

@@ -86,6 +86,9 @@ server_try_upgrade_vault :: proc(player: Player) {
     }
 
     Notifier.notify(player, "Vault upgraded to Level %.", {new_level});
+
+    // Quest tracking: vault upgraded.
+    quest_on_upgrade(player);
 }
 
 Station_Kind :: enum {
@@ -243,6 +246,9 @@ server_try_upgrade_station :: proc(player: Player, lane_index: s64, kind: Statio
     }
 
     Notifier.notify(player, "% upgraded to Level % (Lane %).", {station_display_name(kind), new_level, lane_index + 1});
+
+    // Quest tracking: machine upgraded.
+    quest_on_upgrade(player);
 }
 
 draw_upgrades_unlock_lane_prompt :: proc(player: Player, rect: Rect, lane_index: s64) {

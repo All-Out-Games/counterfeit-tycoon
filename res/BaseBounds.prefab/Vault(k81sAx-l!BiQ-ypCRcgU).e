@@ -28,7 +28,7 @@
     "prompt_offset": {
       "Y": 1
     },
-    "max_capacity": 50,
+    "max_capacity": 20000,
     "deposit_per_interact": 64,
     "spine_animator": "449462421451476:1771025941292413900"
   }

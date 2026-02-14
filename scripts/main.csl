@@ -123,6 +123,9 @@ server_try_unlock_lane :: proc(player: Player, lane_index: s64) {
 
     Notifier.notify(player, "Unlocked Lane %.", {lane_index + 1});
 
+    // Quest tracking: lane unlocked.
+    quest_on_lane_unlock(player, lane_index);
+
     // Spawn the lane prefab under their PlayerBase.
     gm := get_game_manager();
     if gm != null {
@@ -429,6 +432,20 @@ Player :: class : Player_Base {
 
     // Vault upgrade level (per-player, multiplayer safe; NOT lane-based — one vault per player)
     vault_level: s64;                     // 1..6
+
+    // Quest system (per-player, server authoritative, replicated)
+    quest_slots: [3]Quest_Instance;       // 3 active quests
+    quests_completed: s64;                // lifetime total quests claimed
+    quest_rewards_earned: s64;            // lifetime total reward coins from quests
+    quests_panel_open: bool;              // UI toggle
+
+    // Quest cumulative stats (server authoritative, saved)
+    quest_stat_bank_runs: s64;
+    quest_stat_total_earned: s64;
+    quest_stat_managers_hired: s64;
+    quest_stat_pvp_kills: s64;
+    quest_stat_trucks_destroyed: s64;
+    quest_stat_vaults_robbed: s64;
 
     // Truck upgrades UI + levels (per-player, multiplayer safe)
     truck_upgrades_open: bool;
@@ -834,7 +851,25 @@ Player :: class : Player_Base {
                 station_upgrade_levels[i] = 1;
             }
             vault_level = 1;
+
+            // Quest system init.
+            for i: 0..2 {
+                quest_slots[i].def_id = -1;
+                quest_slots[i].progress = 0;
+                quest_slots[i].completed = false;
+                quest_slots[i].claimed = false;
+                quest_slots[i].is_challenge = false;
+            }
+            quests_completed = 0;
+            quest_rewards_earned = 0;
+            quest_stat_bank_runs = 0;
+            quest_stat_total_earned = 0;
+            quest_stat_managers_hired = 0;
+            quest_stat_pvp_kills = 0;
+            quest_stat_trucks_destroyed = 0;
+            quest_stat_vaults_robbed = 0;
         }
+        quests_panel_open = false;
 
         truck_upgrades_open = false;
         truck_upgrades_selected_kind = 0; // Capacity auto-selected
@@ -962,6 +997,9 @@ Player :: class : Player_Base {
                 if spd_lvl > 10 spd_lvl = 10;
                 truck_upgrade_levels[2] = spd_lvl;
             }
+
+            // Load quest system (server authoritative, replicates to clients).
+            quest_load_active(this);
 
             // Load tutorial progression (server authoritative, replicates to clients).
             {
@@ -1220,6 +1258,12 @@ Player :: class : Player_Base {
 
         // Draw station upgrades button + modal UI.
         draw_upgrades_ui(this);
+
+        // Quest panel UI.
+        // Only show quests after the player finishes the tutorial (step 11 = complete).
+        if tutorial_step >= 11 {
+            draw_quests_ui(this);
+        }
 
         // Tutorial HUD (text + arrow).
         draw_tutorial_hud();
@@ -2220,8 +2264,10 @@ Player :: class : Player_Base {
     }
 
     // Apply damage to this player from server-authoritative logic.
+    // Track who last dealt damage for kill attribution.
+    last_damage_source: Player;
+
     take_damage :: proc(using this: Player, amount: float, source: Player = null, blocked_by_base_safe_zone: bool = false) {
-        _ := source;
 
         if amount <= 0 {
             return;
@@ -2242,6 +2288,11 @@ Player :: class : Player_Base {
         CurrentHealth -= amount;
         if CurrentHealth < 0 {
             CurrentHealth = 0;
+        }
+
+        // Track the source for kill attribution.
+        if source != null {
+            last_damage_source = source;
         }
 
         // Start a damage flash on this player's rig for visual feedback (replicated via player state).
@@ -2282,6 +2333,14 @@ Player :: class : Player_Base {
         if !Game.is_server() return;
         if death_pickup_lockout return; // already dying/dead
         if entity == null || entity.self == null return;
+
+        // Quest: attribute kill to the last damage source.
+        if last_damage_source != null && last_damage_source.self != null {
+            if last_damage_source != this {
+                quest_on_pvp_kill(last_damage_source);
+            }
+        }
+        last_damage_source = null;
 
         // Set immediately so we can't re-enter via multiple damage events in a single tick.
         death_pickup_lockout = true;

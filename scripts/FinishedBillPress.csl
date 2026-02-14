@@ -450,6 +450,17 @@ Finished_Bill_Press :: class : Interactable {
 
         if did_change {
             save_dirty = true;
+
+            // Quest tracking: attribute finished bill production to the owning player.
+            if Game.is_server() {
+                pb := get_parent_player_base(entity);
+                if pb != null {
+                    owner := pb->get_owner();
+                    if owner != null {
+                        quest_on_produce(owner, .PRODUCE_FINISHED_BILLS, 1);
+                    }
+                }
+            }
         }
     }
 

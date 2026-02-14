@@ -1,0 +1,1016 @@
+import "core:ao"
+
+// =============================================================================
+// Quest System
+// =============================================================================
+// Rolling 3-quest panel. Complete -> Claim -> New quest replaces it.
+// Categories: Production, Upgrade, Economy, Expansion, PvP
+// 5 tiers that scale with total quests completed.
+// All quest state is server-authoritative, stored on the Player, saved per-player.
+// =============================================================================
+
+QUEST_COIN_CURRENCY :: "Coins";
+QUEST_ACTIVE_COUNT :: 3;
+QUEST_MAX_TIER :: 5;
+
+// ---- Categories ----
+Quest_Category :: enum {
+    PRODUCTION;
+    UPGRADE;
+    ECONOMY;
+    EXPANSION;
+    PVP;
+}
+
+quest_category_name :: proc(cat: Quest_Category) -> string {
+    switch cat {
+        case .PRODUCTION: return "PRODUCTION";
+        case .UPGRADE:    return "UPGRADE";
+        case .ECONOMY:    return "ECONOMY";
+        case .EXPANSION:  return "EXPANSION";
+        case .PVP:        return "PVP";
+    }
+    return "QUEST";
+}
+
+quest_category_color :: proc(cat: Quest_Category) -> v4 {
+    switch cat {
+        case .PRODUCTION: return {0.2, 0.8, 0.3, 1};   // Green
+        case .UPGRADE:    return {0.3, 0.5, 1.0, 1};    // Blue
+        case .ECONOMY:    return {1.0, 0.85, 0.2, 1};   // Yellow
+        case .EXPANSION:  return {0.7, 0.3, 0.9, 1};    // Purple
+        case .PVP:        return {1.0, 0.25, 0.25, 1};  // Red
+    }
+    return {1, 1, 1, 1};
+}
+
+// ---- Quest tracking types ----
+Quest_Track_Type :: enum {
+    PRODUCE_FINISHED_BILLS;
+    PRODUCE_RAW_PAPER;
+    PRODUCE_BLANK_BILLS;
+    PRODUCE_COLORED_BILLS;
+    FILL_VAULT_PERCENT;         // target = 1 means fill to 25%, etc. (one-shot check)
+    UPGRADE_ANY_MACHINE;        // target = level to reach
+    UPGRADE_STAMP_MACHINE;      // target = level to reach
+    UPGRADE_COLOR_MACHINE;
+    UPGRADE_HARVESTER;
+    UPGRADE_TRUCK_CAPACITY;
+    UPGRADE_TRUCK_HP;
+    UPGRADE_TRUCK_SPEED;
+    UPGRADE_VAULT;
+    UPGRADE_ALL_LANE_TO;        // special: target encodes lane + level
+    MAX_ANY_MACHINE;            // any machine reaches level 10
+    COMPLETE_BANK_RUNS;
+    EARN_TOTAL_COINS;
+    FILL_VAULT_TIMES;
+    DEPOSIT_COINS_IN_RUN;       // single run deposit
+    UNLOCK_LANE;                // target = lane index (1-based)
+    HIRE_MANAGERS;              // target = count
+    AUTOMATE_LANE;              // target = count of fully automated lanes
+    BUY_WEAPON;
+    SEND_TRUCK;
+    KILL_PLAYERS;
+    DEFEND_VAULT;
+    ROB_VAULT;
+    DESTROY_TRUCK;
+    STEAL_COINS_FROM_PLAYERS;   // value in coins stolen via trucks
+    RUN_LANES_AT_FULL;          // target = # of lanes running simultaneously
+}
+
+// ---- Quest definition (static template) ----
+Quest_Def :: struct {
+    id: s64;
+    title: string;
+    category: Quest_Category;
+    track_type: Quest_Track_Type;
+    target: s64;
+    reward: s64;
+    tier: s64;
+}
+
+// ---- Active quest instance (per-player runtime state) ----
+Quest_Instance :: struct {
+    def_id: s64;       // index into quest pool
+    progress: s64;      // current progress toward target
+    completed: bool;    // ready to claim
+    claimed: bool;      // already claimed (slot is free)
+    is_challenge: bool; // 2x reward, harder target
+}
+
+// =============================================================================
+// Quest Pool — All quest definitions across 5 tiers
+// =============================================================================
+
+// We define quest pool as a large flat array. Each quest has a unique id.
+// The quest pool is built once (lazily) and cached in a #static.
+
+QUEST_POOL_COUNT :: 73;
+
+get_quest_pool :: proc() -> [QUEST_POOL_COUNT]Quest_Def {
+    #static pool: [QUEST_POOL_COUNT]Quest_Def;
+    #static initialized: bool;
+    if initialized return pool;
+    initialized = true;
+
+    i := 0;
+
+    // ---- TIER 1: Starter (quests 1-10) ----
+    pool[i] = {i, "Produce 5 Finished Bills",       .PRODUCTION, .PRODUCE_FINISHED_BILLS,  5,    200,  1}; i += 1;
+    pool[i] = {i, "Produce 20 Finished Bills",      .PRODUCTION, .PRODUCE_FINISHED_BILLS,  20,   400,  1}; i += 1;
+    pool[i] = {i, "Produce 50 Raw Paper",           .PRODUCTION, .PRODUCE_RAW_PAPER,       50,   150,  1}; i += 1;
+    pool[i] = {i, "Fill your vault to 25%%",        .PRODUCTION, .FILL_VAULT_PERCENT,      25,   350,  1}; i += 1;
+    pool[i] = {i, "Upgrade any machine to Lv 2",    .UPGRADE,    .UPGRADE_ANY_MACHINE,     2,    250,  1}; i += 1;
+    pool[i] = {i, "Upgrade your Stamp Machine",     .UPGRADE,    .UPGRADE_STAMP_MACHINE,   2,    300,  1}; i += 1;
+    pool[i] = {i, "Upgrade your Harvester",         .UPGRADE,    .UPGRADE_HARVESTER,       2,    250,  1}; i += 1;
+    pool[i] = {i, "Complete your first bank run",   .ECONOMY,    .COMPLETE_BANK_RUNS,      1,    500,  1}; i += 1;
+    pool[i] = {i, "Earn $1,000 total",              .ECONOMY,    .EARN_TOTAL_COINS,        1000, 400,  1}; i += 1;
+    pool[i] = {i, "Hire your first manager",        .EXPANSION,  .HIRE_MANAGERS,            1,    350,  1}; i += 1;
+    pool[i] = {i, "Buy any weapon",                 .EXPANSION,  .BUY_WEAPON,               1,    250,  1}; i += 1;
+    pool[i] = {i, "Send your truck to the bank",    .ECONOMY,    .SEND_TRUCK,               1,    300,  1}; i += 1;
+
+    // ---- TIER 2: Early (quests 11-30) ----
+    pool[i] = {i, "Produce 100 Finished Bills",     .PRODUCTION, .PRODUCE_FINISHED_BILLS,  100,  1200, 2}; i += 1;
+    pool[i] = {i, "Produce 250 Finished Bills",     .PRODUCTION, .PRODUCE_FINISHED_BILLS,  250,  2000, 2}; i += 1;
+    pool[i] = {i, "Produce 500 Raw Paper",          .PRODUCTION, .PRODUCE_RAW_PAPER,       500,  800,  2}; i += 1;
+    pool[i] = {i, "Produce 200 Blank Bills",        .PRODUCTION, .PRODUCE_BLANK_BILLS,     200,  1000, 2}; i += 1;
+    pool[i] = {i, "Upgrade any machine to Lv 4",    .UPGRADE,    .UPGRADE_ANY_MACHINE,     4,    1500, 2}; i += 1;
+    pool[i] = {i, "Upgrade Stamp to Lv 3",          .UPGRADE,    .UPGRADE_STAMP_MACHINE,   3,    1200, 2}; i += 1;
+    pool[i] = {i, "Upgrade Color Machine to Lv 3",  .UPGRADE,    .UPGRADE_COLOR_MACHINE,   3,    1000, 2}; i += 1;
+    pool[i] = {i, "Upgrade Truck Capacity",         .UPGRADE,    .UPGRADE_TRUCK_CAPACITY,  2,    800,  2}; i += 1;
+    pool[i] = {i, "Upgrade Harvester to Lv 3",      .UPGRADE,    .UPGRADE_HARVESTER,       3,    600,  2}; i += 1;
+    pool[i] = {i, "Complete 5 bank runs",           .ECONOMY,    .COMPLETE_BANK_RUNS,      5,    2500, 2}; i += 1;
+    pool[i] = {i, "Earn $5,000 total",              .ECONOMY,    .EARN_TOTAL_COINS,        5000, 2000, 2}; i += 1;
+    pool[i] = {i, "Fill your vault 3 times",        .ECONOMY,    .FILL_VAULT_TIMES,        3,    1800, 2}; i += 1;
+    pool[i] = {i, "Deposit $3,000 at the bank",     .ECONOMY,    .DEPOSIT_COINS_IN_RUN,    3000, 1500, 2}; i += 1;
+    pool[i] = {i, "Unlock Lane 2",                  .EXPANSION,  .UNLOCK_LANE,             2,    1500, 2}; i += 1;
+    pool[i] = {i, "Hire 3 managers",                .EXPANSION,  .HIRE_MANAGERS,            3,    2000, 2}; i += 1;
+    pool[i] = {i, "Fully automate Lane 1",          .EXPANSION,  .AUTOMATE_LANE,            1,    2500, 2}; i += 1;
+    pool[i] = {i, "Kill another player",            .PVP,        .KILL_PLAYERS,             1,    1200, 2}; i += 1;
+    pool[i] = {i, "Defend your vault",              .PVP,        .DEFEND_VAULT,             1,    1800, 2}; i += 1;
+
+    // ---- TIER 3: Mid (quests 31-60) ----
+    pool[i] = {i, "Produce 1,000 Finished Bills",   .PRODUCTION, .PRODUCE_FINISHED_BILLS,  1000,  8000,  3}; i += 1;
+    pool[i] = {i, "Produce 2,500 Finished Bills",   .PRODUCTION, .PRODUCE_FINISHED_BILLS,  2500,  12000, 3}; i += 1;
+    pool[i] = {i, "Produce 5,000 Colored Bills",    .PRODUCTION, .PRODUCE_COLORED_BILLS,   5000,  6000,  3}; i += 1;
+    pool[i] = {i, "Run 2 lanes at full speed",      .PRODUCTION, .RUN_LANES_AT_FULL,       2,     10000, 3}; i += 1;
+    pool[i] = {i, "Upgrade any machine to Lv 6",    .UPGRADE,    .UPGRADE_ANY_MACHINE,     6,     8000,  3}; i += 1;
+    pool[i] = {i, "Upgrade Stamp to Lv 5",          .UPGRADE,    .UPGRADE_STAMP_MACHINE,   5,     5000,  3}; i += 1;
+    pool[i] = {i, "Upgrade Vault to Lv 3",          .UPGRADE,    .UPGRADE_VAULT,           3,     12000, 3}; i += 1;
+    pool[i] = {i, "Complete 15 bank runs",          .ECONOMY,    .COMPLETE_BANK_RUNS,      15,    15000, 3}; i += 1;
+    pool[i] = {i, "Earn $50,000 total",             .ECONOMY,    .EARN_TOTAL_COINS,        50000, 10000, 3}; i += 1;
+    pool[i] = {i, "Deposit $25,000 in one run",     .ECONOMY,    .DEPOSIT_COINS_IN_RUN,    25000, 8000,  3}; i += 1;
+    pool[i] = {i, "Unlock Lane 3",                  .EXPANSION,  .UNLOCK_LANE,             3,     8000,  3}; i += 1;
+    pool[i] = {i, "Unlock Lane 4",                  .EXPANSION,  .UNLOCK_LANE,             4,     15000, 3}; i += 1;
+    pool[i] = {i, "Hire managers for 2 lanes",      .EXPANSION,  .AUTOMATE_LANE,            2,     10000, 3}; i += 1;
+    pool[i] = {i, "Rob another player's vault",     .PVP,        .ROB_VAULT,                1,     8000,  3}; i += 1;
+    pool[i] = {i, "Destroy an enemy truck",         .PVP,        .DESTROY_TRUCK,            1,     12000, 3}; i += 1;
+    pool[i] = {i, "Kill 5 players",                 .PVP,        .KILL_PLAYERS,             5,     10000, 3}; i += 1;
+
+    // ---- TIER 4: Late (quests 61-100) ----
+    pool[i] = {i, "Produce 10,000 Finished Bills",  .PRODUCTION, .PRODUCE_FINISHED_BILLS,  10000,  40000, 4}; i += 1;
+    pool[i] = {i, "Produce 25,000 Finished Bills",  .PRODUCTION, .PRODUCE_FINISHED_BILLS,  25000,  60000, 4}; i += 1;
+    pool[i] = {i, "Run 4 lanes simultaneously",     .PRODUCTION, .RUN_LANES_AT_FULL,       4,      35000, 4}; i += 1;
+    pool[i] = {i, "Max any machine (Lv 10)",        .UPGRADE,    .MAX_ANY_MACHINE,         10,     50000, 4}; i += 1;
+    pool[i] = {i, "Upgrade Vault to Lv 4",          .UPGRADE,    .UPGRADE_VAULT,           4,      45000, 4}; i += 1;
+    pool[i] = {i, "Complete 50 bank runs",          .ECONOMY,    .COMPLETE_BANK_RUNS,      50,     50000, 4}; i += 1;
+    pool[i] = {i, "Earn $500,000 total",            .ECONOMY,    .EARN_TOTAL_COINS,        500000, 75000, 4}; i += 1;
+    pool[i] = {i, "Deposit $100,000 in one run",    .ECONOMY,    .DEPOSIT_COINS_IN_RUN,    100000, 40000, 4}; i += 1;
+    pool[i] = {i, "Fully automate 3 lanes",         .EXPANSION,  .AUTOMATE_LANE,            3,      60000, 4}; i += 1;
+    pool[i] = {i, "Destroy 10 enemy trucks",        .PVP,        .DESTROY_TRUCK,            10,     45000, 4}; i += 1;
+    pool[i] = {i, "Rob 5 vaults",                   .PVP,        .ROB_VAULT,                5,      35000, 4}; i += 1;
+    pool[i] = {i, "Kill 25 players",                .PVP,        .KILL_PLAYERS,             25,     50000, 4}; i += 1;
+
+    // ---- TIER 5: Endgame (quests 100+) ----
+    pool[i] = {i, "Produce 100,000 Finished Bills", .PRODUCTION, .PRODUCE_FINISHED_BILLS,  100000,  150000, 5}; i += 1;
+    pool[i] = {i, "Max all machines in any lane",   .UPGRADE,    .MAX_ANY_MACHINE,         10,      175000, 5}; i += 1;
+    pool[i] = {i, "Max your Vault (Lv 6)",          .UPGRADE,    .UPGRADE_VAULT,           6,       250000, 5}; i += 1;
+    pool[i] = {i, "Max your Harvester",             .UPGRADE,    .UPGRADE_HARVESTER,       10,      125000, 5}; i += 1;
+    pool[i] = {i, "Earn $5,000,000 total",          .ECONOMY,    .EARN_TOTAL_COINS,        5000000, 300000, 5}; i += 1;
+    pool[i] = {i, "Complete 200 bank runs",         .ECONOMY,    .COMPLETE_BANK_RUNS,      200,     275000, 5}; i += 1;
+    pool[i] = {i, "Destroy 50 enemy trucks",        .PVP,        .DESTROY_TRUCK,            50,      175000, 5}; i += 1;
+    pool[i] = {i, "Rob 25 vaults",                  .PVP,        .ROB_VAULT,                25,      125000, 5}; i += 1;
+    pool[i] = {i, "Kill 100 players",               .PVP,        .KILL_PLAYERS,             100,     225000, 5}; i += 1;
+
+    return pool;
+}
+
+// =============================================================================
+// Tier logic
+// =============================================================================
+quest_tier_for_completed_count :: proc(count: s64) -> s64 {
+    if count >= 100 return 5;
+    if count >= 60  return 4;
+    if count >= 30  return 3;
+    if count >= 10  return 2;
+    return 1;
+}
+
+quest_tier_name :: proc(tier: s64) -> string {
+    switch tier {
+        case 1: return "Starter";
+        case 2: return "Early";
+        case 3: return "Mid";
+        case 4: return "Late";
+        case 5: return "Endgame";
+    }
+    return "Starter";
+}
+
+quest_tier_quest_range :: proc(tier: s64) -> string {
+    switch tier {
+        case 1: return "1-10";
+        case 2: return "11-30";
+        case 3: return "31-60";
+        case 4: return "61-100";
+        case 5: return "100+";
+    }
+    return "1-10";
+}
+
+// =============================================================================
+// Quest Selection — pick a new quest for a slot
+// =============================================================================
+quest_pick_new :: proc(player: Player, slot: s64) {
+    if player == null return;
+    if !Game.is_server() return;
+    if slot < 0 || slot >= QUEST_ACTIVE_COUNT return;
+
+    pool := get_quest_pool();
+    tier := quest_tier_for_completed_count(player.quests_completed);
+
+    // Gather categories already used by other active slots.
+    used_cats: [5]bool; // indexed by category enum
+    for s: 0..QUEST_ACTIVE_COUNT-1 {
+        if s == slot continue;
+        q := player.quest_slots[s];
+        if q.def_id < 0 continue;
+        if q.claimed continue;
+        if q.def_id >= QUEST_POOL_COUNT continue;
+        cat_idx := pool[q.def_id].category.(s64);
+        if cat_idx >= 0 && cat_idx < 5 {
+            used_cats[cat_idx] = true;
+        }
+    }
+
+    // Also gather def_ids already active (to avoid duplicates).
+    active_ids: [3]s64;
+    for s: 0..QUEST_ACTIVE_COUNT-1 {
+        if s == slot {
+            active_ids[s] = -1;
+        } else {
+            active_ids[s] = player.quest_slots[s].def_id;
+        }
+    }
+
+    // Collect candidates from current tier.
+    candidates: [..]s64;
+    for q: 0..QUEST_POOL_COUNT-1 {
+        def := pool[q];
+        if def.tier != tier continue;
+
+        // No PvP in tier 1.
+        if tier < 2 && def.category == .PVP continue;
+
+        // No duplicate categories.
+        cat_idx := def.category.(s64);
+        if cat_idx >= 0 && cat_idx < 5 {
+            if used_cats[cat_idx] continue;
+        }
+
+        // No duplicate quest defs.
+        dupe := false;
+        for s: 0..QUEST_ACTIVE_COUNT-1 {
+            if active_ids[s] == q {
+                dupe = true;
+            }
+        }
+        if dupe continue;
+
+        candidates->append(q);
+    }
+
+    // If no candidates found (pool exhausted for tier), try any tier quest.
+    if candidates.count == 0 {
+        for q: 0..QUEST_POOL_COUNT-1 {
+            def := pool[q];
+            if def.tier > tier continue;
+
+            cat_idx := def.category.(s64);
+            if cat_idx >= 0 && cat_idx < 5 {
+                if used_cats[cat_idx] continue;
+            }
+
+            dupe := false;
+            for s: 0..QUEST_ACTIVE_COUNT-1 {
+                if active_ids[s] == q {
+                    dupe = true;
+                }
+            }
+            if dupe continue;
+
+            candidates->append(q);
+        }
+    }
+
+    if candidates.count == 0 {
+        // Absolute fallback: just pick any quest from current tier, ignore category constraint.
+        for q: 0..QUEST_POOL_COUNT-1 {
+            if pool[q].tier == tier {
+                candidates->append(q);
+                break;
+            }
+        }
+    }
+
+    if candidates.count == 0 return;
+
+    // Random pick.
+    rng: u64 = rng_seed_time();
+    pick_idx := rng_range_int(ref rng, 0, candidates.count - 1);
+    chosen_id := candidates[pick_idx];
+
+    // 10% chance for challenge variant (2x target and reward).
+    is_challenge := rng_range_int(ref rng, 1, 10) == 1;
+
+    inst: Quest_Instance;
+    inst.def_id = chosen_id;
+    inst.progress = 0;
+    inst.completed = false;
+    inst.claimed = false;
+    inst.is_challenge = is_challenge;
+
+    player.quest_slots[slot] = inst;
+
+    // Check if already satisfied (e.g. "upgrade any machine to lv 2" when already lv 5).
+    quest_check_instant_completion(player, slot);
+}
+
+// =============================================================================
+// Quest progress tracking
+// =============================================================================
+quest_get_target :: proc(player: Player, slot: s64) -> s64 {
+    if player == null return 1;
+    if slot < 0 || slot >= QUEST_ACTIVE_COUNT return 1;
+    q := player.quest_slots[slot];
+    if q.def_id < 0 || q.def_id >= QUEST_POOL_COUNT return 1;
+    pool := get_quest_pool();
+    t := pool[q.def_id].target;
+    if q.is_challenge {
+        t = t * 2;
+    }
+    if t < 1 t = 1;
+    return t;
+}
+
+quest_get_reward :: proc(player: Player, slot: s64) -> s64 {
+    if player == null return 0;
+    if slot < 0 || slot >= QUEST_ACTIVE_COUNT return 0;
+    q := player.quest_slots[slot];
+    if q.def_id < 0 || q.def_id >= QUEST_POOL_COUNT return 0;
+    pool := get_quest_pool();
+    r := pool[q.def_id].reward;
+    if q.is_challenge {
+        r = r * 2;
+    }
+    return r;
+}
+
+// Increment progress on a quest slot and check completion.
+quest_add_progress :: proc(player: Player, slot: s64, amount: s64) {
+    if player == null return;
+    if !Game.is_server() return;
+    if slot < 0 || slot >= QUEST_ACTIVE_COUNT return;
+
+    q := player.quest_slots[slot];
+    if q.def_id < 0 return;
+    if q.completed return;
+    if q.claimed return;
+
+    q.progress += amount;
+    target := quest_get_target(player, slot);
+    if q.progress >= target {
+        q.progress = target;
+        q.completed = true;
+    }
+    player.quest_slots[slot] = q;
+}
+
+// Set progress to an absolute value (used for "check current state" quests).
+quest_set_progress :: proc(player: Player, slot: s64, value: s64) {
+    if player == null return;
+    if !Game.is_server() return;
+    if slot < 0 || slot >= QUEST_ACTIVE_COUNT return;
+
+    q := player.quest_slots[slot];
+    if q.def_id < 0 return;
+    if q.completed return;
+    if q.claimed return;
+
+    q.progress = value;
+    target := quest_get_target(player, slot);
+    if q.progress >= target {
+        q.progress = target;
+        q.completed = true;
+    }
+    player.quest_slots[slot] = q;
+}
+
+// Check if a quest is instantly satisfied based on current game state.
+quest_check_instant_completion :: proc(player: Player, slot: s64) {
+    if player == null return;
+    if !Game.is_server() return;
+    if slot < 0 || slot >= QUEST_ACTIVE_COUNT return;
+    q := player.quest_slots[slot];
+    if q.def_id < 0 return;
+    if q.completed return;
+
+    pool := get_quest_pool();
+    def := pool[q.def_id];
+
+    switch def.track_type {
+        case .UPGRADE_ANY_MACHINE: {
+            // Check all station levels.
+            max_lvl: s64 = 0;
+            for i: 0..15 {
+                lvl := player.station_upgrade_levels[i];
+                if lvl > max_lvl { max_lvl = lvl; }
+            }
+            quest_set_progress(player, slot, max_lvl);
+        }
+        case .UPGRADE_STAMP_MACHINE: {
+            max_lvl: s64 = 0;
+            for lane: 0..3 {
+                lvl := get_player_station_level(player, lane, .STAMP_MACHINE);
+                if lvl > max_lvl { max_lvl = lvl; }
+            }
+            quest_set_progress(player, slot, max_lvl);
+        }
+        case .UPGRADE_COLOR_MACHINE: {
+            max_lvl: s64 = 0;
+            for lane: 0..3 {
+                lvl := get_player_station_level(player, lane, .COLOR_MACHINE);
+                if lvl > max_lvl { max_lvl = lvl; }
+            }
+            quest_set_progress(player, slot, max_lvl);
+        }
+        case .UPGRADE_HARVESTER: {
+            quest_set_progress(player, slot, player.harvester_level);
+        }
+        case .UPGRADE_TRUCK_CAPACITY: {
+            quest_set_progress(player, slot, player.truck_upgrade_levels[0]);
+        }
+        case .UPGRADE_TRUCK_HP: {
+            quest_set_progress(player, slot, player.truck_upgrade_levels[1]);
+        }
+        case .UPGRADE_TRUCK_SPEED: {
+            quest_set_progress(player, slot, player.truck_upgrade_levels[2]);
+        }
+        case .UPGRADE_VAULT: {
+            quest_set_progress(player, slot, player.vault_level);
+        }
+        case .MAX_ANY_MACHINE: {
+            max_lvl: s64 = 0;
+            for i: 0..15 {
+                lvl := player.station_upgrade_levels[i];
+                if lvl > max_lvl { max_lvl = lvl; }
+            }
+            quest_set_progress(player, slot, max_lvl);
+        }
+        case .UNLOCK_LANE: {
+            // target is 1-based lane number. Check if unlocked.
+            target := quest_get_target(player, slot);
+            lane_idx := target - 1;
+            if lanes_is_unlocked(player, lane_idx) {
+                quest_set_progress(player, slot, target);
+            }
+        }
+        case .EARN_TOTAL_COINS: {
+            quest_set_progress(player, slot, player.quest_stat_total_earned);
+        }
+        case .COMPLETE_BANK_RUNS: {
+            quest_set_progress(player, slot, player.quest_stat_bank_runs);
+        }
+        case .HIRE_MANAGERS: {
+            quest_set_progress(player, slot, player.quest_stat_managers_hired);
+        }
+        case .KILL_PLAYERS: {
+            quest_set_progress(player, slot, player.quest_stat_pvp_kills);
+        }
+        case .DESTROY_TRUCK: {
+            quest_set_progress(player, slot, player.quest_stat_trucks_destroyed);
+        }
+        case .ROB_VAULT: {
+            quest_set_progress(player, slot, player.quest_stat_vaults_robbed);
+        }
+    }
+}
+
+// =============================================================================
+// Quest Event Hooks — called from game systems
+// =============================================================================
+
+// Called when a machine produces an output item.
+quest_on_produce :: proc(player: Player, track_type: Quest_Track_Type, amount: s64) {
+    if player == null return;
+    if !Game.is_server() return;
+
+    pool := get_quest_pool();
+    for s: 0..QUEST_ACTIVE_COUNT-1 {
+        q := player.quest_slots[s];
+        if q.def_id < 0 continue;
+        if q.completed continue;
+        if q.claimed continue;
+        if q.def_id >= QUEST_POOL_COUNT continue;
+        if pool[q.def_id].track_type == track_type {
+            quest_add_progress(player, s, amount);
+        }
+    }
+}
+
+// Called on upgrade events (machine, harvester, truck, vault).
+quest_on_upgrade :: proc(player: Player) {
+    if player == null return;
+    if !Game.is_server() return;
+
+    pool := get_quest_pool();
+    for s: 0..QUEST_ACTIVE_COUNT-1 {
+        q := player.quest_slots[s];
+        if q.def_id < 0 continue;
+        if q.completed continue;
+        if q.claimed continue;
+        if q.def_id >= QUEST_POOL_COUNT continue;
+        quest_check_instant_completion(player, s);
+    }
+}
+
+// Called when a bank run completes.
+quest_on_bank_run :: proc(player: Player, coins_deposited: s64) {
+    if player == null return;
+    if !Game.is_server() return;
+
+    player.quest_stat_bank_runs += 1;
+    player.quest_stat_total_earned += coins_deposited;
+    Save.set_int(player, "quest_stat_bank_runs", player.quest_stat_bank_runs);
+    Save.set_int(player, "quest_stat_total_earned", player.quest_stat_total_earned);
+
+    pool := get_quest_pool();
+    for s: 0..QUEST_ACTIVE_COUNT-1 {
+        q := player.quest_slots[s];
+        if q.def_id < 0 continue;
+        if q.completed continue;
+        if q.claimed continue;
+        if q.def_id >= QUEST_POOL_COUNT continue;
+        def := pool[q.def_id];
+        switch def.track_type {
+            case .COMPLETE_BANK_RUNS: {
+                quest_set_progress(player, s, player.quest_stat_bank_runs);
+            }
+            case .EARN_TOTAL_COINS: {
+                quest_set_progress(player, s, player.quest_stat_total_earned);
+            }
+            case .DEPOSIT_COINS_IN_RUN: {
+                // Single-run deposit check.
+                if coins_deposited >= quest_get_target(player, s) {
+                    quest_set_progress(player, s, quest_get_target(player, s));
+                }
+            }
+            case .SEND_TRUCK: {
+                quest_add_progress(player, s, 1);
+            }
+        }
+    }
+}
+
+// Called when a lane is unlocked.
+quest_on_lane_unlock :: proc(player: Player, lane_index: s64) {
+    if player == null return;
+    if !Game.is_server() return;
+
+    pool := get_quest_pool();
+    for s: 0..QUEST_ACTIVE_COUNT-1 {
+        q := player.quest_slots[s];
+        if q.def_id < 0 continue;
+        if q.completed continue;
+        if q.claimed continue;
+        if q.def_id >= QUEST_POOL_COUNT continue;
+        def := pool[q.def_id];
+        if def.track_type == .UNLOCK_LANE {
+            target_lane := quest_get_target(player, s);
+            if (lane_index + 1) >= target_lane {
+                quest_set_progress(player, s, target_lane);
+            }
+        }
+    }
+}
+
+// Called when a manager is hired.
+quest_on_manager_hired :: proc(player: Player) {
+    if player == null return;
+    if !Game.is_server() return;
+
+    player.quest_stat_managers_hired += 1;
+    Save.set_int(player, "quest_stat_managers_hired", player.quest_stat_managers_hired);
+
+    pool := get_quest_pool();
+    for s: 0..QUEST_ACTIVE_COUNT-1 {
+        q := player.quest_slots[s];
+        if q.def_id < 0 continue;
+        if q.completed continue;
+        if q.claimed continue;
+        if q.def_id >= QUEST_POOL_COUNT continue;
+        def := pool[q.def_id];
+        if def.track_type == .HIRE_MANAGERS {
+            quest_set_progress(player, s, player.quest_stat_managers_hired);
+        }
+        if def.track_type == .AUTOMATE_LANE {
+            quest_check_instant_completion(player, s);
+        }
+    }
+}
+
+// Called when a player kills another player.
+quest_on_pvp_kill :: proc(player: Player) {
+    if player == null return;
+    if !Game.is_server() return;
+
+    player.quest_stat_pvp_kills += 1;
+    Save.set_int(player, "quest_stat_pvp_kills", player.quest_stat_pvp_kills);
+
+    pool := get_quest_pool();
+    for s: 0..QUEST_ACTIVE_COUNT-1 {
+        q := player.quest_slots[s];
+        if q.def_id < 0 continue;
+        if q.completed continue;
+        if q.claimed continue;
+        if q.def_id >= QUEST_POOL_COUNT continue;
+        if pool[q.def_id].track_type == .KILL_PLAYERS {
+            quest_set_progress(player, s, player.quest_stat_pvp_kills);
+        }
+    }
+}
+
+// Called when a player destroys another player's truck.
+quest_on_truck_destroyed :: proc(player: Player) {
+    if player == null return;
+    if !Game.is_server() return;
+
+    player.quest_stat_trucks_destroyed += 1;
+    Save.set_int(player, "quest_stat_trucks_destroyed", player.quest_stat_trucks_destroyed);
+
+    pool := get_quest_pool();
+    for s: 0..QUEST_ACTIVE_COUNT-1 {
+        q := player.quest_slots[s];
+        if q.def_id < 0 continue;
+        if q.completed continue;
+        if q.claimed continue;
+        if q.def_id >= QUEST_POOL_COUNT continue;
+        if pool[q.def_id].track_type == .DESTROY_TRUCK {
+            quest_set_progress(player, s, player.quest_stat_trucks_destroyed);
+        }
+    }
+}
+
+// Called when a player robs a vault.
+quest_on_vault_robbed :: proc(player: Player) {
+    if player == null return;
+    if !Game.is_server() return;
+
+    player.quest_stat_vaults_robbed += 1;
+    Save.set_int(player, "quest_stat_vaults_robbed", player.quest_stat_vaults_robbed);
+
+    pool := get_quest_pool();
+    for s: 0..QUEST_ACTIVE_COUNT-1 {
+        q := player.quest_slots[s];
+        if q.def_id < 0 continue;
+        if q.completed continue;
+        if q.claimed continue;
+        if q.def_id >= QUEST_POOL_COUNT continue;
+        if pool[q.def_id].track_type == .ROB_VAULT {
+            quest_set_progress(player, s, player.quest_stat_vaults_robbed);
+        }
+    }
+}
+
+// Called when a weapon is bought.
+quest_on_weapon_bought :: proc(player: Player) {
+    if player == null return;
+    if !Game.is_server() return;
+
+    pool := get_quest_pool();
+    for s: 0..QUEST_ACTIVE_COUNT-1 {
+        q := player.quest_slots[s];
+        if q.def_id < 0 continue;
+        if q.completed continue;
+        if q.claimed continue;
+        if q.def_id >= QUEST_POOL_COUNT continue;
+        if pool[q.def_id].track_type == .BUY_WEAPON {
+            quest_add_progress(player, s, 1);
+        }
+    }
+}
+
+// Called when vault fill percent changes (check fill_vault_percent quests).
+quest_on_vault_deposit :: proc(player: Player) {
+    if player == null return;
+    if !Game.is_server() return;
+
+    // Find player's vault.
+    fill_pct: s64 = 0;
+    foreach v: component_iterator(Vault) {
+        if v == null continue;
+        if v.entity == null || v.entity.self == null continue;
+        if !is_owner_of_parent_base(v.entity, player) continue;
+        if v.max_capacity > 0 {
+            fill_pct = (v.stored_finished_bills * 100) / v.max_capacity;
+        }
+        break;
+    }
+
+    pool := get_quest_pool();
+    for s: 0..QUEST_ACTIVE_COUNT-1 {
+        q := player.quest_slots[s];
+        if q.def_id < 0 continue;
+        if q.completed continue;
+        if q.claimed continue;
+        if q.def_id >= QUEST_POOL_COUNT continue;
+        def := pool[q.def_id];
+        if def.track_type == .FILL_VAULT_PERCENT {
+            if fill_pct >= quest_get_target(player, s) {
+                quest_set_progress(player, s, quest_get_target(player, s));
+            }
+        }
+        if def.track_type == .FILL_VAULT_TIMES {
+            if fill_pct >= 95 {
+                quest_add_progress(player, s, 1);
+            }
+        }
+    }
+}
+
+// =============================================================================
+// Quest Claim — player presses claim button
+// =============================================================================
+server_quest_claim :: proc(player: Player, slot: s64) {
+    if player == null return;
+    if !Game.is_server() return;
+    if slot < 0 || slot >= QUEST_ACTIVE_COUNT return;
+
+    q := player.quest_slots[slot];
+    if q.def_id < 0 return;
+    if !q.completed return;
+    if q.claimed return;
+
+    reward := quest_get_reward(player, slot);
+    Economy.deposit_currency(player, QUEST_COIN_CURRENCY, reward);
+
+    q.claimed = true;
+    player.quest_slots[slot] = q;
+    player.quests_completed += 1;
+    player.quest_rewards_earned += reward;
+
+    Save.set_int(player, "quests_completed", player.quests_completed);
+    Save.set_int(player, "quest_rewards_earned", player.quest_rewards_earned);
+
+    // Show reward notification.
+    Notifier.notify(player, "+$% Quest Reward!", {format_int_with_commas(reward)});
+
+    // Pick a new quest for this slot.
+    quest_pick_new(player, slot);
+
+    // Save active quests.
+    quest_save_active(player);
+}
+
+// =============================================================================
+// Quest Save/Load
+// =============================================================================
+quest_save_active :: proc(player: Player) {
+    if player == null return;
+    if !Game.is_server() return;
+
+    for s: 0..QUEST_ACTIVE_COUNT-1 {
+        q := player.quest_slots[s];
+        prefix := format_string("quest_%", {s});
+        Save.set_int(player, format_string("%_def_id", {prefix}), q.def_id);
+        Save.set_int(player, format_string("%_progress", {prefix}), q.progress);
+        Save.set_int(player, format_string("%_completed", {prefix}), q.completed ? 1 : 0);
+        Save.set_int(player, format_string("%_challenge", {prefix}), q.is_challenge ? 1 : 0);
+    }
+}
+
+quest_load_active :: proc(player: Player) {
+    if player == null return;
+    if !Game.is_server() return;
+
+    player.quests_completed = Save.get_int(player, "quests_completed", 0);
+    player.quest_rewards_earned = Save.get_int(player, "quest_rewards_earned", 0);
+
+    // Load cumulative stats.
+    player.quest_stat_bank_runs = Save.get_int(player, "quest_stat_bank_runs", 0);
+    player.quest_stat_total_earned = Save.get_int(player, "quest_stat_total_earned", 0);
+    player.quest_stat_managers_hired = Save.get_int(player, "quest_stat_managers_hired", 0);
+    player.quest_stat_pvp_kills = Save.get_int(player, "quest_stat_pvp_kills", 0);
+    player.quest_stat_trucks_destroyed = Save.get_int(player, "quest_stat_trucks_destroyed", 0);
+    player.quest_stat_vaults_robbed = Save.get_int(player, "quest_stat_vaults_robbed", 0);
+
+    any_loaded := false;
+    for s: 0..QUEST_ACTIVE_COUNT-1 {
+        prefix := format_string("quest_%", {s});
+        def_id := Save.get_int(player, format_string("%_def_id", {prefix}), -1);
+        if def_id >= 0 && def_id < QUEST_POOL_COUNT {
+            q: Quest_Instance;
+            q.def_id = def_id;
+            q.progress = Save.get_int(player, format_string("%_progress", {prefix}), 0);
+            q.completed = Save.get_int(player, format_string("%_completed", {prefix}), 0) != 0;
+            q.claimed = false;
+            q.is_challenge = Save.get_int(player, format_string("%_challenge", {prefix}), 0) != 0;
+            player.quest_slots[s] = q;
+            any_loaded = true;
+        } else {
+            player.quest_slots[s].def_id = -1;
+        }
+    }
+
+    if !any_loaded {
+        // First time: populate all 3 slots.
+        for s: 0..QUEST_ACTIVE_COUNT-1 {
+            quest_pick_new(player, s);
+        }
+        quest_save_active(player);
+    } else {
+        // Re-check any empty slots.
+        for s: 0..QUEST_ACTIVE_COUNT-1 {
+            if player.quest_slots[s].def_id < 0 {
+                quest_pick_new(player, s);
+            }
+        }
+        // Re-evaluate instant-completion quests (player may have progressed offline).
+        for s: 0..QUEST_ACTIVE_COUNT-1 {
+            if !player.quest_slots[s].completed {
+                quest_check_instant_completion(player, s);
+            }
+        }
+        quest_save_active(player);
+    }
+}
+
+// =============================================================================
+// Quest UI — Always-visible top-center horizontal bar with 3 quest cards
+// Styled like clean white card boxes with title, progress, and coin reward.
+// =============================================================================
+
+draw_quests_ui :: proc(player: Player) {
+    if player == null return;
+    if !player->is_local_or_server() return;
+    // Gate quest UI until tutorial completion (step 11 = "Tutorial Complete").
+    if player.tutorial_step < 11 return;
+
+    UI.push_screen_draw_context();
+    defer UI.pop_draw_context();
+
+    UI.push_layer(100);
+    defer UI.pop_layer();
+
+    safe := UI.get_safe_screen_rect();
+
+    // Padding from the top of the screen.
+    _ := safe->cut_top(20);
+
+    // Top-center strip: half the old width (40% of screen), 50% taller (120px).
+    top_strip := safe->cut_top(120)->inset(0, 6, 0, 6);
+    bar := top_strip->subrect(0.30, 0, 0.70, 1);
+
+    // 3 equal cards side-by-side.
+    THIRD :: 0.3333;
+    for s: 0..QUEST_ACTIVE_COUNT-1 {
+        UI.push_id("quest_card_%", {s});
+        defer UI.pop_id();
+
+        x1 := THIRD * s.(float);
+        x2 := x1 + THIRD;
+        card_rect := bar->subrect(x1, 0, x2, 1)->inset(2, 4, 2, 4);
+        draw_quest_card(player, card_rect, s);
+    }
+}
+
+draw_quest_card :: proc(player: Player, rect: Rect, slot: s64) {
+    if slot < 0 || slot >= QUEST_ACTIVE_COUNT return;
+    q := player.quest_slots[slot];
+    if q.def_id < 0 || q.def_id >= QUEST_POOL_COUNT return;
+
+    pool := get_quest_pool();
+    def := pool[q.def_id];
+    target := quest_get_target(player, slot);
+    reward := quest_get_reward(player, slot);
+
+    bold_font := get_asset(Font_Asset, "$AO/fonts/Barlow-Black.ttf");
+
+    // ---- Card background (white rounded button sprite) ----
+    card_bg := get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_9.png");
+    if q.completed && !q.claimed {
+        UI.quad(rect, card_bg, {0.7, 1.0, 0.75, 0.97});
+    } else {
+        UI.quad(rect, card_bg, {1, 1, 1, 0.97});
+    }
+
+    inner := rect->inset(10, 12, 10, 12);
+
+    // Split: left content | right reward column.
+    reward_area := inner->cut_right(56);
+    _ := inner->cut_right(6); // gap between content and reward
+    content := inner;
+
+    // ---- Left: Title ----
+    title_row := content->cut_top(34);
+    ts_title := UI.default_text_settings();
+    ts_title.size = 22;
+    ts_title.halign = .LEFT;
+    ts_title.valign = .CENTER;
+    ts_title.color = {1, 1, 1, 1};
+    ts_title.do_outline = false;
+    ts_title.word_wrap = true;
+    ts_title.font = bold_font;
+    UI.text(title_row, ts_title, def.title);
+
+    _ := content->cut_top(4);
+
+    // ---- Left: "Progress:" label ----
+    label_row := content->cut_top(22);
+    ts_label := UI.default_text_settings();
+    ts_label.size = 18;
+    ts_label.halign = .LEFT;
+    ts_label.valign = .CENTER;
+    ts_label.color = {0.4, 0.4, 0.45, 1};
+    ts_label.do_outline = false;
+    UI.text(label_row, ts_label, "Progress:");
+
+    _ := content->cut_top(2);
+
+    // ---- Left: Progress numbers (large bold) ----
+    num_row := content;
+    ts_num := UI.default_text_settings();
+    ts_num.size = 28;
+    ts_num.halign = .LEFT;
+    ts_num.valign = .CENTER;
+    ts_num.color = {1.0, 0.85, 0.2, 1};
+    ts_num.do_outline = false;
+    ts_num.font = bold_font;
+
+    if q.completed && !q.claimed {
+        ts_num.color = {0.1, 0.55, 0.15, 1};
+        UI.text(num_row, ts_num, "% / %", {format_int_with_commas(target), format_int_with_commas(target)});
+    } else {
+        UI.text(num_row, ts_num, "% / %", {format_int_with_commas(q.progress), format_int_with_commas(target)});
+    }
+
+    // ---- Right: Coin icon + reward (or Claim button) ----
+    if q.completed && !q.claimed {
+        // Pulse animation: gentle scale bounce so the button is eye-catching.
+        t := get_time() * 3.0;               // speed of pulse
+        pulse := sin(t) * 0.5 + 0.5;         // 0..1 wave
+        grow_amt := pulse * 3.0;              // up to 3px extra each side
+        bright := 0.85 + pulse * 0.15;        // 0.85..1.0 brightness
+
+        claim_rect := reward_area->inset(2)->grow_unscaled(grow_amt, grow_amt, grow_amt, grow_amt);
+
+        bs_claim := UI.default_button_settings();
+        bs_claim.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_2.png");
+        bs_claim.press_scaling = 0.4;
+        bs_claim.color = {bright, 1, bright, 1};
+
+        ts_btn := UI.default_text_settings();
+        ts_btn.size = 18;
+        ts_btn.halign = .CENTER;
+        ts_btn.valign = .CENTER;
+        ts_btn.do_outline = true;
+        ts_btn.outline_thickness = 1;
+        ts_btn.outline_color = {0, 0, 0, 1};
+
+        if UI.button(claim_rect, bs_claim, ts_btn, "Claim").clicked {
+            server_quest_claim(player, slot);
+        }
+    } else {
+        // Coin icon (top 60%).
+        coin_tex := get_asset(Texture_Asset, "Items/Coin.png");
+        if coin_tex != null {
+            icon_area := reward_area->subrect(0, 0.38, 1, 1)->inset(4);
+            UI.quad(icon_area->fit_aspect(coin_tex->get_aspect()), coin_tex);
+        }
+
+        // Reward amount below icon (bottom 40%).
+        reward_text_area := reward_area->subrect(0, 0, 1, 0.42);
+        ts_reward := UI.default_text_settings();
+        ts_reward.size = 20;
+        ts_reward.halign = .CENTER;
+        ts_reward.valign = .CENTER;
+        ts_reward.color = {0.15, 0.15, 0.15, 1};
+        ts_reward.do_outline = false;
+        ts_reward.font = bold_font;
+        if q.is_challenge {
+            UI.text(reward_text_area, ts_reward, "x%!", {format_int_with_commas(reward)});
+        } else {
+            UI.text(reward_text_area, ts_reward, "x%", {format_int_with_commas(reward)});
+        }
+    }
+}
