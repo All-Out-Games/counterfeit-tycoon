@@ -53,6 +53,9 @@ server_try_upgrade_harvester_level :: proc(player: Player) {
     Save.set_int(player, HARVESTER_UPGRADES_LEVEL_SAVE_KEY, player.harvester_level);
 
     Notifier.notify(player, "Harvester upgraded to Level %.", {player.harvester_level});
+
+    // Quest tracking: harvester upgraded.
+    quest_on_upgrade(player);
 }
 
 server_try_unlock_harvester_manager :: proc(player: Player) {
@@ -74,6 +77,9 @@ server_try_unlock_harvester_manager :: proc(player: Player) {
     Save.set_int(player, HARVESTER_UPGRADES_MANAGER_UNLOCK_SAVE_KEY, 1);
 
     Notifier.notify(player, "Unlocked Harvester Manager.");
+
+    // Quest tracking: manager hired (harvester manager counts).
+    quest_on_manager_hired(player);
 }
 
 draw_harvester_upgrades_button :: proc(player: Player) {

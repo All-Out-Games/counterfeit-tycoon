@@ -161,6 +161,9 @@ Vault :: class : Interactable {
         owner := pb->get_owner();
         if owner != null {
             Save.set_int(owner, VAULT_SAVE_KEY_FINISHED_BILLS, stored_finished_bills);
+
+            // Quest tracking: vault deposit (manager deposit counts too).
+            quest_on_vault_deposit(owner);
         }
 
         return to_add;
@@ -233,6 +236,9 @@ Vault :: class : Interactable {
 
         // Persist immediately so disconnects/crashes don't lose progress.
         Save.set_int(player, VAULT_SAVE_KEY_FINISHED_BILLS, stored_finished_bills);
+
+        // Quest tracking: vault deposit (check fill percent quests).
+        quest_on_vault_deposit(player);
     }
 
     server_steal_finished_bills :: method(thief: Player) {
@@ -284,6 +290,9 @@ Vault :: class : Interactable {
         Save.set_int(owner, VAULT_SAVE_KEY_FINISHED_BILLS, stored_finished_bills);
 
         Notifier.notify(thief, "Stole Finished Bills x%!", {to_steal});
+
+        // Quest tracking: vault robbed.
+        quest_on_vault_robbed(thief);
     }
 
     server_give_finished_bills_to_player :: method(player: Player, amount: s64) {

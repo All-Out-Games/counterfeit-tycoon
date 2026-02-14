@@ -601,6 +601,9 @@ Truck :: class : Interactable {
         }
         if shooter != null {
             Notifier.notify(shooter, "Destroyed truck! The bills spilled out.");
+
+            // Quest tracking: truck destroyed by shooter.
+            quest_on_truck_destroyed(shooter);
         }
 
         // Explosion VFX at the truck's death position (before teleport).
@@ -770,6 +773,9 @@ Truck :: class : Interactable {
                 delivery_bills = carried_finished_bills;
                 delivery_coins = coins;
                 delivery_seq += 1;
+
+                // Quest tracking: bank run completed.
+                quest_on_bank_run(owner, coins);
             }
         }
         else if vault != null && carried_finished_bills > 0 {
