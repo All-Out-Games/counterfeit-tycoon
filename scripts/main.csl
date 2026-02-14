@@ -358,7 +358,8 @@ coin_currency_hud_get_text_anchor :: proc(player: Player) -> v2 {
 // they regenerate health over time.
 BASE_SAFE_ZONE_BOX_SIZE :: 15.0;
 BASE_SAFE_ZONE_BOX_HALF :: (BASE_SAFE_ZONE_BOX_SIZE * 0.5);
-BASE_SAFE_ZONE_REGEN_HP_PER_SEC :: 10.0;
+BASE_SAFE_ZONE_REGEN_HP_PER_SEC :: 15.0;
+SPAWN_PROTECTION_SECONDS :: 10.0;
 
 player_is_in_own_base_safe_zone :: proc(player: Player) -> bool {
     if player == null return false;
@@ -760,6 +761,14 @@ Player :: class : Player_Base {
 
     // Death / respawn state (per-player, server authoritative)
     death_pickup_lockout: bool;
+    spawn_protection_until: float; // game time when spawn protection expires
+
+    // Spawn shield VFX (local cosmetic)
+    shield_entity: Entity;
+    shield_spine: Spine_Animator;
+    shield_playing_disappear: bool;
+    shield_created_time: float;
+    shield_disappear_start_time: float;
 
     give_item :: proc(player: Player, item_id: string) {
     item := Items.create_item_instance(ItemManager.FindItem(item_id), 1);
@@ -1110,6 +1119,70 @@ Player :: class : Player_Base {
                 }
                 else {
                     animator.instance.color_multiplier = {1, 1, 1, 1};
+                }
+            }
+        }
+
+        // Spawn shield VFX (runs on all clients so everyone sees it).
+        {
+            now := get_time();
+            is_protected := now < spawn_protection_until && !death_pickup_lockout;
+            SHIELD_INTRO_DURATION :: 0.6;   // seconds for intro anim
+            DISAPPEAR_LEAD :: 0.8;          // start disappear this long before expiry
+            DISAPPEAR_DURATION :: 0.8;      // seconds for disappear anim
+
+            should_disappear := !is_protected || (spawn_protection_until - now) < DISAPPEAR_LEAD;
+
+            if is_protected && !should_disappear {
+                // Shield should be visible.
+                if shield_entity == null || shield_entity.self == null {
+                    shield_entity = Scene.create_entity();
+                    shield_spine = shield_entity->add_component(Spine_Animator);
+                    shield_spine->awaken();
+                    shield_asset := get_asset(Spine_Asset, "Animations/008BED_Shield_spine/008BED_Shield.spine");
+                    shield_spine.instance->set_skeleton(shield_asset);
+                    shield_spine.instance->set_animation("intro", false, 0);
+                    shield_spine.depth_offset = -5.0; // render on top of player
+                    shield_playing_disappear = false;
+                    shield_created_time = now;
+                }
+
+                // After intro duration, switch to idle_loop.
+                if !shield_playing_disappear && (now - shield_created_time) >= SHIELD_INTRO_DURATION {
+                    if shield_spine != null && shield_spine.instance != null {
+                        // Only set once (check if we haven't already switched).
+                        if (now - shield_created_time) < SHIELD_INTRO_DURATION + dt + 0.05 {
+                            shield_spine.instance->set_animation("idle_loop", true, 0);
+                        }
+                    }
+                }
+
+                // Follow player position (offset up to center on body).
+                if entity != null && entity.self != null && shield_entity != null && shield_entity.self != null {
+                    shield_entity->set_local_position(entity.world_position + v2{0, 0.5});
+                }
+            }
+            else if shield_entity != null && shield_entity.self != null {
+                // Play disappear then destroy.
+                if !shield_playing_disappear {
+                    shield_playing_disappear = true;
+                    shield_disappear_start_time = now;
+                    if shield_spine != null && shield_spine.instance != null {
+                        shield_spine.instance->set_animation("disappear", false, 0);
+                    }
+                }
+
+                // Destroy after disappear duration.
+                if shield_playing_disappear && (now - shield_disappear_start_time) >= DISAPPEAR_DURATION {
+                    shield_entity->destroy();
+                    shield_entity = null;
+                    shield_spine = null;
+                    shield_playing_disappear = false;
+                }
+
+                // Keep following player while disappearing.
+                if entity != null && entity.self != null && shield_entity != null && shield_entity.self != null {
+                    shield_entity->set_local_position(entity.world_position + v2{0, 0.5});
                 }
             }
         }
@@ -2280,6 +2353,11 @@ Player :: class : Player_Base {
 
         // Ignore damage while dead / in death sequence.
         if death_pickup_lockout {
+            return;
+        }
+
+        // Spawn protection: ignore damage for SPAWN_PROTECTION_SECONDS after respawn.
+        if get_time() < spawn_protection_until {
             return;
         }
 

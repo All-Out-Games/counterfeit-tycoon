@@ -1,0 +1,12 @@
+10c4467511db1e40.png
+	size: 316, 948
+	filter: Linear, Linear
+shield0000
+	bounds: 3, 3, 310, 312
+	offsets: 4, 5, 318, 322
+shield0001
+	bounds: 3, 318, 310, 312
+	offsets: 4, 5, 318, 322
+shield0002
+	bounds: 3, 633, 310, 312
+	offsets: 4, 5, 318, 322

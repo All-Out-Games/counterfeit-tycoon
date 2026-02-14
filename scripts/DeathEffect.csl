@@ -167,6 +167,9 @@ Death_Effect :: class : Effect_Base {
 
             // Allow interactions again immediately upon respawn (death sequence is over for gameplay).
             player.death_pickup_lockout = false;
+
+            // Grant spawn protection.
+            player.spawn_protection_until = get_time() + SPAWN_PROTECTION_SECONDS;
         }
     }
 

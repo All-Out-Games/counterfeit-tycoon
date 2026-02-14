@@ -7,9 +7,9 @@ HARVESTER_MAX_LEVEL :: 10;
 HARVESTER_SPEED_MULT_PER_LEVEL :: 0.16; // +16% move speed per level above 1
 
 // Fixed capacity per level (hard numbers).
-// L1..L10: 5, 8, 12, 16, 22, 30, 40, 55, 75, 100
+// L1..L10: 10, 15, 25, 40, 60, 85, 120, 160, 200, 250
 harvester_capacity_by_level :: proc() -> [10]s64 {
-    return {5, 8, 12, 16, 22, 30, 40, 55, 75, 100};
+    return {10, 15, 25, 40, 60, 85, 120, 160, 200, 250};
 }
 
 harvester_capacity_for_level :: proc(level: s64) -> s64 {

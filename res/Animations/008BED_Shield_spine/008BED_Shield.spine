@@ -1,0 +1,135 @@
+{
+"skeleton": { "hash": "OjxYwYW3/Xs", "spine": "4.0.64", "x": -159, "y": -161, "width": 318, "height": 322 },
+"bones": [
+	{ "name": "root" }
+],
+"slots": [
+	{ "name": "shield0000", "bone": "root", "attachment": "shield0000" }
+],
+"skins": [
+	{
+		"name": "default",
+		"attachments": {
+			"shield0000": {
+				"shield0000": { "width": 318, "height": 322 },
+				"shield0001": { "width": 318, "height": 322 },
+				"shield0002": { "width": 318, "height": 322 }
+			}
+		}
+	}
+],
+"animations": {
+	"disappear": {
+		"slots": {
+			"shield0000": {
+				"rgba": [
+					{
+						"time": 0.1667,
+						"color": "ffffffff",
+						"curve": [ 0.256, 1, 0.411, 1, 0.256, 1, 0.411, 1, 0.256, 1, 0.411, 1, 0.256, 1, 0.434, 0.52 ]
+					},
+					{ "time": 0.5, "color": "ffffff00" }
+				],
+				"attachment": [
+					{ "time": 0.1, "name": "shield0001" },
+					{ "time": 0.2, "name": "shield0002" },
+					{ "time": 0.3, "name": "shield0000" },
+					{ "time": 0.4, "name": "shield0001" },
+					{ "time": 0.5, "name": "shield0002" }
+				]
+			}
+		},
+		"bones": {
+			"root": {
+				"scale": [
+					{
+						"curve": [ 0.15, 1, 0.438, 1.223, 0.15, 1, 0.44, 0.95 ]
+					},
+					{ "time": 0.5, "x": 1.281, "y": 0.918 }
+				]
+			}
+		}
+	},
+	"idle_loop": {
+		"slots": {
+			"shield0000": {
+				"attachment": [
+					{ "time": 0.1, "name": "shield0001" },
+					{ "time": 0.2, "name": "shield0002" },
+					{ "time": 0.3, "name": "shield0000" },
+					{ "time": 0.4, "name": "shield0001" },
+					{ "time": 0.5, "name": "shield0002" },
+					{ "time": 0.6, "name": "shield0000" },
+					{ "time": 0.7, "name": "shield0001" },
+					{ "time": 0.8, "name": "shield0002" },
+					{ "time": 0.9, "name": "shield0000" }
+				]
+			}
+		},
+		"bones": {
+			"root": {
+				"scale": [
+					{
+						"curve": [ 0.15, 1, 0.3, 1.069, 0.15, 1, 0.3, 0.952 ]
+					},
+					{
+						"time": 0.45,
+						"x": 1.069,
+						"y": 0.952,
+						"curve": [ 0.6, 1.069, 0.75, 1.023, 0.6, 0.952, 0.75, 0.984 ]
+					},
+					{ "time": 0.9 }
+				]
+			}
+		}
+	},
+	"intro": {
+		"slots": {
+			"shield0000": {
+				"rgba": [
+					{
+						"color": "ffffff00",
+						"curve": [ 0.094, 1, 0.189, 1, 0.094, 1, 0.189, 1, 0.094, 1, 0.189, 1, 0.047, 0.5, 0.189, 1 ]
+					},
+					{ "time": 0.2833, "color": "ffffffff" }
+				],
+				"attachment": [
+					{ "time": 0.1, "name": "shield0001" },
+					{ "time": 0.2, "name": "shield0002" },
+					{ "time": 0.3, "name": "shield0000" },
+					{ "time": 0.4, "name": "shield0001" },
+					{ "time": 0.5, "name": "shield0002" },
+					{ "time": 0.6, "name": "shield0000" },
+					{ "time": 0.7, "name": "shield0001" },
+					{ "time": 0.8, "name": "shield0002" },
+					{ "time": 0.9, "name": "shield0000" }
+				]
+			}
+		},
+		"bones": {
+			"root": {
+				"scale": [
+					{
+						"x": 0.847,
+						"y": 0.847,
+						"curve": [ 0.042, 0.927, 0.112, 1.009, 0.042, 0.927, 0.112, 0.993 ]
+					},
+					{
+						"time": 0.1667,
+						"x": 1.022,
+						"y": 0.985,
+						"curve": [ 0.262, 1.042, 0.356, 1.069, 0.262, 0.971, 0.356, 0.952 ]
+					},
+					{
+						"time": 0.45,
+						"x": 1.069,
+						"y": 0.952,
+						"curve": [ 0.6, 1.069, 0.75, 1.023, 0.6, 0.952, 0.75, 0.984 ]
+					},
+					{ "time": 0.9 }
+				]
+			}
+		}
+	}
+}
+}
