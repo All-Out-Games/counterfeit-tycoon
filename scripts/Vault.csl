@@ -81,7 +81,7 @@ Vault :: class : Interactable {
 
         // Defaults (only if not set in editor)
         if max_capacity <= 0 {
-            max_capacity = 50;
+            max_capacity = 20000;
         }
 
         // If we've already received replicated state from the server (common on clients),
@@ -91,13 +91,18 @@ Vault :: class : Interactable {
         }
 
         // Ensure capacity matches upgrade level.
-        apply_upgrade_level(upgrade_level);
+        apply_upgrade_level(upgrade_level < 0 ? 6 : upgrade_level);
         if deposit_per_interact <= 0 {
             deposit_per_interact = 25;
         }
         if ui_offset.x == 0 && ui_offset.y == 0 {
             ui_offset = {0, 1.25};
         }
+
+        if upgrade_level < 1 {
+            upgrade_level = 1;
+        }
+
 
         // Interaction prompt
         this->set_text("Deposit finished bills");
@@ -521,9 +526,6 @@ Vault :: class : Interactable {
         if saved < 0 {
             saved = 0;
         }
-        if saved > cap {
-            saved = cap;
-        }
 
         // Don't overwrite non-zero runtime state with an older save (defensive).
         if stored_finished_bills < saved {
@@ -531,9 +533,6 @@ Vault :: class : Interactable {
         }
         if stored_finished_bills < 0 {
             stored_finished_bills = 0;
-        }
-        if stored_finished_bills > cap {
-            stored_finished_bills = cap;
         }
 
         loaded_from_save = true;

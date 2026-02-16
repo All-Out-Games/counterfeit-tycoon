@@ -3,6 +3,13 @@ import "core:ao"
 WEAPONS_SHOP_COIN_CURRENCY :: "Coins";
 WEAPONS_SHOP_AMMO_BUY_AMOUNT :: 100;
 
+// Sparks product ids (created via MCP). Pistol intentionally has no product.
+WEAPON_SPARKS_PRODUCT_SMG              :: "6993734e5adc42888ceccffe";
+WEAPON_SPARKS_PRODUCT_AKIMBO_PISTOLS   :: "6993734e9d2f45bf92330ac9";
+WEAPON_SPARKS_PRODUCT_ASSAULT_RIFLE    :: "6993734eaeeff8c9759e5a9c";
+WEAPON_SPARKS_PRODUCT_EXPLOSIVE_SHOTTY :: "6993734e56519cfc7405a4f5";
+WEAPON_SPARKS_PRODUCT_GATLING_GUN      :: "6993734eaeeff8c9759e5a9b";
+
 Weapons_Shop_Tab :: enum {
     WEAPONS;
     AMMO;
@@ -41,6 +48,146 @@ server_request_purchase_fx :: proc(player: Player, icon_path: string) {
     if icon_path.count == 0 return;
     player.purchase_fx_icon_path = icon_path;
     player.purchase_fx_seq += 1;
+}
+
+weapon_shop_sparks_product_id :: proc(wt: Weapon_Type) -> string {
+    switch wt {
+        case .SUBMACHINE_GUN:    return WEAPON_SPARKS_PRODUCT_SMG;
+        case .AKIMBO_PISTOLS:    return WEAPON_SPARKS_PRODUCT_AKIMBO_PISTOLS;
+        case .ASSAULT_RIFLE:     return WEAPON_SPARKS_PRODUCT_ASSAULT_RIFLE;
+        case .EXPLOSIVE_SHOTGUN: return WEAPON_SPARKS_PRODUCT_EXPLOSIVE_SHOTTY;
+        case .GATLING_GUN:       return WEAPON_SPARKS_PRODUCT_GATLING_GUN;
+        case .PISTOL:            return {}; // No pistol product
+        case .NONE:              return {};
+    }
+    return {};
+}
+
+weapon_shop_sparks_price :: proc(wt: Weapon_Type) -> s64 {
+    id := weapon_shop_sparks_product_id(wt);
+    if id.count == 0 return 0;
+
+    p := Purchasing.get_product(id);
+    if p.id.count != 0 && p.price > 0 {
+        return p.price;
+    }
+
+    // Fallback to the authored prices (in case product data isn't available yet).
+    switch wt {
+        case .SUBMACHINE_GUN:    return 50;
+        case .AKIMBO_PISTOLS:    return 150;
+        case .ASSAULT_RIFLE:     return 300;
+        case .EXPLOSIVE_SHOTGUN: return 650;
+        case .GATLING_GUN:       return 900;
+        case .PISTOL:            return 0;
+        case .NONE:              return 0;
+    }
+    return 0;
+}
+
+server_grant_weapon_purchase :: proc(player: Player, wt: Weapon_Type, purchase_source: string) -> bool {
+    if player == null return false;
+    //if !Game.is_server() return false;
+    if wt == .NONE return false;
+
+    init_weapon_items();
+
+    defn := get_weapon_item_def(wt);
+    if defn == null {
+        Notifier.notify(player, "Weapon not available.");
+        return false;
+    }
+
+    inv := player.default_inventory;
+    if inv == null || inv.self == null {
+        Notifier.notify(player, "No inventory available.");
+        return false;
+    }
+
+    // Prefer inventory grant; if full at the moment of fulfillment, drop near the player
+    // so they don't lose their purchase.
+    room := Items.calculate_room_in_inventory_for_item(defn, inv);
+    if room < 1 {
+        if player.entity != null && player.entity.self != null {
+            ItemDrops.spawn_from_definition(player.entity.world_position, defn, 1);
+            Notifier.notify(player, "Inventory full — dropped % near you.", {defn->get_name()});
+            server_request_purchase_fx(player, get_weapon_config(wt).weapon_icon_path);
+            quest_on_weapon_bought(player);
+            return true;
+        }
+        Notifier.notify(player, "Inventory full!");
+        return false;
+    }
+
+    item := Items.create_item_instance(defn, 1);
+    if item == null || item.self == null {
+        Notifier.notify(player, "Purchase failed.");
+        return false;
+    }
+
+    will_destroy: bool;
+    if Items.can_move_item_to_inventory(item, inv, ref will_destroy) {
+        Items.move_item_to_inventory(item, inv);
+        Notifier.notify(player, "Purchased % (%).", {defn->get_name(), purchase_source});
+
+        quest_on_weapon_bought(player);
+        server_request_purchase_fx(player, get_weapon_config(wt).weapon_icon_path);
+        return true;
+    }
+
+    Items.destroy_item_instance(item);
+    if player.entity != null && player.entity.self != null {
+        ItemDrops.spawn_from_definition(player.entity.world_position, defn, 1);
+        Notifier.notify(player, "Inventory full — dropped % near you.", {defn->get_name()});
+        server_request_purchase_fx(player, get_weapon_config(wt).weapon_icon_path);
+        quest_on_weapon_bought(player);
+        return true;
+    }
+
+    Notifier.notify(player, "Inventory full!");
+    return false;
+}
+
+server_try_prompt_sparks_weapon_purchase :: proc(player: Player, wt: Weapon_Type) {
+    if player == null return;
+    if wt == .NONE return;
+
+    product_id := weapon_shop_sparks_product_id(wt);
+    if product_id.count == 0 {
+        if player->is_local() {
+            Notifier.notify("Sparks purchase not available.");
+        }
+        return;
+    }
+
+    init_weapon_items();
+
+    defn := get_weapon_item_def(wt);
+    if defn == null {
+        if player->is_local() {
+            Notifier.notify("Weapon not available.");
+        }
+        return;
+    }
+
+    inv := player.default_inventory;
+    if inv == null || inv.self == null {
+        if player->is_local() {
+            Notifier.notify("No inventory available.");
+        }
+        return;
+    }
+
+    room := Items.calculate_room_in_inventory_for_item(defn, inv);
+    if room < 1 {
+        if player->is_local() {
+            Notifier.notify("Inventory full!");
+        }
+        return;
+    }
+
+    log_info("Prompting purchase of %", {product_id});
+    Purchasing.prompt_purchase(player, product_id);
 }
 
 weapon_shop_price :: proc(wt: Weapon_Type) -> s64 {
@@ -99,7 +246,7 @@ ammo_shop_price :: proc(ammo_type_index: s64) -> s64 {
 
 server_try_buy_weapon :: proc(player: Player, wt: Weapon_Type) {
     if player == null return;
-    if !Game.is_server() return;
+    //if !Game.is_server() return;
     if wt == .NONE return;
 
     init_weapon_items();
@@ -172,6 +319,104 @@ server_try_buy_weapon :: proc(player: Player, wt: Weapon_Type) {
         }
         Notifier.notify(player, "Inventory full!");
     }
+}
+
+// Weapons shop purchase fulfillment.
+// Called by `ao_purchase_handler` (defined in `scripts/main.csl`) when a purchase succeeds.
+// Return true if we handled the purchase id.
+weapons_shop_try_handle_purchase :: proc(player: Player, id: string) -> bool {
+    if player == null return false;
+    if id.count == 0 return false;
+
+    // Weapons Shop Sparks products
+    if id == WEAPON_SPARKS_PRODUCT_SMG {
+        if Game.is_server() {
+            _ := server_grant_weapon_purchase(player, .SUBMACHINE_GUN, "Sparks");
+            return true;
+        }
+        return true;
+    }
+    if id == WEAPON_SPARKS_PRODUCT_AKIMBO_PISTOLS {
+        if Game.is_server() {
+            _ := server_grant_weapon_purchase(player, .AKIMBO_PISTOLS, "Sparks");
+            return true;
+        }
+        return true;
+    }
+    if id == WEAPON_SPARKS_PRODUCT_ASSAULT_RIFLE {
+        if Game.is_server() {
+            _ := server_grant_weapon_purchase(player, .ASSAULT_RIFLE, "Sparks");
+            return true;
+        }
+        return true;
+    }
+    if id == WEAPON_SPARKS_PRODUCT_EXPLOSIVE_SHOTTY {
+        if Game.is_server() {
+            _ := server_grant_weapon_purchase(player, .EXPLOSIVE_SHOTGUN, "Sparks");
+            return true;
+        }
+        return true;
+    }
+    if id == WEAPON_SPARKS_PRODUCT_GATLING_GUN {
+        if Game.is_server() {
+            _ := server_grant_weapon_purchase(player, .GATLING_GUN, "Sparks");
+            return true;
+        }
+        return true;
+    }
+
+    // Fallback: some purchase flows may pass a different id (or even product name).
+    // Try resolving it through Purchasing and match by product name.
+    prod := Purchasing.get_product(id);
+    if prod.id.count != 0 {
+        if prod.name == "Submachine Gun" {
+            if Game.is_server() {
+                _ := server_grant_weapon_purchase(player, .SUBMACHINE_GUN, "Sparks");
+            }
+            return true;
+        }
+        if prod.name == "Akimbo Pistols" {
+            if Game.is_server() {
+                _ := server_grant_weapon_purchase(player, .AKIMBO_PISTOLS, "Sparks");
+            }
+            return true;
+        }
+        if prod.name == "Assault Rifle" {
+            if Game.is_server() {
+                _ := server_grant_weapon_purchase(player, .ASSAULT_RIFLE, "Sparks");
+            }
+            return true;
+        }
+        if prod.name == "Explosive Shotgun" {
+            if Game.is_server() {
+                _ := server_grant_weapon_purchase(player, .EXPLOSIVE_SHOTGUN, "Sparks");
+            }
+            return true;
+        }
+        if prod.name == "Gatling Gun" {
+            if Game.is_server() {
+                _ := server_grant_weapon_purchase(player, .GATLING_GUN, "Sparks");
+            }
+            return true;
+        }
+    }
+
+    // Extra fallback: id might be the product name directly.
+    if id == "Submachine Gun" || id == "Akimbo Pistols" || id == "Assault Rifle" || id == "Explosive Shotgun" || id == "Gatling Gun" {
+        if Game.is_server() {
+            if id == "Submachine Gun"       _ := server_grant_weapon_purchase(player, .SUBMACHINE_GUN, "Sparks");
+            if id == "Akimbo Pistols"       _ := server_grant_weapon_purchase(player, .AKIMBO_PISTOLS, "Sparks");
+            if id == "Assault Rifle"        _ := server_grant_weapon_purchase(player, .ASSAULT_RIFLE, "Sparks");
+            if id == "Explosive Shotgun"    _ := server_grant_weapon_purchase(player, .EXPLOSIVE_SHOTGUN, "Sparks");
+            if id == "Gatling Gun"          _ := server_grant_weapon_purchase(player, .GATLING_GUN, "Sparks");
+        }
+        return true;
+    }
+
+    if Game.is_server() {
+        log_info("ao_purchase_handler: unhandled purchase id: %", {id});
+    }
+    return false;
 }
 
 server_try_buy_ammo :: proc(player: Player, ammo_type_index: s64) {
@@ -398,6 +643,18 @@ draw_weapon_shop_item_card :: proc(player: Player, rect: Rect, wt: Weapon_Type) 
     icon := get_asset(Texture_Asset, config.weapon_icon_path);
     cost := weapon_shop_price(wt);
     can_afford := cost == 0 || (cost > 0 && Economy.can_withdraw_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost));
+    sparks_product_id := weapon_shop_sparks_product_id(wt);
+    sparks_price := weapon_shop_sparks_price(wt);
+
+    // Keep the original big purchase button, but reserve room for a Sparks button underneath.
+    main_rect := rect;
+    sparks_rect: Rect;
+    has_sparks := sparks_product_id.count != 0 && sparks_price > 0;
+    if has_sparks {
+        // Bottom button + small gap.
+        sparks_rect = main_rect->cut_bottom(56)->inset(4);
+        _ := main_rect->cut_bottom(6);
+    }
 
     bs := UI.default_button_settings();
     bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_2.png"); // Green
@@ -415,7 +672,9 @@ draw_weapon_shop_item_card :: proc(player: Player, rect: Rect, wt: Weapon_Type) 
     ts.outline_thickness = 2;
     ts.outline_color = {0, 0, 0, 1};
 
-    result := UI.begin_button(rect, bs, ts, ""); {
+    // Original card button (coins)
+    UI.push_id("coins_btn", {}); defer UI.pop_id();
+    result := UI.begin_button(main_rect, bs, ts, ""); {
         defer UI.end_button();
 
         inner := result.rect->inset(12);
@@ -439,6 +698,43 @@ draw_weapon_shop_item_card :: proc(player: Player, rect: Rect, wt: Weapon_Type) 
 
     if result.clicked {
         server_try_buy_weapon(player, wt);
+    }
+
+    // Sparks button (separate, underneath; always green)
+    if has_sparks {
+        UI.push_id("sparks_btn", {}); defer UI.pop_id();
+
+        bs_sparks := UI.default_button_settings();
+        bs_sparks.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_2.png"); // Green (always)
+        bs_sparks.press_scaling = 0.25;
+
+        // Render icon + price (no "Sparks" text).
+        prod := Purchasing.get_product(sparks_product_id);
+        sparks_icon := prod.icon;
+
+        sparks_result := UI.begin_button(sparks_rect, bs_sparks, ts, ""); {
+            defer UI.end_button();
+
+            inner := sparks_result.rect->inset(10);
+            // Left: icon, Right: price.
+            icon_rect := inner->cut_left_unscaled(42);
+            _ := inner->cut_left(8);
+            text_rect := inner;
+
+            if sparks_icon != null {
+                UI.quad(icon_rect->fit_aspect(sparks_icon->get_aspect()), sparks_icon);
+            }
+
+            ts_price := ts;
+            ts_price.size = 26;
+            ts_price.halign = .LEFT;
+            ts_price.valign = .CENTER;
+            UI.text(text_rect, ts_price, "%", {format_int_with_commas(sparks_price)});
+        }
+
+        if sparks_result.clicked {
+            server_try_prompt_sparks_weapon_purchase(player, wt);
+        }
     }
 }
 

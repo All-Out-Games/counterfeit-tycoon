@@ -1,10 +1,13 @@
 {
-    csl: true
-    projects:
-    [
-        {
-            name: "Counterfeit Tycoon"
-            id: "697fed014dbbc40714514d3e"
-        }
-    ]
+  "csl": true,
+  "projects": [
+    {
+      "name": "Counterfeit Tycoon",
+      "id": "697fed014dbbc40714514d3e"
+    },
+    {
+      "name": "Counterfeit Tycoon (Staging)",
+      "id": "6993a0bf5adc42888cece51d"
+    }
+  ]
 }
