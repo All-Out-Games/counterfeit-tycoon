@@ -576,7 +576,7 @@ Courier :: class : Component {
                         if !vault_full_notified_this_stop {
                             owner := pb != null ? pb->get_owner() : null;
                             if owner != null {
-                                Notifier.notify(owner, "Vault is full! Courier is paused until there is space.");
+                                Notifier.notify(owner, "Piggy Bank is full! Courier is paused until there is space.");
                             }
                             vault_full_notified_this_stop = true;
                         }

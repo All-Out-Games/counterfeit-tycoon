@@ -24,17 +24,25 @@ machine_queue_cap_for_level :: proc(level: s64) -> s64 {
     return QUEUE_CAP_BASE + QUEUE_CAP_PER_LEVEL * lvl;
 }
 
-// Vault upgrade balance: 6 levels, capacity + cost tables.
-VAULT_MAX_LEVEL :: 6;
+// Vault upgrade balance: 12 levels, capacity + cost tables.
+// Spread across more tiers so each upgrade feels achievable and
+// players see frequent progression rather than hitting big cost walls.
+VAULT_MAX_LEVEL :: 12;
 
 vault_capacity_for_level :: proc(level: s64) -> s64 {
     switch level {
         case 1:  return 50;
-        case 2:  return 200;
-        case 3:  return 750;
-        case 4:  return 2000;
-        case 5:  return 6000;
-        case 6:  return 20000;
+        case 2:  return 120;
+        case 3:  return 250;
+        case 4:  return 500;
+        case 5:  return 900;
+        case 6:  return 1500;
+        case 7:  return 2500;
+        case 8:  return 4000;
+        case 9:  return 6500;
+        case 10: return 10000;
+        case 11: return 15000;
+        case 12: return 20000;
     }
     return 50;
 }
@@ -42,11 +50,17 @@ vault_capacity_for_level :: proc(level: s64) -> s64 {
 vault_upgrade_cost_for_level :: proc(level: s64) -> s64 {
     // Cost to upgrade from `level` to `level+1`. Level 1 is free (no cost to reach it).
     switch level {
-        case 1:  return 2000;
-        case 2:  return 15000;
-        case 3:  return 100000;
-        case 4:  return 750000;
-        case 5:  return 5000000;
+        case 1:  return 500;
+        case 2:  return 1200;
+        case 3:  return 2800;
+        case 4:  return 6000;
+        case 5:  return 12000;
+        case 6:  return 25000;
+        case 7:  return 50000;
+        case 8:  return 100000;
+        case 9:  return 225000;
+        case 10: return 500000;
+        case 11: return 1500000;
     }
     return 0; // max level or invalid
 }
@@ -58,7 +72,7 @@ server_try_upgrade_vault :: proc(player: Player) {
     level := player.vault_level;
     if level < 1 level = 1;
     if level >= VAULT_MAX_LEVEL {
-        Notifier.notify(player, "Vault is already max level.");
+        Notifier.notify(player, "Piggy Bank is already max level.");
         return;
     }
 
@@ -85,7 +99,7 @@ server_try_upgrade_vault :: proc(player: Player) {
         gm->server_apply_vault_level_for_player(player);
     }
 
-    Notifier.notify(player, "Vault upgraded to Level %.", {new_level});
+    Notifier.notify(player, "Piggy Bank upgraded to Level %.", {new_level});
 
     // Quest tracking: vault upgraded.
     quest_on_upgrade(player);
@@ -178,12 +192,15 @@ base_station_upgrade_costs :: proc() -> [9]s64 {
 }
 
 station_cost_multiplier :: proc(kind: Station_Kind) -> s64 {
-    // Placeholder: later stations are more expensive.
+    // Early-chain stations (low value-add) cost more to upgrade.
+    // Late-chain stations (high value-add) are cheaper, incentivizing
+    // players to upgrade the money-making end of the pipeline first.
+    // Value-add per item: Shredder +3, Paper Press +5, Color Machine +7, Stamp Machine +35
     switch kind {
-        case .SHREDDER:      return 1;
+        case .SHREDDER:      return 3;
         case .PAPER_PRESS:   return 2;
-        case .COLOR_MACHINE: return 3;
-        case .STAMP_MACHINE: return 4;
+        case .COLOR_MACHINE: return 2;
+        case .STAMP_MACHINE: return 1;
     }
     return 1;
 }
@@ -391,7 +408,7 @@ draw_upgrades_lane_header_buttons :: proc(player: Player, rect: Rect) {
         x2 := (i + 1).(float) / TAB_COUNT.(float);
         btn := rect->subrect(x1, 0, x2, 1)->inset(8);
 
-        label := "Vault";
+        label := "Piggy Bank";
         if i < UPGRADES_LANE_COUNT {
             label = format_string("Lane %", {i + 1});
         }
@@ -514,7 +531,7 @@ draw_vault_upgrade_card :: proc(player: Player, rect: Rect) {
     ts_title.do_outline = true;
     ts_title.outline_thickness = 3;
     ts_title.outline_color = {0, 0, 0, 1};
-    UI.text(title_rect, ts_title, "Vault");
+    UI.text(title_rect, ts_title, "Piggy Bank");
 
     _ := inner->cut_top(16);
 
