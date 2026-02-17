@@ -8,6 +8,71 @@ HARVESTER_UPGRADES_MANAGER_UNLOCK_SAVE_KEY :: "harvester_manager_unlocked";
 
 HARVESTER_UPGRADES_MANAGER_UNLOCK_COST :: 500;
 
+// Sparks product ids (created via MCP) for Harvester level upgrades.
+HARVESTER_SPARKS_PRODUCT_LEVEL_2  :: "69942dd956519cfc7405d3c2";
+HARVESTER_SPARKS_PRODUCT_LEVEL_3  :: "69942ddb56519cfc7405d3c5";
+HARVESTER_SPARKS_PRODUCT_LEVEL_4  :: "69942ddc56519cfc7405d3c6";
+HARVESTER_SPARKS_PRODUCT_LEVEL_5  :: "69942ddc56519cfc7405d3c7";
+HARVESTER_SPARKS_PRODUCT_LEVEL_6  :: "69942ddd56519cfc7405d3c8";
+HARVESTER_SPARKS_PRODUCT_LEVEL_7  :: "69942ddd56519cfc7405d3c9";
+HARVESTER_SPARKS_PRODUCT_LEVEL_8  :: "69942ddd56519cfc7405d3ca";
+HARVESTER_SPARKS_PRODUCT_LEVEL_9  :: "69942ddd56519cfc7405d3cb";
+HARVESTER_SPARKS_PRODUCT_LEVEL_10 :: "69942dde56519cfc7405d3cc";
+
+HARVESTER_SPARKS_PRODUCT_MANAGER_UNLOCK :: "69942ee3196902f46c702f6b";
+
+harvester_upgrade_sparks_product_id_for_level :: proc(target_level: s64) -> string {
+    switch target_level {
+        case 2:  return HARVESTER_SPARKS_PRODUCT_LEVEL_2;
+        case 3:  return HARVESTER_SPARKS_PRODUCT_LEVEL_3;
+        case 4:  return HARVESTER_SPARKS_PRODUCT_LEVEL_4;
+        case 5:  return HARVESTER_SPARKS_PRODUCT_LEVEL_5;
+        case 6:  return HARVESTER_SPARKS_PRODUCT_LEVEL_6;
+        case 7:  return HARVESTER_SPARKS_PRODUCT_LEVEL_7;
+        case 8:  return HARVESTER_SPARKS_PRODUCT_LEVEL_8;
+        case 9:  return HARVESTER_SPARKS_PRODUCT_LEVEL_9;
+        case 10: return HARVESTER_SPARKS_PRODUCT_LEVEL_10;
+    }
+    return {};
+}
+
+harvester_upgrade_sparks_price_for_level :: proc(target_level: s64) -> s64 {
+    id := harvester_upgrade_sparks_product_id_for_level(target_level);
+    if id.count == 0 return 0;
+
+    p := Purchasing.get_product(id);
+    if p.id.count != 0 && p.price > 0 {
+        return p.price;
+    }
+
+    // Fallback to authored prices (in case product data isn't available yet).
+    switch target_level {
+        case 2:  return 5;
+        case 3:  return 8;
+        case 4:  return 19;
+        case 5:  return 42;
+        case 6:  return 93;
+        case 7:  return 206;
+        case 8:  return 453;
+        case 9:  return 598;
+        case 10: return 1317;
+    }
+    return 0;
+}
+
+harvester_manager_unlock_sparks_price :: proc() -> s64 {
+    id := HARVESTER_SPARKS_PRODUCT_MANAGER_UNLOCK;
+    if id.count == 0 return 0;
+
+    p := Purchasing.get_product(id);
+    if p.id.count != 0 && p.price > 0 {
+        return p.price;
+    }
+
+    // Fallback to authored price (in case product data isn't available yet).
+    return 5;
+}
+
 // Costs to upgrade from:
 // 1->2, 2->3, ... 9->10
 harvester_level_upgrade_costs :: proc() -> [9]s64 {
@@ -56,6 +121,162 @@ server_try_upgrade_harvester_level :: proc(player: Player) {
 
     // Quest tracking: harvester upgraded.
     quest_on_upgrade(player);
+}
+
+server_grant_harvester_upgrade_to_level :: proc(player: Player, target_level: s64, purchase_source: string) -> bool {
+    if player == null return false;
+    if !Game.is_server() return false;
+
+    if target_level < 1 target_level = 1;
+    if target_level > HARVESTER_UPGRADES_MAX_LEVEL target_level = HARVESTER_UPGRADES_MAX_LEVEL;
+
+    cur := player.harvester_level;
+    if cur < 1 cur = 1;
+    if cur > HARVESTER_UPGRADES_MAX_LEVEL cur = HARVESTER_UPGRADES_MAX_LEVEL;
+
+    if target_level <= cur {
+        Notifier.notify(player, "Harvester is already Level %.", {cur});
+        return false;
+    }
+
+    player.harvester_level = target_level;
+    Save.set_int(player, HARVESTER_UPGRADES_LEVEL_SAVE_KEY, player.harvester_level);
+
+    // Reuse the existing quest hook (counts as an upgrade regardless of source).
+    quest_on_upgrade(player);
+
+    if purchase_source.count != 0 {
+        Notifier.notify(player, "Harvester upgraded to Level % (%).", {player.harvester_level, purchase_source});
+    }
+    else {
+        Notifier.notify(player, "Harvester upgraded to Level %.", {player.harvester_level});
+    }
+
+    return true;
+}
+
+server_grant_harvester_manager_unlock :: proc(player: Player, purchase_source: string) -> bool {
+    if player == null return false;
+    if !Game.is_server() return false;
+
+    if player.harvester_manager_unlocked {
+        return false;
+    }
+
+    player.harvester_manager_unlocked = true;
+    Save.set_int(player, HARVESTER_UPGRADES_MANAGER_UNLOCK_SAVE_KEY, 1);
+
+    // Quest tracking: manager hired (harvester manager counts).
+    quest_on_manager_hired(player);
+
+    if purchase_source.count != 0 {
+        Notifier.notify(player, "Unlocked Harvester Manager (%).", {purchase_source});
+    }
+    else {
+        Notifier.notify(player, "Unlocked Harvester Manager.");
+    }
+
+    return true;
+}
+
+server_try_prompt_sparks_harvester_upgrade_purchase :: proc(player: Player, target_level: s64) {
+    if player == null return;
+    if target_level < 2 || target_level > HARVESTER_UPGRADES_MAX_LEVEL {
+        if player->is_local() {
+            Notifier.notify("Invalid upgrade.");
+        }
+        return;
+    }
+
+    cur := player.harvester_level;
+    if cur < 1 cur = 1;
+    if cur >= target_level {
+        if player->is_local() {
+            Notifier.notify("Harvester is already Level %.", {cur});
+        }
+        return;
+    }
+
+    product_id := harvester_upgrade_sparks_product_id_for_level(target_level);
+    if product_id.count == 0 {
+        if player->is_local() {
+            Notifier.notify("Sparks purchase not available.");
+        }
+        return;
+    }
+
+    Purchasing.prompt_purchase(player, product_id);
+}
+
+server_try_prompt_sparks_harvester_manager_unlock_purchase :: proc(player: Player) {
+    if player == null return;
+
+    if player.harvester_manager_unlocked {
+        if player->is_local() {
+            Notifier.notify("Already unlocked.");
+        }
+        return;
+    }
+
+    product_id := HARVESTER_SPARKS_PRODUCT_MANAGER_UNLOCK;
+    if product_id.count == 0 {
+        if player->is_local() {
+            Notifier.notify("Sparks purchase not available.");
+        }
+        return;
+    }
+
+    Purchasing.prompt_purchase(player, product_id);
+}
+
+// Harvester Upgrades Sparks purchase fulfillment.
+// Called by `ao_purchase_handler` (defined in `scripts/main.csl`) when a purchase succeeds.
+// Return true if we handled the purchase id.
+harvester_upgrades_try_handle_purchase :: proc(player: Player, id: string) -> bool {
+    if player == null return false;
+    if id.count == 0 return false;
+
+    // Direct id matches.
+    if id == HARVESTER_SPARKS_PRODUCT_LEVEL_2  { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 2,  "Sparks"); } return true; }
+    if id == HARVESTER_SPARKS_PRODUCT_LEVEL_3  { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 3,  "Sparks"); } return true; }
+    if id == HARVESTER_SPARKS_PRODUCT_LEVEL_4  { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 4,  "Sparks"); } return true; }
+    if id == HARVESTER_SPARKS_PRODUCT_LEVEL_5  { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 5,  "Sparks"); } return true; }
+    if id == HARVESTER_SPARKS_PRODUCT_LEVEL_6  { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 6,  "Sparks"); } return true; }
+    if id == HARVESTER_SPARKS_PRODUCT_LEVEL_7  { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 7,  "Sparks"); } return true; }
+    if id == HARVESTER_SPARKS_PRODUCT_LEVEL_8  { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 8,  "Sparks"); } return true; }
+    if id == HARVESTER_SPARKS_PRODUCT_LEVEL_9  { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 9,  "Sparks"); } return true; }
+    if id == HARVESTER_SPARKS_PRODUCT_LEVEL_10 { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 10, "Sparks"); } return true; }
+    if id == HARVESTER_SPARKS_PRODUCT_MANAGER_UNLOCK { if Game.is_server() { _ := server_grant_harvester_manager_unlock(player, "Sparks"); } return true; }
+
+    // Fallback: some purchase flows may pass a different id (or even product name).
+    // Try resolving it through Purchasing and match by product name.
+    prod := Purchasing.get_product(id);
+    if prod.id.count != 0 {
+        if prod.name == "Harvester Upgrade: Level 2"  { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 2,  "Sparks"); } return true; }
+        if prod.name == "Harvester Upgrade: Level 3"  { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 3,  "Sparks"); } return true; }
+        if prod.name == "Harvester Upgrade: Level 4"  { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 4,  "Sparks"); } return true; }
+        if prod.name == "Harvester Upgrade: Level 5"  { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 5,  "Sparks"); } return true; }
+        if prod.name == "Harvester Upgrade: Level 6"  { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 6,  "Sparks"); } return true; }
+        if prod.name == "Harvester Upgrade: Level 7"  { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 7,  "Sparks"); } return true; }
+        if prod.name == "Harvester Upgrade: Level 8"  { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 8,  "Sparks"); } return true; }
+        if prod.name == "Harvester Upgrade: Level 9"  { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 9,  "Sparks"); } return true; }
+        if prod.name == "Harvester Upgrade: Level 10" { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 10, "Sparks"); } return true; }
+        if prod.name == "Harvester Manager Unlock" { if Game.is_server() { _ := server_grant_harvester_manager_unlock(player, "Sparks"); } return true; }
+    }
+
+    // Extra fallback: id might be the product name directly.
+    if id == "Harvester Upgrade: Level 2"  { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 2,  "Sparks"); } return true; }
+    if id == "Harvester Upgrade: Level 3"  { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 3,  "Sparks"); } return true; }
+    if id == "Harvester Upgrade: Level 4"  { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 4,  "Sparks"); } return true; }
+    if id == "Harvester Upgrade: Level 5"  { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 5,  "Sparks"); } return true; }
+    if id == "Harvester Upgrade: Level 6"  { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 6,  "Sparks"); } return true; }
+    if id == "Harvester Upgrade: Level 7"  { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 7,  "Sparks"); } return true; }
+    if id == "Harvester Upgrade: Level 8"  { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 8,  "Sparks"); } return true; }
+    if id == "Harvester Upgrade: Level 9"  { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 9,  "Sparks"); } return true; }
+    if id == "Harvester Upgrade: Level 10" { if Game.is_server() { _ := server_grant_harvester_upgrade_to_level(player, 10, "Sparks"); } return true; }
+    if id == "Harvester Manager Unlock" { if Game.is_server() { _ := server_grant_harvester_manager_unlock(player, "Sparks"); } return true; }
+
+    return false;
 }
 
 server_try_unlock_harvester_manager :: proc(player: Player) {
@@ -179,20 +400,34 @@ draw_upgrade_card :: proc(player: Player, rect: Rect) {
         UI.text(
             info_rect,
             ts_info,
-            "Current: Level % / %\nSpeed Mult: %x\nCapacity: %",
-            {level, HARVESTER_UPGRADES_MAX_LEVEL, format_float(speed_mult, decimals=2), cur_cap}
+            "Speed Mult: %x\nCapacity: %",
+            {format_float(speed_mult, decimals=2), cur_cap}
         );
     }
     else {
         UI.text(
             info_rect,
             ts_info,
-            "Current: Level % / %\nSpeed Mult: %x\nCapacity: % -> %",
-            {level, HARVESTER_UPGRADES_MAX_LEVEL, format_float(speed_mult, decimals=2), cur_cap, next_cap}
+            "Speed Mult: %x\nCapacity: % -> %",
+            {format_float(speed_mult, decimals=2), cur_cap, next_cap}
         );
     }
 
-    btn_rect := inner->cut_bottom(78);
+    // Reserve room for the normal Coins upgrade button plus an optional Sparks button.
+    target_level := level + 1;
+    sparks_product_id := harvester_upgrade_sparks_product_id_for_level(target_level);
+    sparks_price := harvester_upgrade_sparks_price_for_level(target_level);
+    has_sparks := sparks_product_id.count != 0 && sparks_price > 0;
+
+    btn_area := inner->cut_bottom(78);
+    coins_btn_rect := btn_area;
+    sparks_btn_rect: Rect;
+    if has_sparks {
+        // Place buttons side-by-side.
+        left := btn_area->cut_left_unscaled(btn_area->width() * 0.5);
+        coins_btn_rect = left;
+        sparks_btn_rect = btn_area;
+    }
 
     if level >= HARVESTER_UPGRADES_MAX_LEVEL {
         bs := UI.default_button_settings();
@@ -207,14 +442,19 @@ draw_upgrade_card :: proc(player: Player, rect: Rect) {
         ts.outline_color = {0, 0, 0, 1};
         UI.push_disabled(true);
         defer UI.pop_disabled();
-        _ := UI.button(btn_rect->inset(6), bs, ts, "Max Level");
+        _ := UI.button(coins_btn_rect->inset(6), bs, ts, "Max Level");
         return;
     }
 
     cost := harvester_upgrade_cost_for_level(level);
 
+    can_afford := cost > 0 && Economy.can_withdraw_currency(player, HARVESTER_UPGRADES_COIN_CURRENCY, cost);
+
     bs := UI.default_button_settings();
     bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_2.png"); // Green
+    if !can_afford {
+        bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_3.png"); // Red
+    }
     bs.press_scaling = 0.4;
 
     ts := UI.default_text_settings();
@@ -225,9 +465,47 @@ draw_upgrade_card :: proc(player: Player, rect: Rect) {
     ts.outline_thickness = 2;
     ts.outline_color = {0, 0, 0, 1};
 
+    // Coins upgrade button
+    UI.push_id("coins_btn", {}); defer UI.pop_id();
     label := format_string("Upgrade ($%)", {format_int_with_commas(cost)});
-    if UI.button(btn_rect->inset(6), bs, ts, label).clicked {
+    if UI.button(coins_btn_rect->inset(6), bs, ts, label).clicked {
         server_try_upgrade_harvester_level(player);
+    }
+
+    // Sparks upgrade button (prompts a purchase for the target level)
+    if has_sparks {
+        UI.push_id("sparks_btn", {}); defer UI.pop_id();
+
+        bs_sparks := UI.default_button_settings();
+        bs_sparks.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_4.png"); // Gold
+        bs_sparks.press_scaling = 0.35;
+
+        sparks_icon := get_asset(Texture_Asset, "UI/Spark.png");
+        // Keep label short for half-width button.
+        sparks_label := format_string("%", {format_int_with_commas(sparks_price)});
+
+        ts_sparks := ts;
+        ts_sparks.do_autofit = true;
+        ts_sparks.autofit_min_size = 18;
+        ts_sparks.autofit_max_size = ts.size;
+
+        result_sparks := UI.begin_button(sparks_btn_rect->inset(6), bs_sparks, ts_sparks, ""); {
+            defer UI.end_button();
+
+            inner_btn := result_sparks.rect->inset(10);
+            if sparks_icon != null {
+                icon_rect := inner_btn->left_center_rect()->grow_unscaled(18)->offset_unscaled(22, 0);
+                UI.quad(icon_rect->fit_aspect(sparks_icon->get_aspect()), sparks_icon);
+            }
+
+            label_rect := inner_btn;
+            _ := label_rect->cut_left_unscaled(46);
+            UI.text(label_rect, ts_sparks, sparks_label);
+        }
+
+        if result_sparks.clicked {
+            server_try_prompt_sparks_harvester_upgrade_purchase(player, target_level);
+        }
     }
 }
 
@@ -259,9 +537,9 @@ draw_manager_unlock_card :: proc(player: Player, rect: Rect) {
     ts_desc.do_outline = true;
     ts_desc.outline_thickness = 2;
     ts_desc.outline_color = {0, 0, 0, 1};
-    UI.text(desc_rect, ts_desc, "One-time unlock. Applies to all lanes.\nManages your Harvester for you.");
+    UI.text(desc_rect, ts_desc, "One-time unlock. Applies to all lanes. Manages your Harvester for you.");
 
-    btn_rect := inner->cut_bottom(78);
+    btn_area := inner->cut_bottom(78);
 
     if player.harvester_manager_unlocked {
         bs := UI.default_button_settings();
@@ -278,8 +556,17 @@ draw_manager_unlock_card :: proc(player: Player, rect: Rect) {
 
         UI.push_disabled(true);
         defer UI.pop_disabled();
-        _ := UI.button(btn_rect->inset(6), bs, ts, "Unlocked");
+        _ := UI.button(btn_area->inset(6), bs, ts, "Unlocked");
         return;
+    }
+
+    // Split the action row: Coins unlock (left) + Sparks unlock (right).
+    coins_btn_rect := btn_area;
+    sparks_btn_rect := btn_area;
+    {
+        left := btn_area->cut_left_unscaled(btn_area->width() * 0.5);
+        coins_btn_rect = left;
+        sparks_btn_rect = btn_area;
     }
 
     bs := UI.default_button_settings();
@@ -295,8 +582,45 @@ draw_manager_unlock_card :: proc(player: Player, rect: Rect) {
     ts.outline_color = {0, 0, 0, 1};
 
     label := format_string("Unlock ($%)", {format_int_with_commas(HARVESTER_UPGRADES_MANAGER_UNLOCK_COST)});
-    if UI.button(btn_rect->inset(6), bs, ts, label).clicked {
+    UI.push_id("mgr_coins_btn", {}); defer UI.pop_id();
+    if UI.button(coins_btn_rect->inset(6), bs, ts, label).clicked {
         server_try_unlock_harvester_manager(player);
+    }
+
+    // Sparks unlock button (prompts a purchase for manager unlock).
+    UI.push_id("mgr_sparks_btn", {}); defer UI.pop_id();
+    {
+        sparks_price := harvester_manager_unlock_sparks_price();
+
+        bs_sparks := UI.default_button_settings();
+        bs_sparks.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_4.png"); // Gold
+        bs_sparks.press_scaling = 0.35;
+
+        sparks_icon := get_asset(Texture_Asset, "UI/Spark.png");
+        sparks_label := format_string("%", {format_int_with_commas(sparks_price)});
+
+        ts_sparks := ts;
+        ts_sparks.do_autofit = true;
+        ts_sparks.autofit_min_size = 18;
+        ts_sparks.autofit_max_size = ts.size;
+
+        result_sparks := UI.begin_button(sparks_btn_rect->inset(6), bs_sparks, ts_sparks, ""); {
+            defer UI.end_button();
+
+            inner_btn := result_sparks.rect->inset(10);
+            if sparks_icon != null {
+                icon_rect := inner_btn->left_center_rect()->grow_unscaled(18)->offset_unscaled(22, 0);
+                UI.quad(icon_rect->fit_aspect(sparks_icon->get_aspect()), sparks_icon);
+            }
+
+            label_rect := inner_btn;
+            _ := label_rect->cut_left_unscaled(46);
+            UI.text(label_rect, ts_sparks, sparks_label);
+        }
+
+        if result_sparks.clicked {
+            server_try_prompt_sparks_harvester_manager_unlock_purchase(player);
+        }
     }
 }
 
@@ -328,7 +652,10 @@ draw_harvester_upgrades_modal :: proc(player: Player) {
     ts_title.do_outline = true;
     ts_title.outline_thickness = 3;
     ts_title.outline_color = {0, 0, 0, 1};
-    UI.text(header, ts_title, "Harvester Upgrades");
+    level := player.harvester_level;
+    if level < 1 level = 1;
+    if level > HARVESTER_UPGRADES_MAX_LEVEL level = HARVESTER_UPGRADES_MAX_LEVEL;
+    UI.text(header, ts_title, "Harvester Upgrades - Level %", {level});
 
     // Content area (below header)
     content := window->inset(30);
@@ -357,7 +684,8 @@ draw_harvester_upgrades_modal :: proc(player: Player) {
     body := content->inset(10);
 
     top := body->cut_top_unscaled(body->height() * 0.52)->inset(10);
-    _ := body->cut_top(10);
+    // Larger separation between the two categories (Level vs Manager).
+    _ := body->cut_top(26);
     bottom := body->inset(10);
 
     draw_upgrade_card(player, top);

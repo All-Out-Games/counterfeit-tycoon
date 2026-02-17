@@ -38,12 +38,15 @@ ao_update :: proc(dt: float) {
 // Called by the engine when a purchase is successful.
 // Return true if we handled the purchase id.
 ao_purchase_handler :: proc(player: Player, id: string) -> bool {
-    //if player == null return false;
-    //if id.count == 0 return false;
+    if player == null return false;
+    if id.count == 0 return false;
 
     log_info("Purchase handler called for %", {id});
 
     handled := weapons_shop_try_handle_purchase(player, id);
+    if !handled {
+        handled = harvester_upgrades_try_handle_purchase(player, id);
+    }
     if handled {
         // Debug: visible confirmation that the callback is firing (server only).
         if Game.is_server() {

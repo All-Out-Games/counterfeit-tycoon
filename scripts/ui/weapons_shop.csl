@@ -186,7 +186,7 @@ server_try_prompt_sparks_weapon_purchase :: proc(player: Player, wt: Weapon_Type
         return;
     }
 
-    log_info("Prompting purchase of %", {product_id});
+    //log_info("Prompting purchase of %", {product_id});
     Purchasing.prompt_purchase(player, product_id);
 }
 
@@ -413,9 +413,6 @@ weapons_shop_try_handle_purchase :: proc(player: Player, id: string) -> bool {
         return true;
     }
 
-    if Game.is_server() {
-        log_info("ao_purchase_handler: unhandled purchase id: %", {id});
-    }
     return false;
 }
 
@@ -653,7 +650,7 @@ draw_weapon_shop_item_card :: proc(player: Player, rect: Rect, wt: Weapon_Type) 
     if has_sparks {
         // Bottom button + small gap.
         sparks_rect = main_rect->cut_bottom(56)->inset(4);
-        _ := main_rect->cut_bottom(6);
+        _ := main_rect->cut_bottom(4);
     }
 
     bs := UI.default_button_settings();
@@ -700,39 +697,54 @@ draw_weapon_shop_item_card :: proc(player: Player, rect: Rect, wt: Weapon_Type) 
         server_try_buy_weapon(player, wt);
     }
 
-    // Sparks button (separate, underneath; always green)
+    // Sparks button (separate, underneath; always yellow)
     if has_sparks {
         UI.push_id("sparks_btn", {}); defer UI.pop_id();
 
         bs_sparks := UI.default_button_settings();
-        bs_sparks.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_2.png"); // Green (always)
+        // Yellow (always): tint a white button background, keep text unaffected.
+        bs_sparks.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_4.png"); // Gold
+        bs_sparks.color = {1, 1, 1, 1};
+        bs_sparks.hovered_color = {1, 1, 1, 1};
+        bs_sparks.pressed_color = {1, 1, 1, 1};
         bs_sparks.press_scaling = 0.25;
 
-        // Render icon + price (no "Sparks" text).
-        prod := Purchasing.get_product(sparks_product_id);
-        sparks_icon := prod.icon;
+        // Icon anchored left + centered label with extra horizontal room.
+        sparks_icon := get_asset(Texture_Asset, "UI/Spark.png");
+        label := format_string("% Sparks", {format_int_with_commas(sparks_price)});
 
-        sparks_result := UI.begin_button(sparks_rect, bs_sparks, ts, ""); {
+        ts_draw := ts;
+        ts_draw.size = 26;
+        ts_draw.halign = .CENTER;
+        ts_draw.valign = .CENTER;
+
+        ICON_SIZE_PX :: 26.0;
+        ICON_LEFT_PADDING_PX :: 12.0;
+        ICON_TEXT_GAP_PX :: 10.0;
+
+        result_sparks := UI.begin_button(sparks_rect, bs_sparks, ts_draw, ""); {
             defer UI.end_button();
 
-            inner := sparks_result.rect->inset(10);
-            // Left: icon, Right: price.
-            icon_rect := inner->cut_left_unscaled(42);
-            _ := inner->cut_left(8);
-            text_rect := inner;
+            inner := result_sparks.rect->inset(10);
 
+            // Left-anchored icon, padded in from button edge.
             if sparks_icon != null {
+                icon_center := v2{inner.min.x + ICON_LEFT_PADDING_PX + ICON_SIZE_PX * 0.5, inner->center().y};
+                icon_rect := Rect{icon_center, icon_center}->grow_unscaled(ICON_SIZE_PX * 0.5, ICON_SIZE_PX * 0.5, ICON_SIZE_PX * 0.5, ICON_SIZE_PX * 0.5);
                 UI.quad(icon_rect->fit_aspect(sparks_icon->get_aspect()), sparks_icon);
             }
 
-            ts_price := ts;
-            ts_price.size = 26;
-            ts_price.halign = .LEFT;
-            ts_price.valign = .CENTER;
-            UI.text(text_rect, ts_price, "%", {format_int_with_commas(sparks_price)});
+            // Give the label the remaining width to avoid crowding/wrapping.
+            label_rect := inner;
+            cut := ICON_LEFT_PADDING_PX + ICON_SIZE_PX + ICON_TEXT_GAP_PX;
+            if sparks_icon == null {
+                cut = 0;
+            }
+            _ := label_rect->cut_left_unscaled(cut);
+            UI.text(label_rect, ts_draw, label);
         }
 
-        if sparks_result.clicked {
+        if result_sparks.clicked {
             server_try_prompt_sparks_weapon_purchase(player, wt);
         }
     }

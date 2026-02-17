@@ -1,5 +1,11 @@
 [
   {
+    "id": "UI/Spark.png",
+    "texture": {
+      "resample_multiplier": 1
+    }
+  },
+  {
     "id": "dirt_path_horizontal_end_cap.png",
     "texture": {
       "resample_multiplier": 1
