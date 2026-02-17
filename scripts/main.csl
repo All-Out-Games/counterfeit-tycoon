@@ -470,6 +470,7 @@ Player :: class : Player_Base {
     quest_stat_pvp_kills: s64;
     quest_stat_trucks_destroyed: s64;
     quest_stat_vaults_robbed: s64;
+    quest_stat_vault_defended: s64;
 
     // Truck upgrades UI + levels (per-player, multiplayer safe)
     truck_upgrades_open: bool;
@@ -1245,6 +1246,23 @@ Player :: class : Player_Base {
             VAULT_HOLD_CLEAR_GRACE :: 0.25;
             if vault_theft_target_entity_id != 0 && vault_theft_last_hold_time > 0 {
                 if get_time() - vault_theft_last_hold_time > VAULT_HOLD_CLEAR_GRACE {
+                    // If the owner was notified, a real theft attempt happened but failed.
+                    // Credit the vault owner with a successful defense.
+                    if vault_theft_owner_notified {
+                        foreach v: component_iterator(Vault) {
+                            if v == null continue;
+                            if v.entity == null || v.entity.self == null continue;
+                            if v.entity.id != vault_theft_target_entity_id continue;
+                            pb := get_parent_player_base(v.entity);
+                            if pb != null {
+                                owner := pb->get_owner();
+                                if owner != null {
+                                    quest_on_vault_defended(owner);
+                                }
+                            }
+                            break;
+                        }
+                    }
                     vault_theft_target_entity_id = 0;
                     vault_theft_hold_start_time = 0;
                     vault_theft_last_hold_time = 0;

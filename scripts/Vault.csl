@@ -738,6 +738,13 @@ Vault_Steal_Interactable :: class : Interactable {
         }
 
         vault->server_steal_finished_bills(player);
+
+        // Clear theft state immediately so the grace-period cleanup
+        // doesn't misfire a vault defense event for the owner.
+        player.vault_theft_target_entity_id = 0;
+        player.vault_theft_hold_start_time = 0;
+        player.vault_theft_last_hold_time = 0;
+        player.vault_theft_owner_notified = false;
     }
 }
 

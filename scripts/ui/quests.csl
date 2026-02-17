@@ -116,83 +116,100 @@ get_quest_pool :: proc() -> [QUEST_POOL_COUNT]Quest_Def {
     i := 0;
 
     // ---- TIER 1: Starter (quests 1-10) ----
-    pool[i] = {i, "Produce 5 Finished Bills",       .PRODUCTION, .PRODUCE_FINISHED_BILLS,  5,    200,  1}; i += 1;
-    pool[i] = {i, "Produce 20 Finished Bills",      .PRODUCTION, .PRODUCE_FINISHED_BILLS,  20,   400,  1}; i += 1;
-    pool[i] = {i, "Produce 50 Raw Paper",           .PRODUCTION, .PRODUCE_RAW_PAPER,       50,   150,  1}; i += 1;
-    pool[i] = {i, "Fill your vault to 25%%",        .PRODUCTION, .FILL_VAULT_PERCENT,      25,   350,  1}; i += 1;
-    pool[i] = {i, "Upgrade any machine to Lv 2",    .UPGRADE,    .UPGRADE_ANY_MACHINE,     2,    250,  1}; i += 1;
+    // Titles use % as placeholder for the target number (rendered via quest_get_display_title).
+    // Quests without a number in the title use a plain string (no %).
+    pool[i] = {i, "Produce % Finished Bills",       .PRODUCTION, .PRODUCE_FINISHED_BILLS,  5,    200,  1}; i += 1;
+    pool[i] = {i, "Produce % Finished Bills",       .PRODUCTION, .PRODUCE_FINISHED_BILLS,  20,   400,  1}; i += 1;
+    pool[i] = {i, "Produce % Raw Paper",            .PRODUCTION, .PRODUCE_RAW_PAPER,       50,   150,  1}; i += 1;
+    pool[i] = {i, "Fill your vault to %0%%",        .PRODUCTION, .FILL_VAULT_PERCENT,      25,   350,  1}; i += 1;
+    pool[i] = {i, "Upgrade any machine to Lv %",    .UPGRADE,    .UPGRADE_ANY_MACHINE,     2,    250,  1}; i += 1;
     pool[i] = {i, "Upgrade your Stamp Machine",     .UPGRADE,    .UPGRADE_STAMP_MACHINE,   2,    300,  1}; i += 1;
     pool[i] = {i, "Upgrade your Harvester",         .UPGRADE,    .UPGRADE_HARVESTER,       2,    250,  1}; i += 1;
-    pool[i] = {i, "Complete your first bank run",   .ECONOMY,    .COMPLETE_BANK_RUNS,      1,    500,  1}; i += 1;
-    pool[i] = {i, "Earn $1,000 total",              .ECONOMY,    .EARN_TOTAL_COINS,        1000, 400,  1}; i += 1;
-    pool[i] = {i, "Hire your first manager",        .EXPANSION,  .HIRE_MANAGERS,            1,    350,  1}; i += 1;
+    pool[i] = {i, "Complete % bank run",            .ECONOMY,    .COMPLETE_BANK_RUNS,      1,    500,  1}; i += 1;
+    pool[i] = {i, "Earn $% total",                  .ECONOMY,    .EARN_TOTAL_COINS,        1000, 400,  1}; i += 1;
+    pool[i] = {i, "Hire % manager",                 .EXPANSION,  .HIRE_MANAGERS,            1,    350,  1}; i += 1;
     pool[i] = {i, "Buy any weapon",                 .EXPANSION,  .BUY_WEAPON,               1,    250,  1}; i += 1;
     pool[i] = {i, "Send your truck to the bank",    .ECONOMY,    .SEND_TRUCK,               1,    300,  1}; i += 1;
 
     // ---- TIER 2: Early (quests 11-30) ----
-    pool[i] = {i, "Produce 100 Finished Bills",     .PRODUCTION, .PRODUCE_FINISHED_BILLS,  100,  1200, 2}; i += 1;
-    pool[i] = {i, "Produce 250 Finished Bills",     .PRODUCTION, .PRODUCE_FINISHED_BILLS,  250,  2000, 2}; i += 1;
-    pool[i] = {i, "Produce 500 Raw Paper",          .PRODUCTION, .PRODUCE_RAW_PAPER,       500,  800,  2}; i += 1;
-    pool[i] = {i, "Produce 200 Blank Bills",        .PRODUCTION, .PRODUCE_BLANK_BILLS,     200,  1000, 2}; i += 1;
-    pool[i] = {i, "Upgrade any machine to Lv 4",    .UPGRADE,    .UPGRADE_ANY_MACHINE,     4,    1500, 2}; i += 1;
-    pool[i] = {i, "Upgrade Stamp to Lv 3",          .UPGRADE,    .UPGRADE_STAMP_MACHINE,   3,    1200, 2}; i += 1;
-    pool[i] = {i, "Upgrade Color Machine to Lv 3",  .UPGRADE,    .UPGRADE_COLOR_MACHINE,   3,    1000, 2}; i += 1;
+    pool[i] = {i, "Produce % Finished Bills",       .PRODUCTION, .PRODUCE_FINISHED_BILLS,  100,  1200, 2}; i += 1;
+    pool[i] = {i, "Produce % Finished Bills",       .PRODUCTION, .PRODUCE_FINISHED_BILLS,  250,  2000, 2}; i += 1;
+    pool[i] = {i, "Produce % Raw Paper",            .PRODUCTION, .PRODUCE_RAW_PAPER,       500,  800,  2}; i += 1;
+    pool[i] = {i, "Produce % Blank Bills",          .PRODUCTION, .PRODUCE_BLANK_BILLS,     200,  1000, 2}; i += 1;
+    pool[i] = {i, "Upgrade any machine to Lv %",    .UPGRADE,    .UPGRADE_ANY_MACHINE,     4,    1500, 2}; i += 1;
+    pool[i] = {i, "Upgrade Stamp to Lv %",          .UPGRADE,    .UPGRADE_STAMP_MACHINE,   3,    1200, 2}; i += 1;
+    pool[i] = {i, "Upgrade Color Machine to Lv %",  .UPGRADE,    .UPGRADE_COLOR_MACHINE,   3,    1000, 2}; i += 1;
     pool[i] = {i, "Upgrade Truck Capacity",         .UPGRADE,    .UPGRADE_TRUCK_CAPACITY,  2,    800,  2}; i += 1;
-    pool[i] = {i, "Upgrade Harvester to Lv 3",      .UPGRADE,    .UPGRADE_HARVESTER,       3,    600,  2}; i += 1;
-    pool[i] = {i, "Complete 5 bank runs",           .ECONOMY,    .COMPLETE_BANK_RUNS,      5,    2500, 2}; i += 1;
-    pool[i] = {i, "Earn $5,000 total",              .ECONOMY,    .EARN_TOTAL_COINS,        5000, 2000, 2}; i += 1;
-    pool[i] = {i, "Fill your vault 3 times",        .ECONOMY,    .FILL_VAULT_TIMES,        3,    1800, 2}; i += 1;
-    pool[i] = {i, "Deposit $3,000 at the bank",     .ECONOMY,    .DEPOSIT_COINS_IN_RUN,    3000, 1500, 2}; i += 1;
-    pool[i] = {i, "Unlock Lane 2",                  .EXPANSION,  .UNLOCK_LANE,             2,    1500, 2}; i += 1;
-    pool[i] = {i, "Hire 3 managers",                .EXPANSION,  .HIRE_MANAGERS,            3,    2000, 2}; i += 1;
-    pool[i] = {i, "Fully automate Lane 1",          .EXPANSION,  .AUTOMATE_LANE,            1,    2500, 2}; i += 1;
-    pool[i] = {i, "Kill another player",            .PVP,        .KILL_PLAYERS,             1,    1200, 2}; i += 1;
+    pool[i] = {i, "Upgrade Harvester to Lv %",      .UPGRADE,    .UPGRADE_HARVESTER,       3,    600,  2}; i += 1;
+    pool[i] = {i, "Complete % bank runs",           .ECONOMY,    .COMPLETE_BANK_RUNS,      5,    2500, 2}; i += 1;
+    pool[i] = {i, "Earn $% total",                  .ECONOMY,    .EARN_TOTAL_COINS,        5000, 2000, 2}; i += 1;
+    pool[i] = {i, "Fill your vault % times",        .ECONOMY,    .FILL_VAULT_TIMES,        3,    1800, 2}; i += 1;
+    pool[i] = {i, "Deposit $% at the bank",         .ECONOMY,    .DEPOSIT_COINS_IN_RUN,    3000, 1500, 2}; i += 1;
+    pool[i] = {i, "Unlock Lane %",                  .EXPANSION,  .UNLOCK_LANE,             2,    1500, 2}; i += 1;
+    pool[i] = {i, "Hire % managers",                .EXPANSION,  .HIRE_MANAGERS,            3,    2000, 2}; i += 1;
+    pool[i] = {i, "Fully automate Lane %",          .EXPANSION,  .AUTOMATE_LANE,            1,    2500, 2}; i += 1;
+    pool[i] = {i, "Kill % player",                  .PVP,        .KILL_PLAYERS,             1,    1200, 2}; i += 1;
     pool[i] = {i, "Defend your vault",              .PVP,        .DEFEND_VAULT,             1,    1800, 2}; i += 1;
 
     // ---- TIER 3: Mid (quests 31-60) ----
-    pool[i] = {i, "Produce 1,000 Finished Bills",   .PRODUCTION, .PRODUCE_FINISHED_BILLS,  1000,  8000,  3}; i += 1;
-    pool[i] = {i, "Produce 2,500 Finished Bills",   .PRODUCTION, .PRODUCE_FINISHED_BILLS,  2500,  12000, 3}; i += 1;
-    pool[i] = {i, "Produce 5,000 Colored Bills",    .PRODUCTION, .PRODUCE_COLORED_BILLS,   5000,  6000,  3}; i += 1;
-    pool[i] = {i, "Run 2 lanes at full speed",      .PRODUCTION, .RUN_LANES_AT_FULL,       2,     10000, 3}; i += 1;
-    pool[i] = {i, "Upgrade any machine to Lv 6",    .UPGRADE,    .UPGRADE_ANY_MACHINE,     6,     8000,  3}; i += 1;
-    pool[i] = {i, "Upgrade Stamp to Lv 5",          .UPGRADE,    .UPGRADE_STAMP_MACHINE,   5,     5000,  3}; i += 1;
-    pool[i] = {i, "Upgrade Vault to Lv 3",          .UPGRADE,    .UPGRADE_VAULT,           3,     12000, 3}; i += 1;
-    pool[i] = {i, "Complete 15 bank runs",          .ECONOMY,    .COMPLETE_BANK_RUNS,      15,    15000, 3}; i += 1;
-    pool[i] = {i, "Earn $50,000 total",             .ECONOMY,    .EARN_TOTAL_COINS,        50000, 10000, 3}; i += 1;
-    pool[i] = {i, "Deposit $25,000 in one run",     .ECONOMY,    .DEPOSIT_COINS_IN_RUN,    25000, 8000,  3}; i += 1;
-    pool[i] = {i, "Unlock Lane 3",                  .EXPANSION,  .UNLOCK_LANE,             3,     8000,  3}; i += 1;
-    pool[i] = {i, "Unlock Lane 4",                  .EXPANSION,  .UNLOCK_LANE,             4,     15000, 3}; i += 1;
-    pool[i] = {i, "Hire managers for 2 lanes",      .EXPANSION,  .AUTOMATE_LANE,            2,     10000, 3}; i += 1;
-    pool[i] = {i, "Rob another player's vault",     .PVP,        .ROB_VAULT,                1,     8000,  3}; i += 1;
-    pool[i] = {i, "Destroy an enemy truck",         .PVP,        .DESTROY_TRUCK,            1,     12000, 3}; i += 1;
-    pool[i] = {i, "Kill 5 players",                 .PVP,        .KILL_PLAYERS,             5,     10000, 3}; i += 1;
+    pool[i] = {i, "Produce % Finished Bills",       .PRODUCTION, .PRODUCE_FINISHED_BILLS,  1000,  8000,  3}; i += 1;
+    pool[i] = {i, "Produce % Finished Bills",       .PRODUCTION, .PRODUCE_FINISHED_BILLS,  2500,  12000, 3}; i += 1;
+    pool[i] = {i, "Produce % Colored Bills",        .PRODUCTION, .PRODUCE_COLORED_BILLS,   5000,  6000,  3}; i += 1;
+    pool[i] = {i, "Run % lanes at full speed",      .PRODUCTION, .RUN_LANES_AT_FULL,       2,     10000, 3}; i += 1;
+    pool[i] = {i, "Upgrade any machine to Lv %",    .UPGRADE,    .UPGRADE_ANY_MACHINE,     6,     8000,  3}; i += 1;
+    pool[i] = {i, "Upgrade Stamp to Lv %",          .UPGRADE,    .UPGRADE_STAMP_MACHINE,   5,     5000,  3}; i += 1;
+    pool[i] = {i, "Upgrade Vault to Lv %",          .UPGRADE,    .UPGRADE_VAULT,           3,     12000, 3}; i += 1;
+    pool[i] = {i, "Complete % bank runs",           .ECONOMY,    .COMPLETE_BANK_RUNS,      15,    15000, 3}; i += 1;
+    pool[i] = {i, "Earn $% total",                  .ECONOMY,    .EARN_TOTAL_COINS,        50000, 10000, 3}; i += 1;
+    pool[i] = {i, "Deposit $% in one run",          .ECONOMY,    .DEPOSIT_COINS_IN_RUN,    25000, 8000,  3}; i += 1;
+    pool[i] = {i, "Unlock Lane %",                  .EXPANSION,  .UNLOCK_LANE,             3,     8000,  3}; i += 1;
+    pool[i] = {i, "Unlock Lane %",                  .EXPANSION,  .UNLOCK_LANE,             4,     15000, 3}; i += 1;
+    pool[i] = {i, "Automate % lanes",               .EXPANSION,  .AUTOMATE_LANE,            2,     10000, 3}; i += 1;
+    pool[i] = {i, "Rob % vault",                    .PVP,        .ROB_VAULT,                1,     8000,  3}; i += 1;
+    pool[i] = {i, "Destroy % enemy truck",          .PVP,        .DESTROY_TRUCK,            1,     12000, 3}; i += 1;
+    pool[i] = {i, "Kill % players",                 .PVP,        .KILL_PLAYERS,             5,     10000, 3}; i += 1;
 
     // ---- TIER 4: Late (quests 61-100) ----
-    pool[i] = {i, "Produce 10,000 Finished Bills",  .PRODUCTION, .PRODUCE_FINISHED_BILLS,  10000,  40000, 4}; i += 1;
-    pool[i] = {i, "Produce 25,000 Finished Bills",  .PRODUCTION, .PRODUCE_FINISHED_BILLS,  25000,  60000, 4}; i += 1;
-    pool[i] = {i, "Run 4 lanes simultaneously",     .PRODUCTION, .RUN_LANES_AT_FULL,       4,      35000, 4}; i += 1;
-    pool[i] = {i, "Max any machine (Lv 10)",        .UPGRADE,    .MAX_ANY_MACHINE,         10,     50000, 4}; i += 1;
-    pool[i] = {i, "Upgrade Vault to Lv 4",          .UPGRADE,    .UPGRADE_VAULT,           4,      45000, 4}; i += 1;
-    pool[i] = {i, "Complete 50 bank runs",          .ECONOMY,    .COMPLETE_BANK_RUNS,      50,     50000, 4}; i += 1;
-    pool[i] = {i, "Earn $500,000 total",            .ECONOMY,    .EARN_TOTAL_COINS,        500000, 75000, 4}; i += 1;
-    pool[i] = {i, "Deposit $100,000 in one run",    .ECONOMY,    .DEPOSIT_COINS_IN_RUN,    100000, 40000, 4}; i += 1;
-    pool[i] = {i, "Fully automate 3 lanes",         .EXPANSION,  .AUTOMATE_LANE,            3,      60000, 4}; i += 1;
-    pool[i] = {i, "Destroy 10 enemy trucks",        .PVP,        .DESTROY_TRUCK,            10,     45000, 4}; i += 1;
-    pool[i] = {i, "Rob 5 vaults",                   .PVP,        .ROB_VAULT,                5,      35000, 4}; i += 1;
-    pool[i] = {i, "Kill 25 players",                .PVP,        .KILL_PLAYERS,             25,     50000, 4}; i += 1;
+    pool[i] = {i, "Produce % Finished Bills",       .PRODUCTION, .PRODUCE_FINISHED_BILLS,  10000,  40000, 4}; i += 1;
+    pool[i] = {i, "Produce % Finished Bills",       .PRODUCTION, .PRODUCE_FINISHED_BILLS,  25000,  60000, 4}; i += 1;
+    pool[i] = {i, "Run % lanes simultaneously",     .PRODUCTION, .RUN_LANES_AT_FULL,       4,      35000, 4}; i += 1;
+    pool[i] = {i, "Max any machine (Lv %)",         .UPGRADE,    .MAX_ANY_MACHINE,         10,     50000, 4}; i += 1;
+    pool[i] = {i, "Upgrade Vault to Lv %",          .UPGRADE,    .UPGRADE_VAULT,           4,      45000, 4}; i += 1;
+    pool[i] = {i, "Complete % bank runs",           .ECONOMY,    .COMPLETE_BANK_RUNS,      50,     50000, 4}; i += 1;
+    pool[i] = {i, "Earn $% total",                  .ECONOMY,    .EARN_TOTAL_COINS,        500000, 75000, 4}; i += 1;
+    pool[i] = {i, "Deposit $% in one run",          .ECONOMY,    .DEPOSIT_COINS_IN_RUN,    100000, 40000, 4}; i += 1;
+    pool[i] = {i, "Fully automate % lanes",         .EXPANSION,  .AUTOMATE_LANE,            3,      60000, 4}; i += 1;
+    pool[i] = {i, "Destroy % enemy trucks",         .PVP,        .DESTROY_TRUCK,            10,     45000, 4}; i += 1;
+    pool[i] = {i, "Rob % vaults",                   .PVP,        .ROB_VAULT,                5,      35000, 4}; i += 1;
+    pool[i] = {i, "Kill % players",                 .PVP,        .KILL_PLAYERS,             25,     50000, 4}; i += 1;
 
     // ---- TIER 5: Endgame (quests 100+) ----
-    pool[i] = {i, "Produce 100,000 Finished Bills", .PRODUCTION, .PRODUCE_FINISHED_BILLS,  100000,  150000, 5}; i += 1;
+    pool[i] = {i, "Produce % Finished Bills",       .PRODUCTION, .PRODUCE_FINISHED_BILLS,  100000,  150000, 5}; i += 1;
     pool[i] = {i, "Max all machines in any lane",   .UPGRADE,    .MAX_ANY_MACHINE,         10,      175000, 5}; i += 1;
-    pool[i] = {i, "Max your Vault (Lv 6)",          .UPGRADE,    .UPGRADE_VAULT,           6,       250000, 5}; i += 1;
+    pool[i] = {i, "Max your Vault (Lv %)",          .UPGRADE,    .UPGRADE_VAULT,           6,       250000, 5}; i += 1;
     pool[i] = {i, "Max your Harvester",             .UPGRADE,    .UPGRADE_HARVESTER,       10,      125000, 5}; i += 1;
-    pool[i] = {i, "Earn $5,000,000 total",          .ECONOMY,    .EARN_TOTAL_COINS,        5000000, 300000, 5}; i += 1;
-    pool[i] = {i, "Complete 200 bank runs",         .ECONOMY,    .COMPLETE_BANK_RUNS,      200,     275000, 5}; i += 1;
-    pool[i] = {i, "Destroy 50 enemy trucks",        .PVP,        .DESTROY_TRUCK,            50,      175000, 5}; i += 1;
-    pool[i] = {i, "Rob 25 vaults",                  .PVP,        .ROB_VAULT,                25,      125000, 5}; i += 1;
-    pool[i] = {i, "Kill 100 players",               .PVP,        .KILL_PLAYERS,             100,     225000, 5}; i += 1;
+    pool[i] = {i, "Earn $% total",                  .ECONOMY,    .EARN_TOTAL_COINS,        5000000, 300000, 5}; i += 1;
+    pool[i] = {i, "Complete % bank runs",           .ECONOMY,    .COMPLETE_BANK_RUNS,      200,     275000, 5}; i += 1;
+    pool[i] = {i, "Destroy % enemy trucks",         .PVP,        .DESTROY_TRUCK,            50,      175000, 5}; i += 1;
+    pool[i] = {i, "Rob % vaults",                   .PVP,        .ROB_VAULT,                25,      125000, 5}; i += 1;
+    pool[i] = {i, "Kill % players",                 .PVP,        .KILL_PLAYERS,             100,     225000, 5}; i += 1;
 
     return pool;
+}
+
+// Build the display title for a quest, substituting the actual target into the
+// format-string title. Titles that contain % get the comma-formatted target
+// inserted; titles without % (e.g. "Buy any weapon") are returned as-is.
+quest_get_display_title :: proc(def: Quest_Def, target: s64) -> string {
+    has_placeholder := false;
+    for i: 0..def.title.count-1 {
+        if def.title[i] == '%' {
+            has_placeholder = true;
+            break;
+        }
+    }
+    if !has_placeholder return def.title;
+    return format_string(def.title, {format_int_with_commas(target)});
 }
 
 // =============================================================================
@@ -488,20 +505,16 @@ quest_check_instant_completion :: proc(player: Player, slot: s64) {
         case .EARN_TOTAL_COINS: {
             quest_set_progress(player, slot, player.quest_stat_total_earned);
         }
-        case .COMPLETE_BANK_RUNS: {
-            quest_set_progress(player, slot, player.quest_stat_bank_runs);
-        }
-        case .HIRE_MANAGERS: {
-            quest_set_progress(player, slot, player.quest_stat_managers_hired);
-        }
-        case .KILL_PLAYERS: {
-            quest_set_progress(player, slot, player.quest_stat_pvp_kills);
-        }
-        case .DESTROY_TRUCK: {
-            quest_set_progress(player, slot, player.quest_stat_trucks_destroyed);
-        }
-        case .ROB_VAULT: {
-            quest_set_progress(player, slot, player.quest_stat_vaults_robbed);
+        case .AUTOMATE_LANE: {
+            // Count how many lanes are fully automated (all 4 managers unlocked).
+            ALL_MANAGERS_MASK :: 15; // bits 1+2+4+8
+            count: s64 = 0;
+            for lane: 0..MANAGERS_LANE_COUNT-1 {
+                if lanes_is_unlocked(player, lane) && player.managers_lane_masks[lane] == ALL_MANAGERS_MASK {
+                    count += 1;
+                }
+            }
+            quest_set_progress(player, slot, count);
         }
     }
 }
@@ -564,7 +577,7 @@ quest_on_bank_run :: proc(player: Player, coins_deposited: s64) {
         def := pool[q.def_id];
         switch def.track_type {
             case .COMPLETE_BANK_RUNS: {
-                quest_set_progress(player, s, player.quest_stat_bank_runs);
+                quest_add_progress(player, s, 1);
             }
             case .EARN_TOTAL_COINS: {
                 quest_set_progress(player, s, player.quest_stat_total_earned);
@@ -621,7 +634,7 @@ quest_on_manager_hired :: proc(player: Player) {
         if q.def_id >= QUEST_POOL_COUNT continue;
         def := pool[q.def_id];
         if def.track_type == .HIRE_MANAGERS {
-            quest_set_progress(player, s, player.quest_stat_managers_hired);
+            quest_add_progress(player, s, 1);
         }
         if def.track_type == .AUTOMATE_LANE {
             quest_check_instant_completion(player, s);
@@ -645,7 +658,7 @@ quest_on_pvp_kill :: proc(player: Player) {
         if q.claimed continue;
         if q.def_id >= QUEST_POOL_COUNT continue;
         if pool[q.def_id].track_type == .KILL_PLAYERS {
-            quest_set_progress(player, s, player.quest_stat_pvp_kills);
+            quest_add_progress(player, s, 1);
         }
     }
 }
@@ -666,7 +679,7 @@ quest_on_truck_destroyed :: proc(player: Player) {
         if q.claimed continue;
         if q.def_id >= QUEST_POOL_COUNT continue;
         if pool[q.def_id].track_type == .DESTROY_TRUCK {
-            quest_set_progress(player, s, player.quest_stat_trucks_destroyed);
+            quest_add_progress(player, s, 1);
         }
     }
 }
@@ -687,7 +700,28 @@ quest_on_vault_robbed :: proc(player: Player) {
         if q.claimed continue;
         if q.def_id >= QUEST_POOL_COUNT continue;
         if pool[q.def_id].track_type == .ROB_VAULT {
-            quest_set_progress(player, s, player.quest_stat_vaults_robbed);
+            quest_add_progress(player, s, 1);
+        }
+    }
+}
+
+// Called when a player successfully defends their vault (thief failed to complete the steal).
+quest_on_vault_defended :: proc(player: Player) {
+    if player == null return;
+    if !Game.is_server() return;
+
+    player.quest_stat_vault_defended += 1;
+    Save.set_int(player, "quest_stat_vault_defended", player.quest_stat_vault_defended);
+
+    pool := get_quest_pool();
+    for s: 0..QUEST_ACTIVE_COUNT-1 {
+        q := player.quest_slots[s];
+        if q.def_id < 0 continue;
+        if q.completed continue;
+        if q.claimed continue;
+        if q.def_id >= QUEST_POOL_COUNT continue;
+        if pool[q.def_id].track_type == .DEFEND_VAULT {
+            quest_add_progress(player, s, 1);
         }
     }
 }
@@ -813,6 +847,7 @@ quest_load_active :: proc(player: Player) {
     player.quest_stat_pvp_kills = Save.get_int(player, "quest_stat_pvp_kills", 0);
     player.quest_stat_trucks_destroyed = Save.get_int(player, "quest_stat_trucks_destroyed", 0);
     player.quest_stat_vaults_robbed = Save.get_int(player, "quest_stat_vaults_robbed", 0);
+    player.quest_stat_vault_defended = Save.get_int(player, "quest_stat_vault_defended", 0);
 
     any_loaded := false;
     for s: 0..QUEST_ACTIVE_COUNT-1 {
@@ -931,7 +966,7 @@ draw_quest_card :: proc(player: Player, rect: Rect, slot: s64) {
     ts_title.do_outline = false;
     ts_title.word_wrap = true;
     ts_title.font = bold_font;
-    UI.text(title_row, ts_title, def.title);
+    UI.text(title_row, ts_title, quest_get_display_title(def, target));
 
     _ := content->cut_top(4);
 
