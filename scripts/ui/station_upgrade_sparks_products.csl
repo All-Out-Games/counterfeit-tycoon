@@ -1,0 +1,119 @@
+import "core:ao"
+
+// Sparks product id tables (created via MCP).
+// Indexing for each table:
+// - 4 lanes (0..3)
+// - 9 upgrades per lane (Level 2..10)
+// idx = lane_index * 9 + (target_level - 2)
+
+blank_bill_press_sparks_products :: proc() -> [36]string {
+    return {
+        // Lane 1 (Levels 2..10)
+        "6995d80e5278898412324813", "6995d80e8472051fbdc40272", "6995d80e3a6535a099a683b4", "6995d80ecff4987318bb8d96", "6995d80e5278898412324814", "6995d8158472051fbdc40273", "6995d815cff4987318bb8d97", "6995d8155278898412324815", "6995d8153a6535a099a683b5",
+        // Lane 2
+        "6995d81b8472051fbdc40274", "6995d81bcff4987318bb8d98", "6995d81b3a6535a099a683b6", "6995d81b5278898412324816", "6995d81b672fef250c0e6a4e", "6995d8208472051fbdc40275", "6995d820cff4987318bb8d9e", "6995d8203a6535a099a683b7", "6995d8205278898412324817",
+        // Lane 3
+        "6995d826672fef250c0e6a4f", "6995d8268472051fbdc40276", "6995d826cff4987318bb8da5", "6995d8265278898412324818", "6995d8263a6535a099a683b8", "6995d82b672fef250c0e6a50", "6995d82b5278898412324819", "6995d82b8472051fbdc40277", "6995d82bcff4987318bb8da6",
+        // Lane 4
+        "6995d831672fef250c0e6a51", "6995d8313a6535a099a683b9", "6995d8318472051fbdc40278", "6995d831cff4987318bb8da8", "6995d831527889841232481a", "6995d836cff4987318bb8da9", "6995d8368472051fbdc40279", "6995d836672fef250c0e6a52", "6995d8363a6535a099a683bb",
+    };
+}
+
+colored_bill_press_sparks_products :: proc() -> [36]string {
+    return {
+        // Lane 1 (Levels 2..10)
+        "6995d843ca9617b56dfba5d0", "6995d843a2df09d9d29d4003", "6995d843110032500af181b8", "6995d843c2cb15d138fcd354", "6995d843e59b65725f5a20f9", "6995d848ca9617b56dfba5d1", "6995d848110032500af181b9", "6995d848a2df09d9d29d4004", "6995d848e59b65725f5a20fc",
+        // Lane 2
+        "6995d84eca9617b56dfba5d2", "6995d84ec2cb15d138fcd355", "6995d84e110032500af181ba", "6995d84ea2df09d9d29d4005", "6995d84ee59b65725f5a20fd", "6995d853c2cb15d138fcd358", "6995d853ca9617b56dfba5d3", "6995d853a2df09d9d29d4006", "6995d853110032500af181bb",
+        // Lane 3
+        "6995d859e59b65725f5a20fe", "6995d859ca9617b56dfba5d4", "6995d859c2cb15d138fcd35a", "6995d859a2df09d9d29d4007", "6995d859110032500af181bc", "6995d8635278898412324822", "6995d8638472051fbdc40281", "6995d863672fef250c0e6a57", "6995d8633a6535a099a683c1",
+        // Lane 4
+        "6995d868cff4987318bb8dae", "6995d868672fef250c0e6a58", "6995d8688472051fbdc40282", "6995d8685278898412324823", "6995d8683a6535a099a683c2", "6995d86f8472051fbdc40283", "6995d86fcff4987318bb8daf", "6995d86f672fef250c0e6a59", "6995d86f5278898412324824",
+    };
+}
+
+finished_bill_press_sparks_products :: proc() -> [36]string {
+    return {
+        // Lane 1 (Levels 2..10)
+        "6995df5c81c1538750dea0e6", "6995df5c53ccb7ec3a0d48e2", "6995df5c7638928de1f4e0bf", "6995df5c9aace2e811924c5d", "6995df5c41f1fecda863df76", "6995df6041f1fecda863df77", "6995df609aace2e811924c5e", "6995df6053ccb7ec3a0d48e4", "6995df6081c1538750dea0e8",
+        // Lane 2
+        "6995df6b7638928de1f4e0c0", "6995df6b41f1fecda863df79", "6995df6b9aace2e811924c5f", "6995df6b53ccb7ec3a0d48e5", "6995df6b81c1538750dea0e9", "6995df727638928de1f4e0c1", "6995df7241f1fecda863df7a", "6995df7253ccb7ec3a0d48e7", "6995df729aace2e811924c61",
+        // Lane 3
+        "6995df7881c1538750dea0ea", "6995df787638928de1f4e0c2", "6995df7853ccb7ec3a0d48e8", "6995df7841f1fecda863df7b", "6995df789aace2e811924c62", "6995df7e867b8ac8248d7dba", "6995df7ee59b65725f5a21bf", "6995df7ec2cb15d138fcd410", "6995df7e110032500af18259",
+        // Lane 4
+        "6995df8481c1538750dea0eb", "6995df847638928de1f4e0c4", "6995df8453ccb7ec3a0d48f2", "6995df849aace2e811924c64", "6995df8441f1fecda863df7c", "6995df8c81c1538750dea0ec", "6995df8c53ccb7ec3a0d48f3", "6995df8c41f1fecda863df7d", "6995df8c7638928de1f4e0c5",
+    };
+}
+
+blank_bill_press_upgrade_sparks_product_id_for_level :: proc(lane_index: s64, target_level: s64) -> string {
+    if lane_index < 0 || lane_index > 3 return "";
+    if target_level < 2 || target_level > 10 return "";
+    idx := lane_index * 9 + (target_level - 2);
+    ids := blank_bill_press_sparks_products();
+    if idx < 0 || idx >= ids.count return "";
+    return ids[idx];
+}
+
+colored_bill_press_upgrade_sparks_product_id_for_level :: proc(lane_index: s64, target_level: s64) -> string {
+    if lane_index < 0 || lane_index > 3 return "";
+    if target_level < 2 || target_level > 10 return "";
+    idx := lane_index * 9 + (target_level - 2);
+    ids := colored_bill_press_sparks_products();
+    if idx < 0 || idx >= ids.count return "";
+    return ids[idx];
+}
+
+finished_bill_press_upgrade_sparks_product_id_for_level :: proc(lane_index: s64, target_level: s64) -> string {
+    if lane_index < 0 || lane_index > 3 return "";
+    if target_level < 2 || target_level > 10 return "";
+    idx := lane_index * 9 + (target_level - 2);
+    ids := finished_bill_press_sparks_products();
+    if idx < 0 || idx >= ids.count return "";
+    return ids[idx];
+}
+
+blank_bill_press_upgrade_sparks_fallback_price_for_level :: proc(target_level: s64) -> s64 {
+    switch target_level {
+        case 2:  return 5;
+        case 3:  return 5;
+        case 4:  return 10;
+        case 5:  return 25;
+        case 6:  return 50;
+        case 7:  return 100;
+        case 8:  return 150;
+        case 9:  return 200;
+        case 10: return 350;
+    }
+    return 0;
+}
+
+colored_bill_press_upgrade_sparks_fallback_price_for_level :: proc(target_level: s64) -> s64 {
+    switch target_level {
+        case 2:  return 5;
+        case 3:  return 10;
+        case 4:  return 25;
+        case 5:  return 50;
+        case 6:  return 75;
+        case 7:  return 100;
+        case 8:  return 200;
+        case 9:  return 350;
+        case 10: return 500;
+    }
+    return 0;
+}
+
+finished_bill_press_upgrade_sparks_fallback_price_for_level :: proc(target_level: s64) -> s64 {
+    switch target_level {
+        case 2:  return 5;
+        case 3:  return 10;
+        case 4:  return 25;
+        case 5:  return 75;
+        case 6:  return 100;
+        case 7:  return 150;
+        case 8:  return 200;
+        case 9:  return 350;
+        case 10: return 750;
+    }
+    return 0;
+}
+

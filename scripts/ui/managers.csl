@@ -8,6 +8,9 @@ MANAGERS_PER_LANE  :: 4;
 // Temporary: hide Managers button from HUD.
 SHOW_MANAGERS_BUTTON :: false;
 
+// Cosmetic purchase SFX/VFX icon (local-only for owning client) via purchase FX pipeline.
+MANAGERS_SPARKS_PURCHASE_FX_ICON_PATH :: "UI/Spark.png";
+
 Manager_Kind :: enum {
     PRESS_OPERATOR;
     COLORIST;
@@ -36,6 +39,225 @@ manager_unlock_cost :: proc(kind: Manager_Kind) -> s64 {
         case .WOODCHIPPER:    return 500; // Harvester manager (see `HARVESTER_UPGRADES_MANAGER_UNLOCK_COST`)
     }
     return 0;
+}
+
+// ---------------------------------------------------------------------------
+// Sparks purchases: manager unlocks (per lane)
+//
+// Product naming convention (created via MCP):
+// - "Press Operator Manager (Lane X)"
+// - "Colorist Manager (Lane X)"
+// - "Stamper Manager (Lane X)"
+// - "Courier Manager (Lane X)"
+// Where X is 1..4.
+//
+// Fulfillment is handled by `ao_purchase_handler` in `scripts/main.csl`.
+// ---------------------------------------------------------------------------
+
+managers_sparks_products :: proc() -> [16]string {
+    return {
+        // Lane 1
+        "6995e6c4a2df09d9d29d41db", // Press Operator
+        "6995e6c4c2cb15d138fcd4eb", // Colorist
+        "6995e6c4867b8ac8248d7ea9", // Stamper
+        "6995e6c43d518aa4fbf96bc4", // Courier
+
+        // Lane 2
+        "6995e6c4a2df09d9d29d41dc", // Press Operator
+        "6995e6c43d518aa4fbf96bc3", // Colorist
+        "6995e6c4ca9617b56dfba857", // Stamper
+        "6995e6c4867b8ac8248d7eaa", // Courier
+
+        // Lane 3
+        "6995e6cf527889841232491b", // Press Operator
+        "6995e6cfd257e61474fbd504", // Colorist
+        "6995e6cfd257e61474fbd503", // Stamper
+        "6995e6cf3a6535a099a6848a", // Courier
+
+        // Lane 4
+        "6995e6cf81c1538750dea133", // Press Operator
+        "6995e6cff01b2938ae0145a9", // Colorist
+        "6995e6cf81c1538750dea134", // Stamper
+        "6995e6cf527889841232491c", // Courier
+    };
+}
+
+manager_kind_index_for_sparks :: proc(kind: Manager_Kind) -> s64 {
+    switch kind {
+        case .PRESS_OPERATOR: return 0;
+        case .COLORIST:       return 1;
+        case .STAMPER:        return 2;
+        case .COURIER:        return 3;
+        case .WOODCHIPPER:    return -1;
+    }
+    return -1;
+}
+
+manager_unlock_sparks_product_id :: proc(lane_index: s64, kind: Manager_Kind) -> string {
+    if lane_index < 0 || lane_index >= MANAGERS_LANE_COUNT return "";
+
+    ki := manager_kind_index_for_sparks(kind);
+    if ki < 0 || ki >= 4 return "";
+
+    idx := lane_index * 4 + ki;
+    if idx < 0 || idx >= 16 return "";
+
+    ids := managers_sparks_products();
+    if idx < 0 || idx >= ids.count return "";
+    return ids[idx];
+}
+
+manager_unlock_sparks_fallback_price :: proc(kind: Manager_Kind) -> s64 {
+    switch kind {
+        case .PRESS_OPERATOR: return 25;
+        case .COLORIST:       return 50;
+        case .STAMPER:        return 100;
+        case .COURIER:        return 200;
+        case .WOODCHIPPER:    return 0;
+    }
+    return 0;
+}
+
+manager_unlock_sparks_price :: proc(lane_index: s64, kind: Manager_Kind) -> s64 {
+    id := manager_unlock_sparks_product_id(lane_index, kind);
+    if id.count == 0 return 0;
+
+    p := Purchasing.get_product(id);
+    if p.id.count != 0 && p.price > 0 {
+        return p.price;
+    }
+
+    // Fallback to authored prices (in case product data isn't available yet).
+    return manager_unlock_sparks_fallback_price(kind);
+}
+
+server_try_prompt_sparks_manager_unlock_purchase :: proc(player: Player, lane_index: s64, kind: Manager_Kind) {
+    if player == null return;
+    if kind == .WOODCHIPPER return;
+
+    if lane_index < 0 || lane_index >= MANAGERS_LANE_COUNT {
+        if player->is_local() {
+            Notifier.notify("Invalid lane.");
+        }
+        return;
+    }
+
+    // Lane must be unlocked.
+    if !lanes_is_unlocked(player, lane_index) {
+        if player->is_local() {
+            Notifier.notify("Lane % is locked.", {lane_index + 1});
+        }
+        return;
+    }
+
+    // Already unlocked?
+    if is_manager_unlocked(player, lane_index, kind) {
+        if player->is_local() {
+            Notifier.notify("Already unlocked.");
+        }
+        return;
+    }
+
+    product_id := manager_unlock_sparks_product_id(lane_index, kind);
+    if product_id.count == 0 {
+        if player->is_local() {
+            Notifier.notify("Sparks purchase not available.");
+        }
+        return;
+    }
+
+    Purchasing.prompt_purchase(player, product_id);
+}
+
+server_grant_manager_unlock :: proc(player: Player, lane_index: s64, kind: Manager_Kind, purchase_source: string) -> bool {
+    if player == null return false;
+    if !Game.is_server() return false;
+    if kind == .WOODCHIPPER return false;
+    if lane_index < 0 || lane_index >= MANAGERS_LANE_COUNT return false;
+
+    // Must have the lane unlocked.
+    if !lanes_is_unlocked(player, lane_index) {
+        Notifier.notify(player, "Lane % is locked.", {lane_index + 1});
+        return false;
+    }
+
+    bit := manager_bit(kind);
+    if bit == 0 return false;
+
+    mask := player.managers_lane_masks[lane_index];
+    if (mask & bit) != 0 {
+        return false;
+    }
+
+    new_mask := mask | bit;
+    player.managers_lane_masks[lane_index] = new_mask;
+    Save.set_int(player, managers_lane_save_key(lane_index), new_mask);
+
+    // Cosmetic: purchase FX + SFX on the owning client.
+    server_request_purchase_fx(player, MANAGERS_SPARKS_PURCHASE_FX_ICON_PATH);
+
+    // Quest tracking: manager hired.
+    quest_on_manager_hired(player);
+
+    // Spawn the manager at the station anchor (so Sparks unlocks behave like in-world prompts).
+    gm := get_game_manager();
+    if gm != null && player.base_entity != null && player.base_entity.self != null {
+        pb := player.base_entity->get_component(PlayerBase);
+        if pb != null {
+            spawn_pos := gm->manager_unlock_anchor_world_pos(pb, lane_index, kind);
+            gm->server_spawn_manager_kind_at(player, lane_index, kind, spawn_pos);
+            gm->server_reconcile_manager_unlock_prompts_for_player(player);
+        }
+    }
+
+    if purchase_source.count != 0 {
+        Notifier.notify(player, "Unlocked % (Lane %) (%).", {manager_display_name(kind), lane_index + 1, purchase_source});
+    }
+    else {
+        Notifier.notify(player, "Unlocked % (Lane %).", {manager_display_name(kind), lane_index + 1});
+    }
+
+    return true;
+}
+
+managers_try_handle_manager_unlock_purchase_name :: proc(player: Player, purchase_name: string) -> bool {
+    if player == null return false;
+    if purchase_name.count == 0 return false;
+
+    for lane_num: 1..MANAGERS_LANE_COUNT {
+        lane_index := lane_num - 1;
+        for manager_index: 0..MANAGERS_PER_LANE-1 {
+            kind := manager_kind_from_index(manager_index);
+            expected := format_string("% Manager (Lane %)", {manager_display_name(kind), lane_num});
+            if purchase_name == expected {
+                if Game.is_server() {
+                    _ := server_grant_manager_unlock(player, lane_index, kind, "Sparks");
+                }
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+// Managers Sparks purchase fulfillment.
+// Called by `ao_purchase_handler` (defined in `scripts/main.csl`) when a purchase succeeds.
+// Return true if we handled the purchase id.
+managers_try_handle_purchase :: proc(player: Player, id: string) -> bool {
+    if player == null return false;
+    if id.count == 0 return false;
+
+    // Primary: resolve product id -> product name, then match by naming convention.
+    prod := Purchasing.get_product(id);
+    if prod.id.count != 0 {
+        if managers_try_handle_manager_unlock_purchase_name(player, prod.name) return true;
+    }
+
+    // Fallback: id might be the product name directly.
+    if managers_try_handle_manager_unlock_purchase_name(player, id) return true;
+
+    return false;
 }
 
 manager_kind_from_index :: proc(index: s64) -> Manager_Kind {
@@ -315,9 +537,59 @@ draw_manager_card :: proc(player: Player, rect: Rect, lane_index: s64, kind: Man
             _ := UI.button(btn_rect->inset(6), bs, ts, "Lane Locked");
         }
         else {
+            // Optional Sparks unlock button (if a product exists for this lane/kind).
+            sparks_product_id := manager_unlock_sparks_product_id(lane_index, kind);
+            sparks_price := manager_unlock_sparks_price(lane_index, kind);
+            has_sparks := sparks_product_id.count != 0 && sparks_price > 0;
+
+            coins_btn_rect := btn_rect;
+            sparks_btn_rect := btn_rect;
+            if has_sparks {
+                left := btn_rect->cut_left_unscaled(btn_rect->width() * 0.5);
+                coins_btn_rect = left;
+                sparks_btn_rect = btn_rect;
+            }
+
+            // Coins unlock
             label := format_string("Unlock $%", {format_int_with_commas(cost)});
-            if UI.button(btn_rect->inset(6), bs, ts, label).clicked {
+            UI.push_id("mgr_coin_btn", {}); defer UI.pop_id();
+            if UI.button(coins_btn_rect->inset(6), bs, ts, label).clicked {
                 server_try_unlock_manager(player, lane_index, kind);
+            }
+
+            // Sparks unlock
+            if has_sparks {
+                UI.push_id("mgr_sparks_btn", {}); defer UI.pop_id();
+
+                bs_sparks := UI.default_button_settings();
+                bs_sparks.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_4.png"); // Gold
+                bs_sparks.press_scaling = 0.35;
+
+                sparks_icon := get_asset(Texture_Asset, "UI/Spark.png");
+                sparks_label := format_string("%", {format_int_with_commas(sparks_price)});
+
+                ts_sparks := ts;
+                ts_sparks.do_autofit = true;
+                ts_sparks.autofit_min_size = 18;
+                ts_sparks.autofit_max_size = ts.size;
+
+                result_sparks := UI.begin_button(sparks_btn_rect->inset(6), bs_sparks, ts_sparks, ""); {
+                    defer UI.end_button();
+
+                    inner_btn := result_sparks.rect->inset(10);
+                    if sparks_icon != null {
+                        icon_rect := inner_btn->left_center_rect()->grow_unscaled(18)->offset_unscaled(22, 0);
+                        UI.quad(icon_rect->fit_aspect(sparks_icon->get_aspect()), sparks_icon);
+                    }
+
+                    label_rect := inner_btn;
+                    _ := label_rect->cut_left_unscaled(46);
+                    UI.text(label_rect, ts_sparks, sparks_label);
+                }
+
+                if result_sparks.clicked {
+                    server_try_prompt_sparks_manager_unlock_purchase(player, lane_index, kind);
+                }
             }
         }
     }

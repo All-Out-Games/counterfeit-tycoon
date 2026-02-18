@@ -47,6 +47,12 @@ ao_purchase_handler :: proc(player: Player, id: string) -> bool {
     if !handled {
         handled = harvester_upgrades_try_handle_purchase(player, id);
     }
+    if !handled {
+        handled = upgrades_try_handle_purchase(player, id);
+    }
+    if !handled {
+        handled = managers_try_handle_purchase(player, id);
+    }
     if handled {
         // Debug: visible confirmation that the callback is firing (server only).
         if Game.is_server() {
