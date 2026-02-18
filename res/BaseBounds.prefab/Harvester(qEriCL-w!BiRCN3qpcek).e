@@ -5,8 +5,8 @@
   "name": "Harvester",
   "local_enabled": true,
   "local_position": {
-    "X": -4,
-    "Y": -6
+    "X": -5,
+    "Y": -9
   },
   "local_rotation": 0,
   "local_scale": {
@@ -14,7 +14,7 @@
     "Y": 1
   },
   "previous_sibling": "174051657103501:1770200675128382600",
-  "next_sibling": "450684739189832:1771026520041078300",
+  "next_sibling": "1343469938113046:1771449240703297800",
   "parent": "150484291903114:1770189516079501100"
 },
 {

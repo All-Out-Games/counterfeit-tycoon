@@ -5,7 +5,7 @@
   "name": "Truck",
   "local_enabled": true,
   "local_position": {
-    "Y": -6
+    "Y": -8.5000000000000000
   },
   "local_rotation": 0,
   "local_scale": {

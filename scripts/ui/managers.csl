@@ -565,7 +565,7 @@ draw_manager_card :: proc(player: Player, rect: Rect, lane_index: s64, kind: Man
                 bs_sparks.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_4.png"); // Gold
                 bs_sparks.press_scaling = 0.35;
 
-                sparks_icon := get_asset(Texture_Asset, "UI/Spark.png");
+                #static sparks_icon := get_asset(Texture_Asset, "UI/Spark.png");
                 sparks_label := format_string("%", {format_int_with_commas(sparks_price)});
 
                 ts_sparks := ts;

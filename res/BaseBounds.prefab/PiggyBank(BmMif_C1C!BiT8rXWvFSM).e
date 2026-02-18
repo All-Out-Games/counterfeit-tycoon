@@ -5,12 +5,12 @@
   "name": "PiggyBank",
   "local_enabled": true,
   "local_position": {
-
+    "Y": 0.1650000065565109
   },
   "local_rotation": 0,
   "local_scale": {
-    "X": -1,
-    "Y": 1
+    "X": -1.5000000000000000,
+    "Y": 1.5000000000000000
   },
   "parent": "162510489722853:1770195210522183700"
 },

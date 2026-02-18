@@ -1,24 +1,24 @@
 13
-193273528321
-101848082889216 1770861351059181700
+253403070465
+1343847986649213 1771449419703666200
 {
   "name": "ColorMachine",
   "local_enabled": true,
   "local_position": {
-    "X": 3
+    "X": 2
   },
   "local_rotation": 0,
   "local_scale": {
     "X": 1,
     "Y": 1
   },
-  "previous_sibling": "101789545094958:1770861323342441200",
-  "next_sibling": "101856284359986:1770861354942451100",
-  "parent": "101762335389753:1770861310459066500"
+  "previous_sibling": "1343847986658646:1771449419703670700",
+  "next_sibling": "1343847986628260:1771449419703656400",
+  "parent": "1343847986531464:1771449419703610900"
 },
 {
   "cid": 1,
-  "aoid": "101848082984225:1770861351059226300",
+  "aoid": "1343847986890985:1771449419703780700",
   "component_type": "Internal_Component",
   "internal_component_type": "Sprite_Renderer",
   "data": {
@@ -31,7 +31,7 @@
 },
 {
   "cid": 2,
-  "aoid": "101848083006877:1770861351059236900",
+  "aoid": "1343847986901494:1771449419703785700",
   "component_type": "Internal_Component",
   "internal_component_type": "Colored_Bill_Press",
   "data": {

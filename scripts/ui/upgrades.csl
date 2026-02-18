@@ -741,6 +741,12 @@ draw_upgrades_lane_header_buttons :: proc(player: Player, rect: Rect) {
 draw_station_upgrade_card :: proc(player: Player, rect: Rect, lane_index: s64, kind: Station_Kind) {
     if player == null return;
 
+    #static btn_green := get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_2.png"); // Green
+    #static btn_red   := get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_3.png"); // Red
+    #static btn_gold  := get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_4.png"); // Gold
+    #static btn_grey  := get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_8.png"); // Grey
+    #static sparks_icon := get_asset(Texture_Asset, "UI/Spark.png");
+
     UI.quad(rect, core_globals.white_sprite, {0.08, 0.08, 0.08, 0.95});
     inner := rect->inset(18);
 
@@ -795,7 +801,9 @@ draw_station_upgrade_card :: proc(player: Player, rect: Rect, lane_index: s64, k
     // Lane locked?
     if !lanes_is_unlocked(player, lane_index) {
         bs_na := UI.default_button_settings();
-        bs_na.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_8.png"); // Grey
+        if btn_grey != null {
+            bs_na.sprite = btn_grey;
+        }
         bs_na.press_scaling = 0.0;
         UI.push_disabled(true);
         defer UI.pop_disabled();
@@ -806,7 +814,9 @@ draw_station_upgrade_card :: proc(player: Player, rect: Rect, lane_index: s64, k
     // Max level?
     if level >= UPGRADES_MAX_LEVEL {
         bs_max := UI.default_button_settings();
-        bs_max.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_8.png"); // Grey
+        if btn_grey != null {
+            bs_max.sprite = btn_grey;
+        }
         bs_max.press_scaling = 0.0;
         UI.push_disabled(true);
         defer UI.pop_disabled();
@@ -836,9 +846,13 @@ draw_station_upgrade_card :: proc(player: Player, rect: Rect, lane_index: s64, k
     UI.push_id("up_coin_btn", {}); defer UI.pop_id();
     {
         bs := UI.default_button_settings();
-        bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_2.png"); // Green
+        if btn_green != null {
+            bs.sprite = btn_green;
+        }
         if !can_afford {
-            bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_3.png"); // Red
+            if btn_red != null {
+                bs.sprite = btn_red;
+            }
         }
         bs.press_scaling = 0.4;
 
@@ -853,10 +867,11 @@ draw_station_upgrade_card :: proc(player: Player, rect: Rect, lane_index: s64, k
         UI.push_id("up_sparks_btn", {}); defer UI.pop_id();
         {
             bs_sparks := UI.default_button_settings();
-            bs_sparks.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_4.png"); // Gold
+            if btn_gold != null {
+                bs_sparks.sprite = btn_gold;
+            }
             bs_sparks.press_scaling = 0.35;
 
-            sparks_icon := get_asset(Texture_Asset, "UI/Spark.png");
             sparks_label := format_string("%", {format_int_with_commas(sparks_price)});
 
             ts_sparks := ts_btn;
@@ -887,6 +902,10 @@ draw_station_upgrade_card :: proc(player: Player, rect: Rect, lane_index: s64, k
 
 draw_vault_upgrade_card :: proc(player: Player, rect: Rect) {
     if player == null return;
+
+    #static btn_green := get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_2.png"); // Green
+    #static btn_red   := get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_3.png"); // Red
+    #static btn_grey  := get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_8.png"); // Grey
 
     UI.quad(rect, core_globals.white_sprite, {0.08, 0.08, 0.08, 0.95});
     inner := rect->inset(26);
@@ -943,7 +962,9 @@ draw_vault_upgrade_card :: proc(player: Player, rect: Rect) {
 
     if level >= VAULT_MAX_LEVEL {
         bs_max := UI.default_button_settings();
-        bs_max.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_8.png");
+        if btn_grey != null {
+            bs_max.sprite = btn_grey;
+        }
         bs_max.press_scaling = 0.0;
         UI.push_disabled(true);
         defer UI.pop_disabled();
@@ -955,9 +976,13 @@ draw_vault_upgrade_card :: proc(player: Player, rect: Rect) {
     can_afford := cost > 0 && Economy.can_withdraw_currency(player, UPGRADES_COIN_CURRENCY, cost);
 
     bs := UI.default_button_settings();
-    bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_2.png");
+    if btn_green != null {
+        bs.sprite = btn_green;
+    }
     if !can_afford {
-        bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_3.png");
+        if btn_red != null {
+            bs.sprite = btn_red;
+        }
     }
     bs.press_scaling = 0.4;
 
@@ -1008,13 +1033,16 @@ draw_upgrades_modal :: proc(player: Player) {
     // Footer close button (red)
     footer := content->cut_bottom(95);
     {
+        #static btn_red := get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_3.png"); // Red
         bs_close := UI.default_button_settings();
         ts_close := UI.default_text_settings();
         ts_close.size = 40;
         ts_close.halign = .CENTER;
         ts_close.valign = .CENTER;
 
-        bs_close.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_3.png"); // Red
+        if btn_red != null {
+            bs_close.sprite = btn_red;
+        }
         bs_close.press_scaling = 0.45;
 
         close_btn := footer->inset(10);

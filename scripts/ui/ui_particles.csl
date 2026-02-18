@@ -46,19 +46,12 @@ UI_Particle_System_Entry :: struct {
 }
 
 ui_particles__get_system_for_player :: proc(player: Player) -> UI_Particle_System {
-    // Only for the local player on clients; on server, valid for all players.
+    // Cosmetic-only: only maintain particle state on the local client.
     if player == null return null;
     if !player->is_local_or_server() return null;
 
     uid := player->get_user_id();
     if uid.count == 0 return null;
-
-    // On clients, guard against the server context by requiring local player.
-    // `is_local_or_server()` is true on the local client and on the server simulation.
-    // For pure cosmetic UI particles we still only want a system for the local player on clients.
-    if !Game.is_server() && !player->is_local() {
-        return null;
-    }
 
     #static entries: [16]UI_Particle_System_Entry;
 
@@ -89,9 +82,9 @@ ui_particles__get_system_for_player :: proc(player: Player) -> UI_Particle_Syste
     sys.heartbeat_accum = 0.0;
 
     // Default debug config (can be changed later if needed).
-    sys.debug_spawn_logs = true;
+    sys.debug_spawn_logs = false;
     sys.debug_heartbeat_logs = false;
-    sys.debug_removal_logs = true;
+    sys.debug_removal_logs = false;
 
     entries[slot].user_id = uid;
     entries[slot].sys = sys;
@@ -205,6 +198,7 @@ ui_particles_update_and_draw_for_player :: proc(player: Player, dt: float) {
     sys := ui_particles__get_system_for_player(player);
     if sys == null return;
     if sys.particles.count <= 0 return;
+    if Game.is_server() return;
 
     UI.push_screen_draw_context();
     defer UI.pop_draw_context();

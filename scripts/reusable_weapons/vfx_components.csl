@@ -19,15 +19,24 @@ Looping_VFX :: class : Component {
     outro_triggered: bool;
 
     ao_update :: method(dt: float) {
+        elapsed_prev := elapsed;
         elapsed += dt;
 
-        // Trigger outro animation before end
-        if !outro_triggered && outro_time > 0 && elapsed >= (lifetime - outro_time) {
-            spine := entity->get_component(Spine_Animator);
-            if spine != null {
-                spine.instance.state_machine->set_trigger("outro");
+        // Trigger outro animation before end.
+        if outro_time > 0 && lifetime > 0 {
+            trigger_time := lifetime - outro_time;
+
+            // Server should not do spine/state-machine work; clients can drive visuals deterministically.
+            if !Game.is_server() && elapsed_prev < trigger_time && elapsed >= trigger_time {
+                spine := entity->get_component(Spine_Animator);
+                if spine != null && spine.instance != null && spine.instance.state_machine != null {
+                    spine.instance.state_machine->set_trigger("outro");
+                }
             }
-            outro_triggered = true;
+
+            if elapsed >= trigger_time {
+                outro_triggered = true;
+            }
         }
 
         if lifetime > 0 && elapsed >= lifetime {

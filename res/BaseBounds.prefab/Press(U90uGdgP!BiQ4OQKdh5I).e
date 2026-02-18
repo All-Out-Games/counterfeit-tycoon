@@ -5,7 +5,8 @@
   "name": "Press",
   "local_enabled": true,
   "local_position": {
-    "X": -3
+    "X": -2,
+    "Y": -5.5000000000000000
   },
   "local_rotation": 0,
   "local_scale": {

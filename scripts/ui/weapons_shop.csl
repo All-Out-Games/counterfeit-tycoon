@@ -710,7 +710,7 @@ draw_weapon_shop_item_card :: proc(player: Player, rect: Rect, wt: Weapon_Type) 
         bs_sparks.press_scaling = 0.25;
 
         // Icon anchored left + centered label with extra horizontal room.
-        sparks_icon := get_asset(Texture_Asset, "UI/Spark.png");
+        #static sparks_icon := get_asset(Texture_Asset, "UI/Spark.png");
         label := format_string("% Sparks", {format_int_with_commas(sparks_price)});
 
         ts_draw := ts;

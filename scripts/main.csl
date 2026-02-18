@@ -291,7 +291,7 @@ migrate_legacy_coin_items_to_currency :: proc(player: Player) {
 
 draw_finished_bills_per_sec_hud :: proc(player: Player) {
     if player == null return;
-    if !player->is_local_or_server() return;
+    if !player->is_local() return;
 
     // Sum production rate across all Finished_Bill_Press instances owned by this player.
     total_rate := 0.0;
@@ -378,13 +378,19 @@ draw_lane_labels :: proc(player: Player) {
 
 draw_coin_currency_hud :: proc(player: Player) {
     if player == null return;
-    if !player->is_local_or_server() return;
+    if !player->is_local() return;
 
     safe := UI.get_safe_screen_rect();
 
     // Top-right coin panel
     panel := safe->bottom_left_rect()->grow(50, 100, 50, 100)->offset(150, 70);
-    UI.quad(panel, get_asset(Texture_Asset, "UI/GoldFrame.png"), {0.5, 0.5, 0.5, 1});
+    #static gold_frame := get_asset(Texture_Asset, "UI/GoldFrame.png");
+    if gold_frame != null {
+        UI.quad(panel, gold_frame, {0.5, 0.5, 0.5, 1});
+    }
+    else {
+        UI.quad(panel, core_globals.white_sprite, {0.15, 0.15, 0.15, 0.85});
+    }
 
     inner := panel->inset(12);
     icon_rect := inner->cut_left_unscaled(54);
@@ -1169,92 +1175,104 @@ Player :: class : Player_Base {
             }
         }
 
-        // Damage flash (runs on server + clients so everyone sees it).
-        {
-            FLASH_DURATION :: 0.5;
-            FLASH_HZ :: 20.0; // toggles ~10 times over 0.5s
+        // Cosmetic-only visual updates: run on clients, not on the dedicated server.
+        if !Game.is_server() {
+            // Damage flash (everyone sees it because each client drives visuals for all replicated players).
+            {
+                FLASH_DURATION :: 0.5;
+                FLASH_HZ :: 20.0; // toggles ~10 times over 0.5s
 
-            now := get_time();
-            flashing := (damage_flash_start_time > 0.0) && (now - damage_flash_start_time <= FLASH_DURATION);
+                now := get_time();
+                flashing := (damage_flash_start_time > 0.0) && (now - damage_flash_start_time <= FLASH_DURATION);
 
-            if animator != null && animator.instance != null {
-                if flashing {
-                    tick := ((now - damage_flash_start_time) * FLASH_HZ).(int);
-                    if (tick % 2) == 0 {
-                        animator.instance.color_multiplier = {1, 1, 1, 1};
+                if animator != null && animator.instance != null {
+                    if flashing {
+                        tick := ((now - damage_flash_start_time) * FLASH_HZ).(int);
+                        if (tick % 2) == 0 {
+                            animator.instance.color_multiplier = {1, 1, 1, 1};
+                        }
+                        else {
+                            animator.instance.color_multiplier = {1, 0.2, 0.2, 1};
+                        }
                     }
                     else {
-                        animator.instance.color_multiplier = {1, 0.2, 0.2, 1};
+                        animator.instance.color_multiplier = {1, 1, 1, 1};
                     }
                 }
-                else {
-                    animator.instance.color_multiplier = {1, 1, 1, 1};
+            }
+
+            // Spawn shield VFX (client-side so the server does no graphical work).
+            {
+                now := get_time();
+                is_protected := now < spawn_protection_until && !death_pickup_lockout;
+                SHIELD_INTRO_DURATION :: 0.6;   // seconds for intro anim
+                DISAPPEAR_LEAD :: 0.8;          // start disappear this long before expiry
+                DISAPPEAR_DURATION :: 0.8;      // seconds for disappear anim
+
+                should_disappear := !is_protected || (spawn_protection_until - now) < DISAPPEAR_LEAD;
+
+                if is_protected && !should_disappear {
+                    // Shield should be visible.
+                    if shield_entity == null || shield_entity.self == null {
+                        shield_entity = Scene.create_entity();
+                        shield_spine = shield_entity->add_component(Spine_Animator);
+                        shield_spine->awaken();
+                        shield_asset := get_asset(Spine_Asset, "Animations/008BED_Shield_spine/008BED_Shield.spine");
+                        shield_spine.instance->set_skeleton(shield_asset);
+                        shield_spine.instance->set_animation("intro", false, 0);
+                        shield_spine.depth_offset = -5.0; // render on top of player
+                        shield_playing_disappear = false;
+                        shield_created_time = now;
+                    }
+
+                    // After intro duration, switch to idle_loop.
+                    if !shield_playing_disappear && (now - shield_created_time) >= SHIELD_INTRO_DURATION {
+                        if shield_spine != null && shield_spine.instance != null {
+                            // Only set once (check if we haven't already switched).
+                            if (now - shield_created_time) < SHIELD_INTRO_DURATION + dt + 0.05 {
+                                shield_spine.instance->set_animation("idle_loop", true, 0);
+                            }
+                        }
+                    }
+
+                    // Follow player position (offset up to center on body).
+                    if entity != null && entity.self != null && shield_entity != null && shield_entity.self != null {
+                        shield_entity->set_local_position(entity.world_position + v2{0, 0.5});
+                    }
+                }
+                else if shield_entity != null && shield_entity.self != null {
+                    // Play disappear then destroy.
+                    if !shield_playing_disappear {
+                        shield_playing_disappear = true;
+                        shield_disappear_start_time = now;
+                        if shield_spine != null && shield_spine.instance != null {
+                            shield_spine.instance->set_animation("disappear", false, 0);
+                        }
+                    }
+
+                    // Destroy after disappear duration.
+                    if shield_playing_disappear && (now - shield_disappear_start_time) >= DISAPPEAR_DURATION {
+                        shield_entity->destroy();
+                        shield_entity = null;
+                        shield_spine = null;
+                        shield_playing_disappear = false;
+                    }
+
+                    // Keep following player while disappearing.
+                    if entity != null && entity.self != null && shield_entity != null && shield_entity.self != null {
+                        shield_entity->set_local_position(entity.world_position + v2{0, 0.5});
+                    }
                 }
             }
         }
-
-        // Spawn shield VFX (runs on all clients so everyone sees it).
-        {
-            now := get_time();
-            is_protected := now < spawn_protection_until && !death_pickup_lockout;
-            SHIELD_INTRO_DURATION :: 0.6;   // seconds for intro anim
-            DISAPPEAR_LEAD :: 0.8;          // start disappear this long before expiry
-            DISAPPEAR_DURATION :: 0.8;      // seconds for disappear anim
-
-            should_disappear := !is_protected || (spawn_protection_until - now) < DISAPPEAR_LEAD;
-
-            if is_protected && !should_disappear {
-                // Shield should be visible.
-                if shield_entity == null || shield_entity.self == null {
-                    shield_entity = Scene.create_entity();
-                    shield_spine = shield_entity->add_component(Spine_Animator);
-                    shield_spine->awaken();
-                    shield_asset := get_asset(Spine_Asset, "Animations/008BED_Shield_spine/008BED_Shield.spine");
-                    shield_spine.instance->set_skeleton(shield_asset);
-                    shield_spine.instance->set_animation("intro", false, 0);
-                    shield_spine.depth_offset = -5.0; // render on top of player
-                    shield_playing_disappear = false;
-                    shield_created_time = now;
-                }
-
-                // After intro duration, switch to idle_loop.
-                if !shield_playing_disappear && (now - shield_created_time) >= SHIELD_INTRO_DURATION {
-                    if shield_spine != null && shield_spine.instance != null {
-                        // Only set once (check if we haven't already switched).
-                        if (now - shield_created_time) < SHIELD_INTRO_DURATION + dt + 0.05 {
-                            shield_spine.instance->set_animation("idle_loop", true, 0);
-                        }
-                    }
-                }
-
-                // Follow player position (offset up to center on body).
-                if entity != null && entity.self != null && shield_entity != null && shield_entity.self != null {
-                    shield_entity->set_local_position(entity.world_position + v2{0, 0.5});
-                }
+        else {
+            // Safety cleanup (useful during hot reload): the server should not keep cosmetic entities around.
+            if shield_entity != null && shield_entity.self != null {
+                shield_entity->destroy();
             }
-            else if shield_entity != null && shield_entity.self != null {
-                // Play disappear then destroy.
-                if !shield_playing_disappear {
-                    shield_playing_disappear = true;
-                    shield_disappear_start_time = now;
-                    if shield_spine != null && shield_spine.instance != null {
-                        shield_spine.instance->set_animation("disappear", false, 0);
-                    }
-                }
-
-                // Destroy after disappear duration.
-                if shield_playing_disappear && (now - shield_disappear_start_time) >= DISAPPEAR_DURATION {
-                    shield_entity->destroy();
-                    shield_entity = null;
-                    shield_spine = null;
-                    shield_playing_disappear = false;
-                }
-
-                // Keep following player while disappearing.
-                if entity != null && entity.self != null && shield_entity != null && shield_entity.self != null {
-                    shield_entity->set_local_position(entity.world_position + v2{0, 0.5});
-                }
-            }
+            shield_entity = null;
+            shield_spine = null;
+            shield_playing_disappear = false;
         }
 
         // Ensure the player can't move while the Sell Shop modal is open.

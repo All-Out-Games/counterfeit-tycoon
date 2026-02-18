@@ -5,7 +5,7 @@
   "name": "Vault",
   "local_enabled": true,
   "local_position": {
-
+    "Y": 1
   },
   "local_rotation": 0,
   "local_scale": {

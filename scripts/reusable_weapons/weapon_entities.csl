@@ -11,22 +11,32 @@ Poison_Cloud :: class : Component {
     disappearing: bool;
 
     ao_update :: method(dt: float) {
+        prev_lifetime := lifetime;
         lifetime += dt;
         if max_lifetime <= 0 {
             max_lifetime = 10.0;
         }
 
         // Trigger disappear animation 1s before end
-        if !disappearing && lifetime > (max_lifetime - 1.0) {
-            spine := entity->get_component(Spine_Animator);
-            if spine != null {
-                spine.instance.state_machine->set_trigger("disappear");
+        {
+            threshold := max_lifetime - 1.0;
+
+            // Visual-only: clients drive the spine trigger; server does no graphical work.
+            if !Game.is_server() && prev_lifetime <= threshold && lifetime > threshold {
+                spine := entity->get_component(Spine_Animator);
+                if spine != null && spine.instance != null && spine.instance.state_machine != null {
+                    spine.instance.state_machine->set_trigger("disappear");
+                }
             }
-            if sound_id != 0 {
-                SFX.stop(sound_id);
-                sound_id = 0;
+
+            // Shared state/sound cleanup (safe on both server + clients).
+            if !disappearing && lifetime > threshold {
+                if sound_id != 0 {
+                    SFX.stop(sound_id);
+                    sound_id = 0;
+                }
+                disappearing = true;
             }
-            disappearing = true;
         }
 
         if lifetime > max_lifetime {
@@ -177,30 +187,39 @@ Tornado_Entity :: class : Component {
     despawning: bool;
 
     ao_update :: method(dt: float) {
+        prev_lifetime := lifetime;
         lifetime += dt;
         if max_lifetime <= 0 {
             max_lifetime = 10.0;
         }
 
         // Trigger outro animation before destruction
-        if !despawning && lifetime > (max_lifetime - 1.317) {
-            spine := entity->get_component(Spine_Animator);
-            if spine != null {
-                spine.instance.state_machine->set_trigger("disappear");
+        {
+            threshold := max_lifetime - 1.317;
+
+            // Visual-only: clients drive the spine trigger; server does no graphical work.
+            if !Game.is_server() && prev_lifetime <= threshold && lifetime > threshold {
+                spine := entity->get_component(Spine_Animator);
+                if spine != null && spine.instance != null && spine.instance.state_machine != null {
+                    spine.instance.state_machine->set_trigger("disappear");
+                }
             }
-            if sound_id != 0 {
-                SFX.stop(sound_id);
-                sound_id = 0;
+
+            if !despawning && lifetime > threshold {
+                if sound_id != 0 {
+                    SFX.stop(sound_id);
+                    sound_id = 0;
+                }
+                // Play end sound
+                if Game.is_server() {
+                    end_sfx := get_asset(SFX_Asset, "reusable_weapons/sounds/reusable-weapons/fire_tornado_end.wav");
+                    end_desc := SFX.default_sfx_desc();
+                    end_desc->set_position(entity.world_position);
+                    end_desc.range_multiplier = 2.0;
+                    SFX.play(end_sfx, end_desc);
+                }
+                despawning = true;
             }
-            // Play end sound
-            if Game.is_server() {
-                end_sfx := get_asset(SFX_Asset, "reusable_weapons/sounds/reusable-weapons/fire_tornado_end.wav");
-                end_desc := SFX.default_sfx_desc();
-                end_desc->set_position(entity.world_position);
-                end_desc.range_multiplier = 2.0;
-                SFX.play(end_sfx, end_desc);
-            }
-            despawning = true;
         }
 
         if lifetime > max_lifetime {
