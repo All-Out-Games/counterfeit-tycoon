@@ -1,7 +1,6 @@
 import "core:ao"
 
 UPGRADES_COIN_CURRENCY :: "Coins";
-UPGRADES_PURCHASE_FX_ICON_PATH :: "Buttons/upgrades.png";
 
 UPGRADES_LANE_COUNT :: 4;
 UPGRADES_STATION_COUNT :: 4;
@@ -25,17 +24,25 @@ machine_queue_cap_for_level :: proc(level: s64) -> s64 {
     return QUEUE_CAP_BASE + QUEUE_CAP_PER_LEVEL * lvl;
 }
 
-// Vault upgrade balance: 6 levels, capacity + cost tables.
-VAULT_MAX_LEVEL :: 6;
+// Vault upgrade balance: 12 levels, capacity + cost tables.
+// Spread across more tiers so each upgrade feels achievable and
+// players see frequent progression rather than hitting big cost walls.
+VAULT_MAX_LEVEL :: 12;
 
 vault_capacity_for_level :: proc(level: s64) -> s64 {
     switch level {
         case 1:  return 50;
-        case 2:  return 200;
-        case 3:  return 750;
-        case 4:  return 2000;
-        case 5:  return 6000;
-        case 6:  return 20000;
+        case 2:  return 120;
+        case 3:  return 250;
+        case 4:  return 500;
+        case 5:  return 900;
+        case 6:  return 1500;
+        case 7:  return 2500;
+        case 8:  return 4000;
+        case 9:  return 6500;
+        case 10: return 10000;
+        case 11: return 15000;
+        case 12: return 20000;
     }
     return 50;
 }
@@ -43,11 +50,17 @@ vault_capacity_for_level :: proc(level: s64) -> s64 {
 vault_upgrade_cost_for_level :: proc(level: s64) -> s64 {
     // Cost to upgrade from `level` to `level+1`. Level 1 is free (no cost to reach it).
     switch level {
-        case 1:  return 2000;
-        case 2:  return 15000;
-        case 3:  return 100000;
-        case 4:  return 750000;
-        case 5:  return 5000000;
+        case 1:  return 500;
+        case 2:  return 1200;
+        case 3:  return 2800;
+        case 4:  return 6000;
+        case 5:  return 12000;
+        case 6:  return 25000;
+        case 7:  return 50000;
+        case 8:  return 100000;
+        case 9:  return 225000;
+        case 10: return 500000;
+        case 11: return 1500000;
     }
     return 0; // max level or invalid
 }
@@ -59,7 +72,7 @@ server_try_upgrade_vault :: proc(player: Player) {
     level := player.vault_level;
     if level < 1 level = 1;
     if level >= VAULT_MAX_LEVEL {
-        Notifier.notify(player, "Vault is already max level.");
+        Notifier.notify(player, "Piggy Bank is already max level.");
         return;
     }
 
@@ -86,10 +99,7 @@ server_try_upgrade_vault :: proc(player: Player) {
         gm->server_apply_vault_level_for_player(player);
     }
 
-    // Cosmetic purchase SFX (local-only for owning client) via purchase FX pipeline.
-    server_request_purchase_fx(player, UPGRADES_PURCHASE_FX_ICON_PATH);
-
-    Notifier.notify(player, "Vault upgraded to Level %.", {new_level});
+    Notifier.notify(player, "Piggy Bank upgraded to Level %.", {new_level});
 
     // Quest tracking: vault upgraded.
     quest_on_upgrade(player);
@@ -182,12 +192,15 @@ base_station_upgrade_costs :: proc() -> [9]s64 {
 }
 
 station_cost_multiplier :: proc(kind: Station_Kind) -> s64 {
-    // Placeholder: later stations are more expensive.
+    // Early-chain stations (low value-add) cost more to upgrade.
+    // Late-chain stations (high value-add) are cheaper, incentivizing
+    // players to upgrade the money-making end of the pipeline first.
+    // Value-add per item: Shredder +3, Paper Press +5, Color Machine +7, Stamp Machine +35
     switch kind {
-        case .SHREDDER:      return 1;
+        case .SHREDDER:      return 3;
         case .PAPER_PRESS:   return 2;
-        case .COLOR_MACHINE: return 3;
-        case .STAMP_MACHINE: return 4;
+        case .COLOR_MACHINE: return 2;
+        case .STAMP_MACHINE: return 1;
     }
     return 1;
 }
@@ -249,325 +262,10 @@ server_try_upgrade_station :: proc(player: Player, lane_index: s64, kind: Statio
         gm->server_apply_station_upgrade_levels_for_player(player);
     }
 
-    // Cosmetic purchase SFX (local-only for owning client) via purchase FX pipeline.
-    server_request_purchase_fx(player, UPGRADES_PURCHASE_FX_ICON_PATH);
-
     Notifier.notify(player, "% upgraded to Level % (Lane %).", {station_display_name(kind), new_level, lane_index + 1});
 
     // Quest tracking: machine upgraded.
     quest_on_upgrade(player);
-}
-
-// ---------------------------------------------------------------------------
-// Sparks purchases: station upgrades (per lane)
-//
-// Product naming convention (created via MCP):
-// - "Paper Mill Upgrade (Lane X): Level Y"
-// - "Blank Bill Press Upgrade (Lane X): Level Y"
-// - "Colored Bill Press Upgrade (Lane X): Level Y"
-// - "Finished Bill Press Upgrade (Lane X): Level Y"
-// Where X is 1..4, Y is 2..10
-//
-// Fulfillment is handled by `ao_purchase_handler` in `scripts/main.csl`.
-// ---------------------------------------------------------------------------
-
-UPGRADES_SPARKS_PURCHASE_FX_ICON_PATH :: "UI/Spark.png";
-
-// Paper Mill (Shredder) per-lane product ids.
-PAPER_MILL_SPARKS_PRODUCT_LANE_1_LEVEL_2  :: "6994ea7056519cfc7405ff63";
-PAPER_MILL_SPARKS_PRODUCT_LANE_1_LEVEL_3  :: "6994ea7156519cfc7405ff64";
-PAPER_MILL_SPARKS_PRODUCT_LANE_1_LEVEL_4  :: "6994ea71d8bdcda888c8cdc7";
-PAPER_MILL_SPARKS_PRODUCT_LANE_1_LEVEL_5  :: "6994ea725adc42888ced4aa1";
-PAPER_MILL_SPARKS_PRODUCT_LANE_1_LEVEL_6  :: "6994ea73196902f46c70719c";
-PAPER_MILL_SPARKS_PRODUCT_LANE_1_LEVEL_7  :: "6994ea749d2f45bf9233823a";
-PAPER_MILL_SPARKS_PRODUCT_LANE_1_LEVEL_8  :: "6994ea75aeeff8c9759ed418";
-PAPER_MILL_SPARKS_PRODUCT_LANE_1_LEVEL_9  :: "6994ea76196902f46c7071a3";
-PAPER_MILL_SPARKS_PRODUCT_LANE_1_LEVEL_10 :: "6994ea763f360af1dec6e64a";
-
-PAPER_MILL_SPARKS_PRODUCT_LANE_2_LEVEL_2  :: "6994f2f5196902f46c7077db";
-PAPER_MILL_SPARKS_PRODUCT_LANE_2_LEVEL_3  :: "6994f2f5aeeff8c9759ed6c7";
-PAPER_MILL_SPARKS_PRODUCT_LANE_2_LEVEL_4  :: "6994f2f5aeeff8c9759ed6c8";
-PAPER_MILL_SPARKS_PRODUCT_LANE_2_LEVEL_5  :: "6994f2f5aeeff8c9759ed6c6";
-PAPER_MILL_SPARKS_PRODUCT_LANE_2_LEVEL_6  :: "6994f2fb5adc42888ced4dc7";
-PAPER_MILL_SPARKS_PRODUCT_LANE_2_LEVEL_7  :: "6994f2fb56519cfc7406023c";
-PAPER_MILL_SPARKS_PRODUCT_LANE_2_LEVEL_8  :: "6994f2fb3f360af1dec6e9b0";
-PAPER_MILL_SPARKS_PRODUCT_LANE_2_LEVEL_9  :: "6994f2fbaeeff8c9759ed6cd";
-PAPER_MILL_SPARKS_PRODUCT_LANE_2_LEVEL_10 :: "6994f2fdd8bdcda888c8d1dd";
-
-PAPER_MILL_SPARKS_PRODUCT_LANE_3_LEVEL_2  :: "6994f357d8bdcda888c8d205";
-PAPER_MILL_SPARKS_PRODUCT_LANE_3_LEVEL_3  :: "6994f357f8c7f73f960d1b85";
-PAPER_MILL_SPARKS_PRODUCT_LANE_3_LEVEL_4  :: "6994f357aeeff8c9759ed6e4";
-PAPER_MILL_SPARKS_PRODUCT_LANE_3_LEVEL_5  :: "6994f3573f360af1dec6e9d3";
-PAPER_MILL_SPARKS_PRODUCT_LANE_3_LEVEL_6  :: "6994f35d5adc42888ced4de3";
-PAPER_MILL_SPARKS_PRODUCT_LANE_3_LEVEL_7  :: "6994f35daeeff8c9759ed6e5";
-PAPER_MILL_SPARKS_PRODUCT_LANE_3_LEVEL_8  :: "6994f35d196902f46c707840";
-PAPER_MILL_SPARKS_PRODUCT_LANE_3_LEVEL_9  :: "6994f35d56519cfc74060265";
-PAPER_MILL_SPARKS_PRODUCT_LANE_3_LEVEL_10 :: "6994f35faeeff8c9759ed6e6";
-
-PAPER_MILL_SPARKS_PRODUCT_LANE_4_LEVEL_2  :: "6994f364d8bdcda888c8d210";
-PAPER_MILL_SPARKS_PRODUCT_LANE_4_LEVEL_3  :: "6994f3633f360af1dec6e9d5";
-PAPER_MILL_SPARKS_PRODUCT_LANE_4_LEVEL_4  :: "6994f363f8c7f73f960d1b88";
-PAPER_MILL_SPARKS_PRODUCT_LANE_4_LEVEL_5  :: "6994f363d8bdcda888c8d20f";
-PAPER_MILL_SPARKS_PRODUCT_LANE_4_LEVEL_6  :: "6994f368aeeff8c9759ed6ea";
-PAPER_MILL_SPARKS_PRODUCT_LANE_4_LEVEL_7  :: "6994f3685adc42888ced4deb";
-PAPER_MILL_SPARKS_PRODUCT_LANE_4_LEVEL_8  :: "6994f368196902f46c707850";
-PAPER_MILL_SPARKS_PRODUCT_LANE_4_LEVEL_9  :: "6994f368aeeff8c9759ed6eb";
-PAPER_MILL_SPARKS_PRODUCT_LANE_4_LEVEL_10 :: "6994f36ad8bdcda888c8d213";
-
-paper_mill_upgrade_sparks_product_id_for_level :: proc(lane_index: s64, target_level: s64) -> string {
-    // lane_index is 0-based
-    switch lane_index {
-        case 0: {
-            switch target_level {
-                case 2:  return PAPER_MILL_SPARKS_PRODUCT_LANE_1_LEVEL_2;
-                case 3:  return PAPER_MILL_SPARKS_PRODUCT_LANE_1_LEVEL_3;
-                case 4:  return PAPER_MILL_SPARKS_PRODUCT_LANE_1_LEVEL_4;
-                case 5:  return PAPER_MILL_SPARKS_PRODUCT_LANE_1_LEVEL_5;
-                case 6:  return PAPER_MILL_SPARKS_PRODUCT_LANE_1_LEVEL_6;
-                case 7:  return PAPER_MILL_SPARKS_PRODUCT_LANE_1_LEVEL_7;
-                case 8:  return PAPER_MILL_SPARKS_PRODUCT_LANE_1_LEVEL_8;
-                case 9:  return PAPER_MILL_SPARKS_PRODUCT_LANE_1_LEVEL_9;
-                case 10: return PAPER_MILL_SPARKS_PRODUCT_LANE_1_LEVEL_10;
-            }
-        }
-        case 1: {
-            switch target_level {
-                case 2:  return PAPER_MILL_SPARKS_PRODUCT_LANE_2_LEVEL_2;
-                case 3:  return PAPER_MILL_SPARKS_PRODUCT_LANE_2_LEVEL_3;
-                case 4:  return PAPER_MILL_SPARKS_PRODUCT_LANE_2_LEVEL_4;
-                case 5:  return PAPER_MILL_SPARKS_PRODUCT_LANE_2_LEVEL_5;
-                case 6:  return PAPER_MILL_SPARKS_PRODUCT_LANE_2_LEVEL_6;
-                case 7:  return PAPER_MILL_SPARKS_PRODUCT_LANE_2_LEVEL_7;
-                case 8:  return PAPER_MILL_SPARKS_PRODUCT_LANE_2_LEVEL_8;
-                case 9:  return PAPER_MILL_SPARKS_PRODUCT_LANE_2_LEVEL_9;
-                case 10: return PAPER_MILL_SPARKS_PRODUCT_LANE_2_LEVEL_10;
-            }
-        }
-        case 2: {
-            switch target_level {
-                case 2:  return PAPER_MILL_SPARKS_PRODUCT_LANE_3_LEVEL_2;
-                case 3:  return PAPER_MILL_SPARKS_PRODUCT_LANE_3_LEVEL_3;
-                case 4:  return PAPER_MILL_SPARKS_PRODUCT_LANE_3_LEVEL_4;
-                case 5:  return PAPER_MILL_SPARKS_PRODUCT_LANE_3_LEVEL_5;
-                case 6:  return PAPER_MILL_SPARKS_PRODUCT_LANE_3_LEVEL_6;
-                case 7:  return PAPER_MILL_SPARKS_PRODUCT_LANE_3_LEVEL_7;
-                case 8:  return PAPER_MILL_SPARKS_PRODUCT_LANE_3_LEVEL_8;
-                case 9:  return PAPER_MILL_SPARKS_PRODUCT_LANE_3_LEVEL_9;
-                case 10: return PAPER_MILL_SPARKS_PRODUCT_LANE_3_LEVEL_10;
-            }
-        }
-        case 3: {
-            switch target_level {
-                case 2:  return PAPER_MILL_SPARKS_PRODUCT_LANE_4_LEVEL_2;
-                case 3:  return PAPER_MILL_SPARKS_PRODUCT_LANE_4_LEVEL_3;
-                case 4:  return PAPER_MILL_SPARKS_PRODUCT_LANE_4_LEVEL_4;
-                case 5:  return PAPER_MILL_SPARKS_PRODUCT_LANE_4_LEVEL_5;
-                case 6:  return PAPER_MILL_SPARKS_PRODUCT_LANE_4_LEVEL_6;
-                case 7:  return PAPER_MILL_SPARKS_PRODUCT_LANE_4_LEVEL_7;
-                case 8:  return PAPER_MILL_SPARKS_PRODUCT_LANE_4_LEVEL_8;
-                case 9:  return PAPER_MILL_SPARKS_PRODUCT_LANE_4_LEVEL_9;
-                case 10: return PAPER_MILL_SPARKS_PRODUCT_LANE_4_LEVEL_10;
-            }
-        }
-    }
-    return "";
-}
-
-paper_mill_upgrade_sparks_fallback_price_for_level :: proc(target_level: s64) -> s64 {
-    // Price ladder for Level 2..10.
-    switch target_level {
-        case 2:  return 5;
-        case 3:  return 5;
-        case 4:  return 5;
-        case 5:  return 10;
-        case 6:  return 25;
-        case 7:  return 75;
-        case 8:  return 100;
-        case 9:  return 150;
-        case 10: return 200;
-    }
-    return 0;
-}
-
-paper_mill_upgrade_sparks_price_for_level :: proc(lane_index: s64, target_level: s64) -> s64 {
-    id := paper_mill_upgrade_sparks_product_id_for_level(lane_index, target_level);
-    if id.count == 0 {
-        return 0;
-    }
-
-    p := Purchasing.get_product(id);
-    if p.id.count != 0 && p.price > 0 {
-        return p.price;
-    }
-
-    // Fallback to authored prices (in case product data isn't available yet).
-    return paper_mill_upgrade_sparks_fallback_price_for_level(target_level);
-}
-
-station_upgrade_sparks_product_id_for_level :: proc(lane_index: s64, kind: Station_Kind, target_level: s64) -> string {
-    switch kind {
-        case .SHREDDER:      return paper_mill_upgrade_sparks_product_id_for_level(lane_index, target_level);
-        case .PAPER_PRESS:   return blank_bill_press_upgrade_sparks_product_id_for_level(lane_index, target_level);
-        case .COLOR_MACHINE: return colored_bill_press_upgrade_sparks_product_id_for_level(lane_index, target_level);
-        case .STAMP_MACHINE: return finished_bill_press_upgrade_sparks_product_id_for_level(lane_index, target_level);
-    }
-    return "";
-}
-
-station_upgrade_sparks_fallback_price_for_level :: proc(kind: Station_Kind, target_level: s64) -> s64 {
-    switch kind {
-        case .SHREDDER:      return paper_mill_upgrade_sparks_fallback_price_for_level(target_level);
-        case .PAPER_PRESS:   return blank_bill_press_upgrade_sparks_fallback_price_for_level(target_level);
-        case .COLOR_MACHINE: return colored_bill_press_upgrade_sparks_fallback_price_for_level(target_level);
-        case .STAMP_MACHINE: return finished_bill_press_upgrade_sparks_fallback_price_for_level(target_level);
-    }
-    return 0;
-}
-
-station_upgrade_sparks_price_for_level :: proc(lane_index: s64, kind: Station_Kind, target_level: s64) -> s64 {
-    id := station_upgrade_sparks_product_id_for_level(lane_index, kind, target_level);
-    if id.count == 0 {
-        return 0;
-    }
-
-    p := Purchasing.get_product(id);
-    if p.id.count != 0 && p.price > 0 {
-        return p.price;
-    }
-
-    // Fallback to authored prices (in case product data isn't available yet).
-    return station_upgrade_sparks_fallback_price_for_level(kind, target_level);
-}
-
-server_try_prompt_sparks_station_upgrade_purchase :: proc(player: Player, lane_index: s64, kind: Station_Kind, target_level: s64) {
-    if player == null return;
-
-    if lane_index < 0 || lane_index >= UPGRADES_LANE_COUNT {
-        if player->is_local() {
-            Notifier.notify("Invalid lane.");
-        }
-        return;
-    }
-
-    if target_level < 2 || target_level > UPGRADES_MAX_LEVEL {
-        if player->is_local() {
-            Notifier.notify("Invalid upgrade.");
-        }
-        return;
-    }
-
-    cur := get_player_station_level(player, lane_index, kind);
-    if cur < 1 cur = 1;
-    if cur >= target_level {
-        if player->is_local() {
-            Notifier.notify("% is already Level %.", {station_display_name(kind), cur});
-        }
-        return;
-    }
-
-    product_id := station_upgrade_sparks_product_id_for_level(lane_index, kind, target_level);
-    if product_id.count == 0 {
-        if player->is_local() {
-            Notifier.notify("Sparks purchase not available.");
-        }
-        return;
-    }
-
-    Purchasing.prompt_purchase(player, product_id);
-}
-
-server_grant_station_upgrade_to_level :: proc(player: Player, lane_index: s64, kind: Station_Kind, target_level: s64, purchase_source: string) -> bool {
-    if player == null return false;
-    if !Game.is_server() return false;
-    if lane_index < 0 || lane_index >= UPGRADES_LANE_COUNT return false;
-
-    // Must have the lane unlocked (same requirement as coin upgrades).
-    if !lanes_is_unlocked(player, lane_index) {
-        Notifier.notify(player, "Lane % is locked.", {lane_index + 1});
-        return false;
-    }
-
-    lvl := target_level;
-    if lvl < 1 lvl = 1;
-    if lvl > UPGRADES_MAX_LEVEL lvl = UPGRADES_MAX_LEVEL;
-
-    cur := get_player_station_level(player, lane_index, kind);
-    if cur >= lvl {
-        return false;
-    }
-
-    set_player_station_level(player, lane_index, kind, lvl);
-
-    st := station_index(kind);
-    Save.set_int(player, station_upgrade_level_save_key(lane_index, st), lvl);
-
-    // Push new level into the actual station components.
-    gm := get_game_manager();
-    if gm != null {
-        gm->server_apply_station_upgrade_levels_for_player(player);
-    }
-
-    // Cosmetic: purchase FX + SFX on the owning client.
-    server_request_purchase_fx(player, UPGRADES_SPARKS_PURCHASE_FX_ICON_PATH);
-
-    if purchase_source.count != 0 {
-        Notifier.notify(player, "% upgraded to Level % (Lane %) (%).", {station_display_name(kind), lvl, lane_index + 1, purchase_source});
-    }
-    else {
-        Notifier.notify(player, "% upgraded to Level % (Lane %).", {station_display_name(kind), lvl, lane_index + 1});
-    }
-
-    // Quest tracking: machine upgraded.
-    quest_on_upgrade(player);
-
-    return true;
-}
-
-upgrades_try_handle_station_upgrade_purchase_name :: proc(player: Player, station_prefix: string, kind: Station_Kind, purchase_name: string) -> bool {
-    if player == null return false;
-    if purchase_name.count == 0 return false;
-    if station_prefix.count == 0 return false;
-
-    // We compare against generated expected names so we don't need to hardcode product ids.
-    // (This also naturally handles any duplicate products with the same name.)
-    for lane_num: 1..UPGRADES_LANE_COUNT {
-        lane_index := lane_num - 1;
-        for target_level: 2..UPGRADES_MAX_LEVEL {
-            expected := format_string("% Upgrade (Lane %): Level %", {station_prefix, lane_num, target_level});
-            if purchase_name == expected {
-                if Game.is_server() {
-                    _ := server_grant_station_upgrade_to_level(player, lane_index, kind, target_level, "Sparks");
-                }
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
-// Called by `ao_purchase_handler` (defined in `scripts/main.csl`) when a purchase succeeds.
-// Return true if we handled the purchase id.
-upgrades_try_handle_purchase :: proc(player: Player, id: string) -> bool {
-    if player == null return false;
-    if id.count == 0 return false;
-
-    // Primary: resolve product id -> product name, then match by naming convention.
-    prod := Purchasing.get_product(id);
-    if prod.id.count != 0 {
-        if upgrades_try_handle_station_upgrade_purchase_name(player, "Paper Mill", .SHREDDER, prod.name) return true;
-        if upgrades_try_handle_station_upgrade_purchase_name(player, "Blank Bill Press", .PAPER_PRESS, prod.name) return true;
-        if upgrades_try_handle_station_upgrade_purchase_name(player, "Colored Bill Press", .COLOR_MACHINE, prod.name) return true;
-        if upgrades_try_handle_station_upgrade_purchase_name(player, "Finished Bill Press", .STAMP_MACHINE, prod.name) return true;
-    }
-
-    // Fallback: some purchase flows may pass the product name directly.
-    if upgrades_try_handle_station_upgrade_purchase_name(player, "Paper Mill", .SHREDDER, id) return true;
-    if upgrades_try_handle_station_upgrade_purchase_name(player, "Blank Bill Press", .PAPER_PRESS, id) return true;
-    if upgrades_try_handle_station_upgrade_purchase_name(player, "Colored Bill Press", .COLOR_MACHINE, id) return true;
-    if upgrades_try_handle_station_upgrade_purchase_name(player, "Finished Bill Press", .STAMP_MACHINE, id) return true;
-
-    return false;
 }
 
 draw_upgrades_unlock_lane_prompt :: proc(player: Player, rect: Rect, lane_index: s64) {
@@ -710,7 +408,7 @@ draw_upgrades_lane_header_buttons :: proc(player: Player, rect: Rect) {
         x2 := (i + 1).(float) / TAB_COUNT.(float);
         btn := rect->subrect(x1, 0, x2, 1)->inset(8);
 
-        label := "Vault";
+        label := "Piggy Bank";
         if i < UPGRADES_LANE_COUNT {
             label = format_string("Lane %", {i + 1});
         }
@@ -805,71 +503,16 @@ draw_station_upgrade_card :: proc(player: Player, rect: Rect, lane_index: s64, k
     cost := station_upgrade_cost_for_level(kind, level);
     can_afford := cost > 0 && Economy.can_withdraw_currency(player, UPGRADES_COIN_CURRENCY, cost);
 
-    // Optional Sparks upgrade button (if a product exists for this lane/target level).
-    target_level := level + 1;
-    sparks_product_id := station_upgrade_sparks_product_id_for_level(lane_index, kind, target_level);
-    sparks_price := station_upgrade_sparks_price_for_level(lane_index, kind, target_level);
-    has_sparks := sparks_product_id.count != 0 && sparks_price > 0;
-
-    // Split the action row: Coins upgrade (left) + Sparks upgrade (right).
-    coins_btn_rect := btn_rect;
-    sparks_btn_rect := btn_rect;
-    if has_sparks {
-        left := btn_rect->cut_left_unscaled(btn_rect->width() * 0.5);
-        coins_btn_rect = left;
-        sparks_btn_rect = btn_rect;
+    bs := UI.default_button_settings();
+    bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_2.png"); // Green
+    if !can_afford {
+        bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_3.png"); // Red
     }
+    bs.press_scaling = 0.4;
 
-    // Coins button
-    UI.push_id("up_coin_btn", {}); defer UI.pop_id();
-    {
-        bs := UI.default_button_settings();
-        bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_2.png"); // Green
-        if !can_afford {
-            bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_3.png"); // Red
-        }
-        bs.press_scaling = 0.4;
-
-        label := format_string("Upgrade ($%)", {format_int_with_commas(cost)});
-        if UI.button(coins_btn_rect->inset(6), bs, ts_btn, label).clicked {
-            server_try_upgrade_station(player, lane_index, kind);
-        }
-    }
-
-    // Sparks button
-    if has_sparks {
-        UI.push_id("up_sparks_btn", {}); defer UI.pop_id();
-        {
-            bs_sparks := UI.default_button_settings();
-            bs_sparks.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_4.png"); // Gold
-            bs_sparks.press_scaling = 0.35;
-
-            sparks_icon := get_asset(Texture_Asset, "UI/Spark.png");
-            sparks_label := format_string("%", {format_int_with_commas(sparks_price)});
-
-            ts_sparks := ts_btn;
-            ts_sparks.do_autofit = true;
-            ts_sparks.autofit_min_size = 18;
-            ts_sparks.autofit_max_size = ts_btn.size;
-
-            result_sparks := UI.begin_button(sparks_btn_rect->inset(6), bs_sparks, ts_sparks, ""); {
-                defer UI.end_button();
-
-                inner_btn := result_sparks.rect->inset(10);
-                if sparks_icon != null {
-                    icon_rect := inner_btn->left_center_rect()->grow_unscaled(18)->offset_unscaled(22, 0);
-                    UI.quad(icon_rect->fit_aspect(sparks_icon->get_aspect()), sparks_icon);
-                }
-
-                label_rect := inner_btn;
-                _ := label_rect->cut_left_unscaled(46);
-                UI.text(label_rect, ts_sparks, sparks_label);
-            }
-
-            if result_sparks.clicked {
-                server_try_prompt_sparks_station_upgrade_purchase(player, lane_index, kind, target_level);
-            }
-        }
+    label := format_string("Upgrade ($%)", {format_int_with_commas(cost)});
+    if UI.button(btn_rect->inset(6), bs, ts_btn, label).clicked {
+        server_try_upgrade_station(player, lane_index, kind);
     }
 }
 
@@ -888,7 +531,7 @@ draw_vault_upgrade_card :: proc(player: Player, rect: Rect) {
     ts_title.do_outline = true;
     ts_title.outline_thickness = 3;
     ts_title.outline_color = {0, 0, 0, 1};
-    UI.text(title_rect, ts_title, "Vault");
+    UI.text(title_rect, ts_title, "Piggy Bank");
 
     _ := inner->cut_top(16);
 

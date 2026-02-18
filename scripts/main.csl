@@ -336,6 +336,46 @@ draw_finished_bills_per_sec_hud :: proc(player: Player) {
     UI.text(inner, ts, "%/s", {format_float(total_rate, decimals=1)});
 }
 
+draw_lane_labels :: proc(player: Player) {
+    if player == null return;
+    if !player->is_local() return;
+    if player.base_entity == null || player.base_entity.self == null return;
+
+    gm := get_game_manager();
+    if gm == null return;
+
+    UI.push_world_draw_context();
+    defer UI.pop_draw_context();
+    UI.push_layer(4);
+    defer UI.pop_layer();
+
+    base_pos := player.base_entity.world_position;
+
+    #static bold_font := get_asset(Font_Asset, "$AO/fonts/Barlow-Black.ttf");
+
+    for lane: 0..3 {
+        if lane > 0 && !lanes_is_unlocked(player, lane) continue;
+
+        lane_y := gm->lane_local_y_for_player(player, lane);
+        center := v2{base_pos.x, base_pos.y + lane_y};
+
+        // Lane title
+        title_pos := v2{center.x, center.y + 0.2};
+        title_rect := Rect{title_pos, title_pos};
+        ts_title := UI.default_text_settings();
+        ts_title.size = 0.3;
+        ts_title.halign = .CENTER;
+        ts_title.valign = .CENTER;
+        ts_title.color = {1, 1, 1, 0.85};
+        ts_title.do_outline = true;
+        ts_title.outline_thickness = 2;
+        ts_title.outline_color = {0, 0, 0, 0.8};
+        ts_title.font = bold_font;
+        UI.text(title_rect, ts_title, "Lane %", {lane + 1});
+
+    }
+}
+
 draw_coin_currency_hud :: proc(player: Player) {
     if player == null return;
     if !player->is_local_or_server() return;
@@ -476,6 +516,7 @@ Player :: class : Player_Base {
     quest_stat_pvp_kills: s64;
     quest_stat_trucks_destroyed: s64;
     quest_stat_vaults_robbed: s64;
+    quest_stat_vault_defended: s64;
 
     // Truck upgrades UI + levels (per-player, multiplayer safe)
     truck_upgrades_open: bool;
@@ -570,7 +611,7 @@ Player :: class : Player_Base {
             }
             if already_notified continue;
 
-            msg := format_string("% is stealing from your Vault!", {thief->get_username()});
+            msg := format_string("% is stealing from your Piggy Bank!", {thief->get_username()});
             Notifier.notify(msg);
 
             // Record.
@@ -1251,6 +1292,23 @@ Player :: class : Player_Base {
             VAULT_HOLD_CLEAR_GRACE :: 0.25;
             if vault_theft_target_entity_id != 0 && vault_theft_last_hold_time > 0 {
                 if get_time() - vault_theft_last_hold_time > VAULT_HOLD_CLEAR_GRACE {
+                    // If the owner was notified, a real theft attempt happened but failed.
+                    // Credit the vault owner with a successful defense.
+                    if vault_theft_owner_notified {
+                        foreach v: component_iterator(Vault) {
+                            if v == null continue;
+                            if v.entity == null || v.entity.self == null continue;
+                            if v.entity.id != vault_theft_target_entity_id continue;
+                            pb := get_parent_player_base(v.entity);
+                            if pb != null {
+                                owner := pb->get_owner();
+                                if owner != null {
+                                    quest_on_vault_defended(owner);
+                                }
+                            }
+                            break;
+                        }
+                    }
                     vault_theft_target_entity_id = 0;
                     vault_theft_hold_start_time = 0;
                     vault_theft_last_hold_time = 0;
@@ -1341,6 +1399,7 @@ Player :: class : Player_Base {
         // Currency HUD
         draw_coin_currency_hud(this);
         draw_finished_bills_per_sec_hud(this);
+        draw_lane_labels(this);
         client_coin_gain_particles_tick();
 
         // Draw weapons shop button + modal UI.
@@ -1484,7 +1543,7 @@ Player :: class : Player_Base {
             case 6:  return "Collect Colored Bills";
             case 7:  return "Deposit Colored Bills into your Finished Bill Press";
             case 8:  return "Collect Finished Bills";
-            case 9:  return "Deposit Finished Bills into your Vault";
+            case 9:  return "Deposit Finished Bills into your Piggy Bank";
             case 10: return "Send your Truck to the Bank";
             case 11: return "Tutorial Complete";
         }
@@ -1809,7 +1868,7 @@ Player :: class : Player_Base {
             if pb != null {
                 owner := pb->get_owner();
                 if owner != null {
-                    Notifier.notify(owner, "% is stealing from your Vault!", {this->get_username()});
+                    Notifier.notify(owner, "% is stealing from your Piggy Bank!", {this->get_username()});
                 }
             }
             vault_theft_owner_notified = true;

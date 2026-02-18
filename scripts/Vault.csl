@@ -288,7 +288,7 @@ Vault :: class : Interactable {
 
         // Server-authoritative safety check (in case client-side can_use is bypassed).
         if Game.is_server() && !is_owner_of_parent_base(entity, player) {
-            Notifier.notify(player, "This vault belongs to someone else.");
+            Notifier.notify(player, "This Piggy Bank belongs to someone else.");
             return;
         }
 
@@ -306,7 +306,7 @@ Vault :: class : Interactable {
 
         room := max_capacity - stored_finished_bills;
         if room <= 0 {
-            Notifier.notify(player, "Vault is full!");
+            Notifier.notify(player, "Piggy Bank is full!");
             return;
         }
 
@@ -315,7 +315,7 @@ Vault :: class : Interactable {
             to_try = room;
         }
         if to_try <= 0 {
-            Notifier.notify(player, "Vault is full!");
+            Notifier.notify(player, "Piggy Bank is full!");
             return;
         }
 
@@ -338,7 +338,7 @@ Vault :: class : Interactable {
 
         if stored_finished_bills >= max_capacity {
             stored_finished_bills = max_capacity;
-            Notifier.notify(player, "Vault is now full!");
+            Notifier.notify(player, "Piggy Bank is now full!");
         }
 
         // Persist immediately so disconnects/crashes don't lose progress.
@@ -357,7 +357,7 @@ Vault :: class : Interactable {
 
         pb := get_parent_player_base(entity);
         if pb == null {
-            Notifier.notify(thief, "Can't steal from this vault right now.");
+            Notifier.notify(thief, "Can't steal from this Piggy Bank right now.");
             return;
         }
 
@@ -368,7 +368,7 @@ Vault :: class : Interactable {
         }
 
         if stored_finished_bills <= 0 {
-            Notifier.notify(thief, "Vault is empty.");
+            Notifier.notify(thief, "Piggy Bank is empty.");
             return;
         }
 
@@ -381,7 +381,7 @@ Vault :: class : Interactable {
             to_steal = stored_finished_bills;
         }
         if to_steal <= 0 {
-            Notifier.notify(thief, "Vault is empty.");
+            Notifier.notify(thief, "Piggy Bank is empty.");
             return;
         }
 
@@ -715,7 +715,7 @@ Vault_Steal_Interactable :: class : Interactable {
             if pb != null {
                 owner := pb->get_owner();
                 if owner != null {
-                    Notifier.notify(owner, "% is stealing from your Vault!", {player->get_username()});
+                    Notifier.notify(owner, "% is stealing from your Piggy Bank!", {player->get_username()});
                 }
             }
             player.vault_theft_owner_notified = true;
@@ -728,7 +728,7 @@ Vault_Steal_Interactable :: class : Interactable {
 
         vault := entity->get_component(Vault);
         if vault == null {
-            Notifier.notify(player, "Can't steal from this vault right now.");
+            Notifier.notify(player, "Can't steal from this Piggy Bank right now.");
             return;
         }
 
@@ -738,6 +738,13 @@ Vault_Steal_Interactable :: class : Interactable {
         }
 
         vault->server_steal_finished_bills(player);
+
+        // Clear theft state immediately so the grace-period cleanup
+        // doesn't misfire a vault defense event for the owner.
+        player.vault_theft_target_entity_id = 0;
+        player.vault_theft_hold_start_time = 0;
+        player.vault_theft_last_hold_time = 0;
+        player.vault_theft_owner_notified = false;
     }
 }
 
