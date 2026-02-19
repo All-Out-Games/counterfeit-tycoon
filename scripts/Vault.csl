@@ -65,6 +65,7 @@ Vault :: class : Interactable {
     spine_animator: Spine_Animator @ao_serialize;
     client_spine_ready: bool;
     client_last_stored_finished_bills: s64;
+    client_steal_anim_playing: bool;
 
     // World UI
     ui_offset: v2 @ao_serialize;
@@ -160,6 +161,7 @@ Vault :: class : Interactable {
 
         // Client-only: play a vault animation whenever finished bills are deposited.
         client_update_deposit_animation();
+        client_update_steal_animation();
     }
 
     client_update_deposit_animation :: method() {
@@ -191,6 +193,18 @@ Vault :: class : Interactable {
                 to_add->create_trigger_condition(add_money_trigger);
                 layer->create_transition(add_state, idle_state, true);
 
+                // Track 1: stealing overlay (clear track <-> break_apart)
+                stealing_var := sm->create_variable("stealing", .BOOL);
+                steal_layer := sm->create_layer("steal_layer", 1);
+                steal_clear := steal_layer->create_state("__CLEAR_TRACK__", true);
+                steal_break := steal_layer->create_state("break_apart", true);
+                steal_layer->set_initial_state(steal_clear);
+                steal_layer->create_transition(steal_clear, steal_break, false)->create_bool_condition(stealing_var, true);
+                steal_layer->create_transition(steal_break, steal_clear, false)->create_bool_condition(stealing_var, false);
+
+                // Slow down only the break_apart animation.
+                steal_break.speed = 0.2;
+
                 spine_animator.instance->set_state_machine(sm, true);
                 client_spine_ready = true;
             }
@@ -208,6 +222,40 @@ Vault :: class : Interactable {
         }
 
         client_last_stored_finished_bills = stored_finished_bills;
+    }
+
+    client_update_steal_animation :: method() {
+        // Lazily bind animator if not assigned in editor.
+        if spine_animator == null {
+            spine_animator = entity->get_component(Spine_Animator);
+        }
+
+        if spine_animator == null {
+            client_steal_anim_playing = false;
+            return;
+        }
+
+        // Ensure instance exists (safe to call repeatedly).
+        spine_animator->awaken();
+
+        // Derive active steal state from the replicated thief hold tracking on Players.
+        // This avoids relying on Vault-owned replicated fields (which may not update on clients).
+        is_active := false;
+        foreach p: component_iterator(Player) {
+            if p == null continue;
+            if p.self == null continue;
+            if p.vault_theft_target_entity_id == entity.id {
+                is_active = true;
+                break;
+            }
+        }
+
+        // Drive the track-1 steal overlay layer via the state machine.
+        if spine_animator.instance != null && spine_animator.instance.state_machine != null {
+            spine_animator.instance.state_machine->set_bool("stealing", is_active);
+        }
+
+        client_steal_anim_playing = is_active;
     }
 
     // Server-only: allow a non-player "manager" (e.g., Courier) to deposit finished bills directly

@@ -116,8 +116,10 @@ beam_radius_damage :: proc(player: Player, origin: v2, range: float, damage: flo
     for target: nearby {
         if target.entity.id == player.entity.id continue;
         if target.CurrentHealth <= 0 continue;
-        target->take_damage(damage, player, true);
-        hit_count += 1;
+        did_damage := target->take_damage(damage, player, true);
+        if did_damage {
+            hit_count += 1;
+        }
     }
 
     // Truck hit registration (does NOT affect the player hit_count return value)

@@ -80,6 +80,7 @@ Stamper :: class : Component {
     lane_index: s64;
     state: Stamper_State;
     carried_colored_bills: s64;
+    deposit_seq: s64;
 
     // Runtime
     agent: Movement_Agent;
@@ -200,6 +201,7 @@ Stamper :: class : Component {
         last_action_time = 0;
         pause_until_time = 0;
         break_variant = 0;
+        deposit_seq = 0;
     }
 
     server_begin_pause :: method(next_state: Stamper_State) {
@@ -328,14 +330,13 @@ Stamper :: class : Component {
     }
 
     try_play_push_when_placing_items :: method() {
-        if state != .WAIT_AT_DEST return;
         if spine == null return;
         if spine.instance == null return;
         if spine.instance.state_machine == null return;
 
         Push_Seen_Entry :: struct {
             id: u64;
-            carried: s64;
+            seq: s64;
         }
         #static seen: [64]Push_Seen_Entry;
 
@@ -353,15 +354,15 @@ Stamper :: class : Component {
         if slot < 0 {
             slot = (empty >= 0) ? empty : 0;
             seen[slot].id = entity.id;
-            seen[slot].carried = carried_colored_bills;
+            seen[slot].seq = deposit_seq;
             return;
         }
 
-        prev := seen[slot].carried;
-        if carried_colored_bills < prev && prev > 0 {
+        prev := seen[slot].seq;
+        if deposit_seq > prev {
             spine.instance.state_machine->set_trigger("push");
         }
-        seen[slot].carried = carried_colored_bills;
+        seen[slot].seq = deposit_seq;
     }
 
     update_spine_state :: method() {
@@ -590,6 +591,7 @@ Stamper :: class : Component {
                         if carried_colored_bills < 0 {
                             carried_colored_bills = 0;
                         }
+                        deposit_seq += 1;
                     }
                     last_action_time = get_time();
                 }

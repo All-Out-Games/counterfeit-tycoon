@@ -247,6 +247,124 @@ coins :: proc(player: Player, amount: s64) {
     Notifier.notify(player, "Gave yourself % Coins.", {amount});
 } @chat_command @youtuber
 
+server_destroy_all_items_in_inventory :: proc(player: Player) -> s64 {
+    if player == null return 0;
+    if !Game.is_server() return 0;
+
+    inv := player.default_inventory;
+    if inv == null || inv.self == null return 0;
+    if inv.capacity <= 0 return 0;
+
+    destroyed: s64 = 0;
+    for slot: 0..inv.capacity-1 {
+        item := inv->get_item(slot);
+        if item == null continue;
+        if item.self == null continue;
+        Items.destroy_item_instance(item);
+        destroyed += 1;
+    }
+    return destroyed;
+}
+
+server_reset_player_progress :: proc(target: Player) {
+    if target == null return;
+    if !Game.is_server() return;
+
+    // 1) Inventory
+    _ := server_destroy_all_items_in_inventory(target);
+
+    // 1b) Managers -> locked everywhere
+    for lane: 0..3 {
+        target.managers_lane_masks[lane] = 0;
+        Save.set_int(target, managers_lane_save_key(lane), 0);
+    }
+    target.harvester_manager_unlocked = false;
+    Save.set_int(target, HARVESTER_UPGRADES_MANAGER_UNLOCK_SAVE_KEY, 0);
+
+    // 2) Station upgrades (all lanes, all stations) -> Level 1
+    for i: 0..15 {
+        target.station_upgrade_levels[i] = 1;
+    }
+    for lane: 0..3 {
+        for station: 0..3 {
+            Save.set_int(target, station_upgrade_level_save_key(lane, station), 1);
+        }
+    }
+
+    // 3) Harvester/Vault/Truck upgrades -> Level 1
+    target.harvester_level = 1;
+    Save.set_int(target, HARVESTER_UPGRADES_LEVEL_SAVE_KEY, 1);
+
+    target.vault_level = 1;
+    Save.set_int(target, "vault_level", 1);
+
+    for i: 0..2 {
+        target.truck_upgrade_levels[i] = 1;
+    }
+    Save.set_int(target, truck_upgrade_level_save_key(.CAPACITY), 1);
+    Save.set_int(target, truck_upgrade_level_save_key(.HP), 1);
+    Save.set_int(target, truck_upgrade_level_save_key(.SPEED), 1);
+
+    // 4) Lane unlock progression -> only Lane 1 unlocked
+    target.lane_unlock_mask = LANES_UNLOCK_MASK_DEFAULT;
+    Save.set_int(target, LANES_UNLOCK_SAVE_KEY, LANES_UNLOCK_MASK_DEFAULT);
+
+    // Destroy spawned extra lanes (Lane 2-4 entities).
+    for lane: 1..3 {
+        e := target.lane_entities[lane];
+        if e != null && e.self != null {
+            e->destroy();
+        }
+        target.lane_entities[lane] = null;
+    }
+
+    // Clear existing lane unlock prompt (will be respawned as needed below).
+    if target.lane_unlock_prompt_entity != null && target.lane_unlock_prompt_entity.self != null {
+        target.lane_unlock_prompt_entity->destroy();
+    }
+    target.lane_unlock_prompt_entity = null;
+    target.lane_unlock_prompt_lane_index = -1;
+
+    // Re-apply new levels + reconcile prompts/navmesh.
+    gm := get_game_manager();
+    if gm != null {
+        gm->server_apply_station_upgrade_levels_for_player(target);
+        gm->server_apply_vault_level_for_player(target);
+        gm->server_reconcile_lane_unlock_prompt_for_player(target);
+        gm->server_reconcile_manager_unlock_prompts_for_player(target);
+        gm->server_reconcile_woodchipper_unlock_prompt_for_player(target);
+
+        // Ensure managers/entities immediately reflect the new masks.
+        gm->server_reconcile_press_operators_lane1();
+        gm->server_reconcile_colorists_lane1();
+        gm->server_reconcile_stampers_lane1();
+        gm->server_reconcile_couriers_lane1();
+        gm->server_reconcile_woodchippers();
+
+        gm->mark_navmesh_for_rebuild();
+    }
+}
+
+// Cheat: completely reset a player's progress (inventory, upgrades, and lanes).
+// Usage:
+// - /reset_player          (resets yourself)
+// - /reset_player <name>   (resets a target player)
+reset_player :: proc(player: Player, target: Player = null) {
+    if player == null return;
+    if !Game.is_server() return;
+
+    p := target != null ? target : player;
+    server_reset_player_progress(p);
+
+    if p == player {
+        Notifier.notify(player, "Reset your player (inventory, upgrades, lanes).");
+    }
+    else {
+        Notifier.notify(player, "Reset player % (inventory, upgrades, lanes).", {p->get_username()});
+        Notifier.notify(p, "Your progress was reset (inventory, upgrades, lanes).");
+    }
+} @chat_command @youtuber
+
 // Convert any legacy "coin" item stacks into Coin currency.
 // (We used to award Coins as an Item_Definition; now it's a currency.)
 migrate_legacy_coin_items_to_currency :: proc(player: Player) {
@@ -890,6 +1008,7 @@ Player :: class : Player_Base {
     shield_entity: Entity;
     shield_spine: Spine_Animator;
     shield_playing_disappear: bool;
+    shield_playing_idle: bool;
     shield_created_time: float;
     shield_disappear_start_time: float;
 
@@ -1223,7 +1342,7 @@ Player :: class : Player_Base {
         }
 
         // Cosmetic-only visual updates: run on clients, not on the dedicated server.
-        if !Game.is_server() {
+       // if !Game.is_server() {
             // Damage flash (everyone sees it because each client drives visuals for all replicated players).
             {
                 FLASH_DURATION :: 0.5;
@@ -1269,16 +1388,15 @@ Player :: class : Player_Base {
                         shield_spine.instance->set_animation("intro", false, 0);
                         shield_spine.depth_offset = -5.0; // render on top of player
                         shield_playing_disappear = false;
+                        shield_playing_idle = false;
                         shield_created_time = now;
                     }
 
                     // After intro duration, switch to idle_loop.
-                    if !shield_playing_disappear && (now - shield_created_time) >= SHIELD_INTRO_DURATION {
+                    if !shield_playing_disappear && !shield_playing_idle && (now - shield_created_time) >= SHIELD_INTRO_DURATION {
                         if shield_spine != null && shield_spine.instance != null {
-                            // Only set once (check if we haven't already switched).
-                            if (now - shield_created_time) < SHIELD_INTRO_DURATION + dt + 0.05 {
-                                shield_spine.instance->set_animation("idle_loop", true, 0);
-                            }
+                            shield_spine.instance->set_animation("idle_loop", true, 0);
+                            shield_playing_idle = true;
                         }
                     }
 
@@ -1303,6 +1421,7 @@ Player :: class : Player_Base {
                         shield_entity = null;
                         shield_spine = null;
                         shield_playing_disappear = false;
+                        shield_playing_idle = false;
                     }
 
                     // Keep following player while disappearing.
@@ -1311,16 +1430,11 @@ Player :: class : Player_Base {
                     }
                 }
             }
-        }
-        else {
+       // }
+       // else {
             // Safety cleanup (useful during hot reload): the server should not keep cosmetic entities around.
-            if shield_entity != null && shield_entity.self != null {
-                shield_entity->destroy();
-            }
-            shield_entity = null;
-            shield_spine = null;
-            shield_playing_disappear = false;
-        }
+            
+       // }
 
         // Ensure the player can't move while the Sell Shop modal is open.
         // Do this server-side so movement is authoritatively blocked.
@@ -1853,6 +1967,15 @@ Player :: class : Player_Base {
 
     ao_end :: method() {
         // Called when this component is destroyed
+        // Cleanup local cosmetic entities (these are not parented under the player).
+        if shield_entity != null && shield_entity.self != null {
+            shield_entity->destroy();
+        }
+        shield_entity = null;
+        shield_spine = null;
+        shield_playing_disappear = false;
+        shield_playing_idle = false;
+
         if Game.is_server() {
             if projectile_bone_debug_entity != null {
                 projectile_bone_debug_entity->destroy();
@@ -2493,25 +2616,30 @@ Player :: class : Player_Base {
     // Track who last dealt damage for kill attribution.
     last_damage_source: Player;
 
-    take_damage :: proc(using this: Player, amount: float, source: Player = null, blocked_by_base_safe_zone: bool = false) {
+    take_damage :: proc(using this: Player, amount: float, source: Player = null, blocked_by_base_safe_zone: bool = false) -> bool {
 
         if amount <= 0 {
-            return;
+            return false;
         }
 
         // Health should only be modified on the server.
         if !Game.is_server() {
-            return;
+            return false;
         }
 
         // Ignore damage while dead / in death sequence.
         if death_pickup_lockout {
-            return;
+            return false;
+        }
+
+        // Ignore damage if already KO'd (extra safety; some callers only check health client-side).
+        if CurrentHealth <= 0 {
+            return false;
         }
 
         // Spawn protection: ignore damage for SPAWN_PROTECTION_SECONDS after respawn.
         if get_time() < spawn_protection_until {
-            return;
+            return false;
         }
 
         _ := blocked_by_base_safe_zone;
@@ -2557,6 +2685,7 @@ Player :: class : Player_Base {
         if CurrentHealth <= 0 {
             this->server_start_death();
         }
+        return true;
     }
 
     // Server-only: begin the death sequence (active effect + item drops + lockout).

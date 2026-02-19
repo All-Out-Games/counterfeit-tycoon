@@ -41,20 +41,21 @@ Piercing_Projectile :: class : Component {
                 }
                 if already_hit continue;
 
-                // Record hit
-                if hit_count < 32 {
-                    hit_ids[hit_count] = hit_player.entity.id;
-                    hit_count += 1;
-                }
+                did_damage := hit_player->take_damage(damage, null, true);
+                if did_damage {
+                    // Record hit only if damage was accepted (spawn protection, death, etc. can block).
+                    if hit_count < 32 {
+                        hit_ids[hit_count] = hit_player.entity.id;
+                        hit_count += 1;
+                    }
 
-                hit_player->take_damage(damage, null, true);
-
-                if !mute_hit_sound {
-                    hit_sfx := get_asset(SFX_Asset, "reusable_weapons/sounds/reusable-weapons/bullet_hit.wav");
-                    sfx_desc := SFX.default_sfx_desc();
-                    sfx_desc->set_position(pos);
-                    sfx_desc.range_multiplier = 2.0;
-                    SFX.play(hit_sfx, sfx_desc);
+                    if !mute_hit_sound {
+                        hit_sfx := get_asset(SFX_Asset, "reusable_weapons/sounds/reusable-weapons/bullet_hit.wav");
+                        sfx_desc := SFX.default_sfx_desc();
+                        sfx_desc->set_position(pos);
+                        sfx_desc.range_multiplier = 2.0;
+                        SFX.play(hit_sfx, sfx_desc);
+                    }
                 }
             }
 

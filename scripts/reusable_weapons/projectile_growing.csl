@@ -49,25 +49,26 @@ Growing_Projectile :: class : Component {
                 }
                 if already_hit continue;
 
-                // Record hit
-                if hit_id_count < 32 {
-                    hit_ids[hit_id_count] = hit_player.entity.id;
-                    hit_id_count += 1;
+                did_damage := hit_player->take_damage(damage, null, true);
+                if did_damage {
+                    // Record hit only if damage was accepted (spawn protection, death, etc. can block).
+                    if hit_id_count < 32 {
+                        hit_ids[hit_id_count] = hit_player.entity.id;
+                        hit_id_count += 1;
+                    }
+
+                    // Grow on hit
+                    hit_count += 1;
+                    damage = damage * 1.25;
+                    cur_scale := entity.local_scale;
+                    entity->set_local_scale({cur_scale.x * 1.5, cur_scale.y * 1.5});
+
+                    sfx := get_asset(SFX_Asset, "reusable_weapons/sounds/reusable-weapons/plasma_burst_hit.wav");
+                    sfx_desc := SFX.default_sfx_desc();
+                    sfx_desc->set_position(pos);
+                    sfx_desc.range_multiplier = 2.0;
+                    SFX.play(sfx, sfx_desc);
                 }
-
-                hit_player->take_damage(damage, null, true);
-
-                // Grow on hit
-                hit_count += 1;
-                damage = damage * 1.25;
-                cur_scale := entity.local_scale;
-                entity->set_local_scale({cur_scale.x * 1.5, cur_scale.y * 1.5});
-
-                sfx := get_asset(SFX_Asset, "reusable_weapons/sounds/reusable-weapons/plasma_burst_hit.wav");
-                sfx_desc := SFX.default_sfx_desc();
-                sfx_desc->set_position(pos);
-                sfx_desc.range_multiplier = 2.0;
-                SFX.play(sfx, sfx_desc);
             }
 
             // Truck hit registration (only when carrying bills, and never by its owner)

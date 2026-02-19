@@ -741,6 +741,36 @@ GameManager :: class : Component {
         }
     }
 
+    get_next_locked_manager_index_in_lane :: method(player: Player, lane_index: s64) -> s64 {
+        if player == null return -1;
+        if lane_index < 0 || lane_index > 3 return -1;
+
+        // Unlock order is the same as `manager_kind_from_index`:
+        // PressOperator -> Colorist -> Stamper -> Courier
+        for mi: 0..3 {
+            kind := manager_kind_from_index(mi);
+            if !is_manager_unlocked(player, lane_index, kind) {
+                return mi;
+            }
+        }
+        return -1;
+    }
+
+    manager_unlock_lane_anchor_world_pos :: method(base: PlayerBase, lane_index: s64) -> v2 {
+        if base == null return v2{0, 0};
+        if base.entity == null || base.entity.self == null return v2{0, 0};
+
+        // Prompts live slightly left of the lane's Paper Mill.
+        // (Even if the next manager is not the Press Operator.)
+        mill := press_operator_find_paper_mill_for_base_and_lane(base, lane_index);
+        if mill != null && mill.entity != null && mill.entity.self != null {
+            return mill.entity.world_position + v2{-1.5, 0.0};
+        }
+
+        // Fallback: base position (should be rare; typically mills exist once lane prefab exists).
+        return base.entity.world_position;
+    }
+
     manager_unlock_anchor_world_pos :: method(base: PlayerBase, lane_index: s64, kind: Manager_Kind) -> v2 {
         if base == null return v2{0, 0};
         if base.entity == null || base.entity.self == null return v2{0, 0};
@@ -862,6 +892,11 @@ GameManager :: class : Component {
         existing := player.manager_unlock_prompt_entities[idx];
         if existing != null && existing.self != null {
             // Keep it configured and positioned.
+            existing->set_parent(player.base_entity, true);
+            anchor := this->manager_unlock_lane_anchor_world_pos(pb, lane_index);
+            base_world := player.base_entity.world_position;
+            existing->set_local_position(anchor - base_world);
+
             mu := existing->get_component(ManagerUnlock);
             if mu == null {
                 mu = existing->add_component(ManagerUnlock);
@@ -885,7 +920,7 @@ GameManager :: class : Component {
         }
 
         ensure_manager_unlock_prompt_prefab_loaded();
-        spawn_pos := this->manager_unlock_anchor_world_pos(pb, lane_index, kind);
+        spawn_pos := this->manager_unlock_lane_anchor_world_pos(pb, lane_index);
 
         if cached_manager_unlock_prompt_prefab != null {
             ud := new(Spawn_ManagerUnlock_Userdata);
@@ -1003,41 +1038,71 @@ GameManager :: class : Component {
         }
 
         for lane: 0..3 {
-            for mi: 0..3 {
-                idx := lane * 4 + mi;
-                if idx < 0 || idx >= 16 continue;
-
-                kind := manager_kind_from_index(mi);
-                should_have := lanes_is_unlocked(player, lane) && !is_manager_unlocked(player, lane, kind);
-
-                e := player.manager_unlock_prompt_entities[idx];
-                if !should_have {
+            // Lanes must be unlocked to show manager prompts at all.
+            if !lanes_is_unlocked(player, lane) {
+                // Ensure there are no leftover prompts in this (locked) lane.
+                for mi: 0..3 {
+                    idx := lane * 4 + mi;
+                    if idx < 0 || idx >= 16 continue;
+                    e := player.manager_unlock_prompt_entities[idx];
                     if e != null && e.self != null {
                         e->destroy();
                     }
                     player.manager_unlock_prompt_entities[idx] = null;
-                    continue;
                 }
+                continue;
+            }
 
-                if e == null || e.self == null {
-                    this->server_spawn_manager_unlock_prompt_for_player(player, lane, mi);
-                    continue;
+            next_mi := this->get_next_locked_manager_index_in_lane(player, lane);
+            if next_mi < 0 {
+                // All managers in this lane are unlocked; ensure prompts are gone.
+                for mi: 0..3 {
+                    idx := lane * 4 + mi;
+                    if idx < 0 || idx >= 16 continue;
+                    e := player.manager_unlock_prompt_entities[idx];
+                    if e != null && e.self != null {
+                        e->destroy();
+                    }
+                    player.manager_unlock_prompt_entities[idx] = null;
                 }
+                continue;
+            }
 
-                // Ensure it stays parented under the base and is positioned at the station anchor.
-                e->set_parent(player.base_entity, true);
-                anchor := this->manager_unlock_anchor_world_pos(pb, lane, kind);
-                // Since base has no rotation/scaling in this project, local = world - base_world is safe.
-                base_world := player.base_entity.world_position;
-                e->set_local_position(anchor - base_world);
+            desired_idx := lane * 4 + next_mi;
+            desired_kind := manager_kind_from_index(next_mi);
 
-                mu := e->get_component(ManagerUnlock);
-                if mu == null {
-                    mu = e->add_component(ManagerUnlock);
+            // Destroy any other manager prompts in this lane so we only show one at a time.
+            for mi: 0..3 {
+                idx := lane * 4 + mi;
+                if idx < 0 || idx >= 16 continue;
+                if idx == desired_idx continue;
+
+                e := player.manager_unlock_prompt_entities[idx];
+                if e != null && e.self != null {
+                    e->destroy();
                 }
-                if mu != null {
-                    mu->configure(player, lane, kind);
-                }
+                player.manager_unlock_prompt_entities[idx] = null;
+            }
+
+            e := player.manager_unlock_prompt_entities[desired_idx];
+            if e == null || e.self == null {
+                this->server_spawn_manager_unlock_prompt_for_player(player, lane, next_mi);
+                continue;
+            }
+
+            // Ensure it stays parented under the base and is positioned at the lane anchor (Paper Mill -X).
+            e->set_parent(player.base_entity, true);
+            anchor := this->manager_unlock_lane_anchor_world_pos(pb, lane);
+            // Since base has no rotation/scaling in this project, local = world - base_world is safe.
+            base_world := player.base_entity.world_position;
+            e->set_local_position(anchor - base_world);
+
+            mu := e->get_component(ManagerUnlock);
+            if mu == null {
+                mu = e->add_component(ManagerUnlock);
+            }
+            if mu != null {
+                mu->configure(player, lane, desired_kind);
             }
         }
     }

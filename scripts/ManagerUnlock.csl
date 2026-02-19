@@ -213,11 +213,18 @@ ManagerUnlock :: class : Interactable {
         // Unlock (withdraws + saves).
         server_try_unlock_manager(player, lane_index, kind);
 
-        // If unlock succeeded, spawn the manager at THIS unlock prompt's location.
+        // If unlock succeeded, spawn the manager at its station anchor (not the prompt location).
         if is_manager_unlocked(player, lane_index, kind) {
             gm := get_game_manager();
             if gm != null {
-                gm->server_spawn_manager_kind_at(player, lane_index, kind, entity.world_position);
+                spawn_pos := entity.world_position;
+                if player.base_entity != null && player.base_entity.self != null {
+                    pb := player.base_entity->get_component(PlayerBase);
+                    if pb != null {
+                        spawn_pos = gm->manager_unlock_anchor_world_pos(pb, lane_index, kind);
+                    }
+                }
+                gm->server_spawn_manager_kind_at(player, lane_index, kind, spawn_pos);
                 gm->server_reconcile_manager_unlock_prompts_for_player(player);
             }
             if entity != null && entity.self != null {

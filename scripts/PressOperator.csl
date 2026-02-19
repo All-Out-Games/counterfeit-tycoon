@@ -82,6 +82,7 @@ PressOperator :: class : Component {
     lane_index: s64;
     state: PressOperator_State;
     carried_paper: s64;
+    deposit_seq: s64;
 
     // Runtime
     agent: Movement_Agent;
@@ -207,6 +208,7 @@ PressOperator :: class : Component {
         last_action_time = 0;
         pause_until_time = 0;
         break_variant = 0;
+        deposit_seq = 0;
     }
 
     server_begin_pause :: method(next_state: PressOperator_State) {
@@ -350,15 +352,14 @@ PressOperator :: class : Component {
     }
 
     try_play_push_when_placing_items :: method() {
-        // Managers "place" items when their carried count decreases while waiting at the destination station.
-        if state != .WAIT_AT_PRESS return;
+        // Guaranteed signal: server increments deposit_seq for every successful deposit.
         if spine == null return;
         if spine.instance == null return;
         if spine.instance.state_machine == null return;
 
         Push_Seen_Entry :: struct {
             id: u64;
-            carried: s64;
+            seq: s64;
         }
         #static seen: [64]Push_Seen_Entry;
 
@@ -376,15 +377,15 @@ PressOperator :: class : Component {
         if slot < 0 {
             slot = (empty >= 0) ? empty : 0;
             seen[slot].id = entity.id;
-            seen[slot].carried = carried_paper;
+            seen[slot].seq = deposit_seq;
             return;
         }
 
-        prev := seen[slot].carried;
-        if carried_paper < prev && prev > 0 {
+        prev := seen[slot].seq;
+        if deposit_seq > prev {
             spine.instance.state_machine->set_trigger("push");
         }
-        seen[slot].carried = carried_paper;
+        seen[slot].seq = deposit_seq;
     }
 
     update_spine_state :: method() {
@@ -640,6 +641,7 @@ PressOperator :: class : Component {
                         if carried_paper < 0 {
                             carried_paper = 0;
                         }
+                        deposit_seq += 1;
                     }
                     last_action_time = get_time();
                 }
