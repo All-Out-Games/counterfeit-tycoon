@@ -2338,18 +2338,20 @@ GameManager :: class : Component {
 
                         // Adjust the truck's local starting position based on which PlayerSpawn this base is using.
                         // - Player 1/2/3 (spawn 0/1/2): leave truck where it is in the prefab.
-                        // - Player 4/5/6 (spawn 3/4/5): move truck to local (0, 6).
+                        // - Player 4/5/6 (spawn 3/4/5): set local Y to 10.0.
                         if spawn_index >= 3 {
                             truck := find_truck_for_base(pb);
                             if truck != null && truck.entity != null && truck.entity.self != null {
-                                truck.entity->set_local_position(v2{0, 6});
+                                lp := truck.entity.local_position;
+                                lp.y = 10.0;
+                                truck.entity->set_local_position(lp);
                             }
 
-                            // Same as Truck, but only alter Y: keep prefab X and set local Y to 6.
+                            // Same as Truck, but only alter Y: keep prefab X and set local Y to 10.0.
                             harvester := find_harvester_for_base(pb);
                             if harvester != null && harvester.entity != null && harvester.entity.self != null {
                                 lp := harvester.entity.local_position;
-                                lp.y = 6;
+                                lp.y = 10.0;
                                 harvester.entity->set_local_position(lp);
                             }
                         }

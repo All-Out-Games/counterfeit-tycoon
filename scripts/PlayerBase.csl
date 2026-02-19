@@ -21,11 +21,26 @@ PlayerBase :: class : Component {
     // - Players 4/5/6 (spawn 3/4/5): local Y =  5.5
     layout_mirror_entities: [5]Entity @ao_serialize;
 
+    // Optional: plot sign UI entity (assigned in PlayerBase prefab).
+    // We keep this as an Entity reference so the prefab can point at a child easily.
+    plot_sign_entity: Entity @ao_serialize;
+    plot_sign: PlotSign;
+    plot_sign_base_local_y: float;
+    plot_sign_base_local_y_initialized: bool;
+
     // Assign ownership using a Player.
     set_owner :: method(owner: Player) {
         owner_user_id = {};
         if owner != null {
             owner_user_id = owner->get_user_id();
+        }
+
+        // Best-effort: if the owner's spawn index is already assigned, reflect it to the plot sign.
+        resolve_plot_sign();
+        if plot_sign != null && owner != null {
+            if owner.base_spawn_index >= 0 {
+                plot_sign.plot_index = owner.base_spawn_index;
+            }
         }
     }
 
@@ -45,10 +60,38 @@ PlayerBase :: class : Component {
             lp.y = target_y;
             e->set_local_position(lp);
         }
+
+        // Move PlotSign entity using the same mirroring rule and keep its index in sync.
+        resolve_plot_sign();
+        if plot_sign != null {
+            plot_sign.plot_index = spawn_index;
+        }
+
+        if plot_sign_entity != null && plot_sign_entity.self != null {
+            // Mirror the sign the same way we do for Truck/Harvester:
+            // - Players 1/2/3 (spawn 0/1/2): keep prefab-authored local Y
+            // - Players 4/5/6 (spawn 3/4/5): force local Y to 10.0
+            if !plot_sign_base_local_y_initialized {
+                plot_sign_base_local_y_initialized = true;
+                plot_sign_base_local_y = plot_sign_entity.local_position.y;
+            }
+
+            desired_y := plot_sign_base_local_y;
+            if spawn_index >= 3 {
+                desired_y = 10.0;
+            }
+
+            lp := plot_sign_entity.local_position;
+            if lp.y != desired_y {
+                lp.y = desired_y;
+                plot_sign_entity->set_local_position(lp);
+            }
+        }
     }
 
     ao_start :: method() {
         resolve_sprite_renderer();
+        resolve_plot_sign();
     }
 
     ao_late_update :: method(dt: float) {
@@ -111,6 +154,25 @@ PlayerBase :: class : Component {
         }
         if sprite_renderer == null && entity != null && entity.self != null {
             sprite_renderer = entity->get_component(Sprite_Renderer);
+        }
+    }
+
+    resolve_plot_sign :: method() {
+        plot_sign = null;
+
+        if plot_sign_entity != null && plot_sign_entity.self != null {
+            plot_sign = plot_sign_entity->get_component(PlotSign);
+
+            // Cache the prefab-authored local Y once so mirroring is idempotent.
+            if !plot_sign_base_local_y_initialized {
+                plot_sign_base_local_y_initialized = true;
+                plot_sign_base_local_y = plot_sign_entity.local_position.y;
+            }
+        }
+
+        // Allow attaching PlotSign directly to the base entity as a fallback.
+        if plot_sign == null && entity != null && entity.self != null {
+            plot_sign = entity->get_component(PlotSign);
         }
     }
 }

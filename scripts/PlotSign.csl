@@ -1,0 +1,143 @@
+import "core:ao"
+
+// PlotSign:
+// World-space label (and optional player spine) for a specific base/plot index.
+//
+// Attach this component to a sign entity in the scene and set `plot_index` to match
+// the player's `base_spawn_index` (0..5).
+PlotSign :: class : Component {
+    plot_index: s64 @ao_serialize; // 0..5 (matches Player.base_spawn_index)
+
+    // World offsets from this entity's world_position (meters).
+    text_offset: v2 @ao_serialize;      // default {0, 2.1}
+    spine_offset: v2 @ao_serialize;     // default {0, 1.0}
+    spine_scale: v2 @ao_serialize;      // default {0.70, 0.70}
+    // 0 = default (draw), 1 = force draw, 2 = force hide
+    draw_spine_mode: s64 @ao_serialize;
+
+    ao_start :: method() {
+        // Reasonable defaults for newly-added components (editor can override).
+        if text_offset.x == 0 && text_offset.y == 0 {
+            text_offset = {0, 2.1};
+        }
+        if spine_offset.x == 0 && spine_offset.y == 0 {
+            spine_offset = {0, 1.0};
+        }
+        if spine_scale.x == 0 && spine_scale.y == 0 {
+            spine_scale = {0.70, 0.70};
+        }
+    }
+
+    ao_late_update :: method(dt: float) {
+        _ := dt;
+        draw_sign();
+    }
+
+    get_z_offset :: method() -> float {
+        if entity == null || entity.self == null {
+            return 0.0;
+        }
+        return entity.world_position.y * entity.local_scale.y;
+    }
+
+    find_plot_owner :: method() -> Player {
+        foreach p: component_iterator(Player) {
+            if p == null continue;
+            if p.base_spawn_index == plot_index {
+                return p;
+            }
+        }
+        return null;
+    }
+
+    draw_sign :: method() {
+        if entity == null || entity.self == null return;
+
+        // Cosmetic-only: draw locally on clients (mirrors other world-space UI helpers).
+        if Game.is_server() {
+            return;
+        }
+
+        // Match the original C# behavior: only draw if the local player exists.
+        local_player := get_local_player();
+        if local_player == null {
+            return;
+        }
+
+        owner := find_plot_owner();
+        if owner == null {
+            return;
+        }
+
+        // Best-effort "alive" check (ported from the old Alive() call).
+        if owner.CurrentHealth <= 0.0 {
+            return;
+        }
+
+        // Cheap cull: skip if the sign is far off-screen.
+        screen := UI.get_screen_rect();
+        sign_screen := world_to_screen(entity.world_position);
+        CULL_PAD_PX :: 300.0;
+        if sign_screen.x < screen.min.x - CULL_PAD_PX return;
+        if sign_screen.x > screen.max.x + CULL_PAD_PX return;
+        if sign_screen.y < screen.min.y - CULL_PAD_PX return;
+        if sign_screen.y > screen.max.y + CULL_PAD_PX return;
+
+        UI.push_world_draw_context();
+        defer UI.pop_draw_context();
+
+        UI.push_layer(5);
+        defer UI.pop_layer();
+
+        // Draw slightly in front so the sign UI stays visible over nearby sprites.
+        UI.push_z(get_z_offset() - 0.002);
+        defer UI.pop_z();
+
+        base_pos := entity.world_position;
+
+        // --------------------------------------------------------------------
+        // Text: "<name>"
+        // --------------------------------------------------------------------
+        {
+            label_pos := base_pos + text_offset;
+            text_rect := Rect{label_pos, label_pos}->grow(0.35, 1.10, 0.35, 1.10);
+
+            ts := UI.default_text_settings();
+            ts.size = 0.42;
+            ts.valign = .TOP;
+            ts.halign = .CENTER;
+            ts.color = {1, 1, 1, 1};
+            ts.do_outline = true;
+            ts.outline_thickness = 2;
+            ts.outline_color = {0, 0, 0, 1};
+            ts.word_wrap = true;
+
+            name := owner->get_username();
+            if name.count > 0 {
+                UI.text(text_rect, ts, "%", {name});
+            }
+            else {
+                UI.text(text_rect, ts, "Player");
+            }
+        }
+
+        // --------------------------------------------------------------------
+        // Spine (optional)
+        // --------------------------------------------------------------------
+        do_draw_spine := true;
+        if draw_spine_mode == 2 {
+            do_draw_spine = false;
+        }
+
+        if do_draw_spine {
+            if owner.animator != null && owner.animator.instance != null {
+                UI.push_unlit_player_material(owner);
+                defer UI.pop_material();
+
+                spine_pos := base_pos + spine_offset;
+                UI.spine(spine_pos, owner.animator.instance, spine_scale, 0.0);
+            }
+        }
+    }
+}
+
