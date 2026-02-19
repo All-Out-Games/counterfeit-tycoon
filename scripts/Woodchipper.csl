@@ -44,10 +44,12 @@ woodchipper_find_paper_mill_for_base_and_lane :: proc(base: PlayerBase, lane_ind
 }
 
 woodchipper_choose_best_paper_mill_lane :: proc(base: PlayerBase) -> s64 {
-    if base == null return 0;
-    if base.entity == null || base.entity.self == null return 0;
+    // Returns the lane index of the "most empty" owned Paper_Mill that has room.
+    // Returns -1 if no owned mills exist (or all are full/disabled).
+    if base == null return -1;
+    if base.entity == null || base.entity.self == null return -1;
 
-    best_lane: s64 = 0;
+    best_lane: s64 = -1;
     best_wood: s64 = 0;
     found: bool = false;
 
@@ -62,9 +64,13 @@ woodchipper_choose_best_paper_mill_lane :: proc(base: PlayerBase) -> s64 {
         lane := m.lane_index;
         if lane < 0 || lane > 3 continue;
 
-        // Prefer mills with lower stored_wood (i.e. "more empty").
+        cap := machine_queue_cap_for_level(m.upgrade_level);
+        if cap <= 0 continue;
+
+        // Prefer mills with lower stored_wood (i.e. "more empty"), but skip full mills.
         wood := m.stored_wood;
         if wood < 0 wood = 0;
+        if wood >= cap continue;
 
         if !found {
             found = true;
@@ -83,6 +89,68 @@ woodchipper_choose_best_paper_mill_lane :: proc(base: PlayerBase) -> s64 {
     }
 
     return best_lane;
+}
+
+woodchipper_choose_next_paper_mill_lane_after_deposit :: proc(base: PlayerBase, current_lane: s64) -> s64 {
+    // Choose the "next lowest" mill after a deposit:
+    // - Prefer the most-empty owned mill with room, EXCLUDING the current lane (so we distribute deposits).
+    // - If no other mill has room, allow staying on the current lane if it still has room.
+    // - If nothing has room, return -1.
+    if base == null return -1;
+    if base.entity == null || base.entity.self == null return -1;
+
+    best_other_lane: s64 = -1;
+    best_other_wood: s64 = 0;
+    found_other: bool = false;
+
+    current_has_room: bool = false;
+
+    foreach m: component_iterator(Paper_Mill) {
+        if m == null continue;
+        if m.entity == null || m.entity.self == null continue;
+        if !m.entity->get_world_enabled() continue;
+
+        pb := get_parent_player_base(m.entity);
+        if pb != base continue;
+
+        lane := m.lane_index;
+        if lane < 0 || lane > 3 continue;
+
+        cap := machine_queue_cap_for_level(m.upgrade_level);
+        if cap <= 0 continue;
+
+        wood := m.stored_wood;
+        if wood < 0 wood = 0;
+        if wood < cap {
+            if lane == current_lane {
+                current_has_room = true;
+                continue;
+            }
+
+            if !found_other {
+                found_other = true;
+                best_other_lane = lane;
+                best_other_wood = wood;
+                continue;
+            }
+
+            if wood < best_other_wood {
+                best_other_lane = lane;
+                best_other_wood = wood;
+            }
+            else if wood == best_other_wood && lane < best_other_lane {
+                best_other_lane = lane;
+            }
+        }
+    }
+
+    if found_other {
+        return best_other_lane;
+    }
+    if current_has_room {
+        return current_lane;
+    }
+    return -1;
 }
 
 Woodchipper :: class : Component {
@@ -681,8 +749,11 @@ Woodchipper :: class : Component {
                     // If the Harvester isn't currently home/idle, we can't top up more this moment.
                     harvester_ready := harvester->server_is_ready_for_manager(owner_user_id);
                     if carried_wood >= max_wood_capacity || !harvester_ready {
-                        target_mill_lane_index = woodchipper_choose_best_paper_mill_lane(pb);
-                        server_begin_pause(.TO_MILL);
+                        lane := woodchipper_choose_best_paper_mill_lane(pb);
+                        if lane >= 0 {
+                            target_mill_lane_index = lane;
+                            server_begin_pause(.TO_MILL);
+                        }
                     }
                 }
             }
@@ -690,6 +761,12 @@ Woodchipper :: class : Component {
                 if mill == null {
                     // Re-choose a target lane and try again next tick.
                     target_mill_lane_index = woodchipper_choose_best_paper_mill_lane(pb);
+                    if target_mill_lane_index < 0 {
+                        state = .TO_HARVESTER;
+                        drive_start_time = get_time();
+                        last_action_time = 0;
+                        return;
+                    }
                     mill = woodchipper_find_paper_mill_for_base_and_lane(pb, target_mill_lane_index);
                     if mill == null {
                         state = .TO_HARVESTER;
@@ -729,6 +806,26 @@ Woodchipper :: class : Component {
 
                 if carried_wood <= 0 {
                     server_begin_pause(.TO_HARVESTER);
+                    return;
+                }
+
+                // After every deposit attempt, retarget to the next-lowest mill with room (if any),
+                // until we're out of wood.
+                next_lane := woodchipper_choose_next_paper_mill_lane_after_deposit(pb, mill.lane_index);
+                if next_lane >= 0 && next_lane != mill.lane_index {
+                    target_mill_lane_index = next_lane;
+                    state = .TO_MILL;
+                    drive_start_time = get_time();
+                    last_action_time = 0;
+                    pause_until_time = 0;
+                    break_variant = 0;
+                    return;
+                }
+                if next_lane < 0 {
+                    // Nowhere to deposit right now (all owned mills full/disabled/missing).
+                    // Go back to the Harvester drop-off zone and let normal behavior continue.
+                    server_begin_pause(.TO_HARVESTER);
+                    return;
                 }
             }
             case .PAUSE_BEFORE_TO_MILL: {
