@@ -355,20 +355,34 @@ GameManager :: class : Component {
     }
 
     lane_local_y_for_player :: method(player: Player, lane_index: s64) -> float {
-        // - Spawns 0/1/2: lanes stack upward (+Y)
-        // - Spawns 3/4/5: mirror lanes to stack downward (-Y)
-        sign := 1.0;
-        if player != null && player.base_spawn_index >= 3 {
-            sign = -1.0;
+        // Lanes are numbered 1..4 in the design, but lane_index is 0-based:
+        // - lane_index 0 == Lane 1 (lives in the base prefab; local Y assumed 0)
+        // - lane_index 1..3 == Lane 2..4 (spawned at runtime via Lane.prefab)
+        //
+        // New layout (local Y positions for lanes 2/3/4):
+        // - Players 1/2/3 (spawn 0/1/2):  -2.0,  4.0,  7.5
+        // - Players 4/5/6 (spawn 3/4/5):   4.0, -2.0, -5.5
+        if lane_index == 0 {
+            return 0.0;
         }
 
-        base_y := lane_index.(float) * 3.5;
-        // Special-case Lane 4 (index 3): spawn at (0, -3.5) then mirror if needed.
-        if lane_index == 3 {
-            base_y = -3.5;
+        mirror := player != null && player.base_spawn_index >= 3;
+        if !mirror {
+            switch lane_index {
+                case 1: return -2.0; // Lane 2
+                case 2: return 4.0;  // Lane 3
+                case 3: return 7.5;  // Lane 4
+            }
+        }
+        else {
+            switch lane_index {
+                case 1: return 4.0;   // Lane 2 (mirrored)
+                case 2: return -2.0;  // Lane 3 (mirrored)
+                case 3: return -5.5;  // Lane 4 (mirrored)
+            }
         }
 
-        return sign * base_y;
+        return 0.0;
     }
 
     ensure_lane_prefab_loaded :: method() {
@@ -2157,6 +2171,12 @@ GameManager :: class : Component {
             if p.base_entity != null && p.base_entity.self != null {
                 used[p.base_spawn_index] = true;
 
+                // Ensure base-specific mirrored layout entities are positioned correctly (e.g. after layout changes).
+                pb := p.base_entity->get_component(PlayerBase);
+                if pb != null {
+                    pb->apply_layout_mirror_y_for_spawn_index(p.base_spawn_index);
+                }
+
                 // Existing base assignment: ensure stations reflect saved upgrade levels.
                 this->server_apply_station_upgrade_levels_for_player(p);
                 this->server_apply_vault_level_for_player(p);
@@ -2268,6 +2288,9 @@ GameManager :: class : Component {
                                 harvester.entity->set_local_position(lp);
                             }
                         }
+
+                        // Snap any configured "layout mirror" entities to their correct local Y.
+                        pb->apply_layout_mirror_y_for_spawn_index(spawn_index);
                     }
 
                     // Now that ownership is established, apply the player's station upgrade levels.

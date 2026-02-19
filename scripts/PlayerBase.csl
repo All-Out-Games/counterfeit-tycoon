@@ -15,11 +15,35 @@ PlayerBase :: class : Component {
     sprite_entity: Entity @ao_serialize;
     sprite_renderer: Sprite_Renderer;
 
+    // Base layout mirroring support:
+    // Some child entities need their local Y snapped depending on which player spawn index this base uses.
+    // - Players 1/2/3 (spawn 0/1/2): local Y = -5.5
+    // - Players 4/5/6 (spawn 3/4/5): local Y =  5.5
+    layout_mirror_entities: [5]Entity @ao_serialize;
+
     // Assign ownership using a Player.
     set_owner :: method(owner: Player) {
         owner_user_id = {};
         if owner != null {
             owner_user_id = owner->get_user_id();
+        }
+    }
+
+    apply_layout_mirror_y_for_spawn_index :: method(spawn_index: s64) {
+        target_y := -5.5;
+        if spawn_index >= 3 {
+            target_y = 7.5;
+        }
+
+        for i: 0..layout_mirror_entities.count-1 {
+            e := layout_mirror_entities[i];
+            if e == null continue;
+            if e.self == null continue;
+
+            lp := e.local_position;
+            if lp.y == target_y continue;
+            lp.y = target_y;
+            e->set_local_position(lp);
         }
     }
 

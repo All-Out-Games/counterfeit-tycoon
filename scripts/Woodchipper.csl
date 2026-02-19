@@ -326,6 +326,7 @@ Woodchipper :: class : Component {
         spine_sm = State_Machine.create();
 
         mode_var := spine_sm->create_variable("anim_mode", .INT);
+        push_var := spine_sm->create_variable("push", .TRIGGER);
         layer := spine_sm->create_layer("main", 0);
 
         // anim_mode mapping:
@@ -337,6 +338,7 @@ Woodchipper :: class : Component {
         run_state := layer->create_state("Run", true);
         break1_state := layer->create_state("Idle_Break_1", true);
         break2_state := layer->create_state("Idle_Break_2", true);
+        push_state := layer->create_state("Push", false);
         layer->set_initial_state(idle_state);
 
         idle_to_run := layer->create_transition(idle_state, run_state, false);
@@ -375,7 +377,50 @@ Woodchipper :: class : Component {
         b2_to_b1 := layer->create_transition(break2_state, break1_state, false);
         b2_to_b1->create_int_condition(mode_var, 2, .EQUAL);
 
+        to_push := layer->create_global_transition(push_state, false);
+        to_push->create_trigger_condition(push_var);
+        _ := to_push;
+        push_to_idle := layer->create_transition(push_state, idle_state, true);
+        _ := push_to_idle;
+
         spine.instance->set_state_machine(spine_sm, true); // transfer ownership
+    }
+
+    try_play_push_when_placing_items :: method() {
+        if state != .WAIT_AT_MILL return;
+        if spine == null return;
+        if spine.instance == null return;
+        if spine.instance.state_machine == null return;
+
+        Push_Seen_Entry :: struct {
+            id: u64;
+            carried: s64;
+        }
+        #static seen: [64]Push_Seen_Entry;
+
+        slot: s64 = -1;
+        empty: s64 = -1;
+        for i: 0..63 {
+            if seen[i].id == entity.id {
+                slot = i;
+                break;
+            }
+            if seen[i].id == 0 && empty < 0 {
+                empty = i;
+            }
+        }
+        if slot < 0 {
+            slot = (empty >= 0) ? empty : 0;
+            seen[slot].id = entity.id;
+            seen[slot].carried = carried_wood;
+            return;
+        }
+
+        prev := seen[slot].carried;
+        if carried_wood < prev && prev > 0 {
+            spine.instance.state_machine->set_trigger("push");
+        }
+        seen[slot].carried = carried_wood;
     }
 
     update_spine_state :: method() {
@@ -525,6 +570,7 @@ Woodchipper :: class : Component {
 
         // Visuals/animation should run on all peers (server + clients).
         update_visuals();
+        try_play_push_when_placing_items();
 
         if agent == null {
             agent = entity->get_component(Movement_Agent);

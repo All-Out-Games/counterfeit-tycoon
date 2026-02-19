@@ -353,11 +353,58 @@ draw_lane_labels :: proc(player: Player) {
 
     #static bold_font := get_asset(Font_Asset, "$AO/fonts/Barlow-Black.ttf");
 
+    // Find an anchor world Y for a given lane by looking at an actual station entity
+    // in that lane (so labels follow the real layout even if the base prefab shifts).
+    find_lane_anchor_world_y :: proc(base_entity: Entity, lane_index: s64) -> float, bool {
+        if base_entity == null || base_entity.self == null return 0.0, false;
+        pb := base_entity->get_component(PlayerBase);
+        if pb == null return 0.0, false;
+
+        // Paper_Mill exists in every lane (including Lane 1 in the base prefab).
+        foreach m: component_iterator(Paper_Mill) {
+            if m == null continue;
+            if m.entity == null || m.entity.self == null continue;
+            if m.lane_index != lane_index continue;
+            if get_parent_player_base(m.entity) != pb continue;
+            return m.entity.world_position.y, true;
+        }
+
+        // Fallbacks in case a lane is missing a mill for some reason.
+        foreach b: component_iterator(Blank_Bill_Press) {
+            if b == null continue;
+            if b.entity == null || b.entity.self == null continue;
+            if b.lane_index != lane_index continue;
+            if get_parent_player_base(b.entity) != pb continue;
+            return b.entity.world_position.y, true;
+        }
+        foreach c: component_iterator(Colored_Bill_Press) {
+            if c == null continue;
+            if c.entity == null || c.entity.self == null continue;
+            if c.lane_index != lane_index continue;
+            if get_parent_player_base(c.entity) != pb continue;
+            return c.entity.world_position.y, true;
+        }
+        foreach f: component_iterator(Finished_Bill_Press) {
+            if f == null continue;
+            if f.entity == null || f.entity.self == null continue;
+            if f.lane_index != lane_index continue;
+            if get_parent_player_base(f.entity) != pb continue;
+            return f.entity.world_position.y, true;
+        }
+
+        return 0.0, false;
+    }
+
     for lane: 0..3 {
         if lane > 0 && !lanes_is_unlocked(player, lane) continue;
 
-        lane_y := gm->lane_local_y_for_player(player, lane);
-        center := v2{base_pos.x, base_pos.y + lane_y};
+        // Anchor off real station positions when possible (fixes Lane 1 drift after layout changes).
+        y, ok := find_lane_anchor_world_y(player.base_entity, lane);
+        if !ok {
+            lane_y := gm->lane_local_y_for_player(player, lane);
+            y = base_pos.y + lane_y;
+        }
+        center := v2{base_pos.x, y};
 
         // Lane title
         title_pos := v2{center.x, center.y + 0.2};
@@ -431,7 +478,7 @@ coin_currency_hud_get_text_anchor :: proc(player: Player) -> v2 {
 // Base safe zone:
 // If a player is within this axis-aligned box (width/height) centered on their own `base_entity`,
 // they regenerate health over time.
-BASE_SAFE_ZONE_BOX_SIZE :: 15.0;
+BASE_SAFE_ZONE_BOX_SIZE :: 20.0;
 BASE_SAFE_ZONE_BOX_HALF :: (BASE_SAFE_ZONE_BOX_SIZE * 0.5);
 BASE_SAFE_ZONE_REGEN_HP_PER_SEC :: 15.0;
 SPAWN_PROTECTION_SECONDS :: 10.0;
