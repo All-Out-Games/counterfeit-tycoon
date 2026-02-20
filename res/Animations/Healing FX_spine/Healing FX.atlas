@@ -1,0 +1,20 @@
+8ef3c9bea5e3f746.png
+	size: 588, 152
+	filter: Linear, Linear
+	scale: 0.5
+green glowing particles/glowingparticle1
+	bounds: 543, 108, 38, 37
+	offsets: 2, 3, 42, 43
+green glowing particles/glowingparticle2
+	bounds: 543, 83, 20, 19
+	offsets: 1, 2, 22, 23
+green glowing particles/glowingparticle3
+	bounds: 460, 11, 51, 51
+	offsets: 3, 4, 57, 59
+green plus sign/mergedplussign
+	bounds: 460, 68, 77, 77
+	offsets: 3, 3, 83, 83
+greenlight
+	bounds: 6, 6, 139, 448
+	offsets: 9, 12, 155, 477
+	rotate: 90

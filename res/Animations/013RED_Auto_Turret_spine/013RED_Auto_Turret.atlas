@@ -1,0 +1,54 @@
+6bc999682bd224d9.png
+	size: 2108, 236
+	filter: Linear, Linear
+auto turret/turretbase
+	bounds: 1075, 23, 205, 170
+	offsets: 1, 1, 207, 172
+	rotate: 90
+auto turret/turretbaseA
+	bounds: 899, 23, 205, 170
+	offsets: 1, 1, 207, 172
+	rotate: 90
+auto turret/turretheadlarge
+	bounds: 262, 53, 250, 175
+	offsets: 1, 1, 260, 177
+auto turret/turretheadlargeA
+	bounds: 6, 53, 250, 175
+	offsets: 1, 1, 260, 177
+minigun/5e1c9012fc1ba7cb
+	bounds: 1536, 74, 147, 154
+	offsets: 1, 1, 149, 156
+minigun/86435c565c177739
+	bounds: 733, 10, 218, 160
+	offsets: 1, 1, 220, 162
+	rotate: 90
+minigun/T2Base
+	bounds: 518, 23, 205, 209
+	offsets: 1, 1, 207, 216
+	rotate: 90
+minigun/minigunbarrel1
+	bounds: 2032, 95, 133, 67
+	offsets: 1, 2, 135, 70
+	rotate: 90
+minigun/minigunbarrel2
+	bounds: 1959, 95, 133, 67
+	offsets: 1, 2, 135, 70
+	rotate: 90
+minigun/minigunbarrel3
+	bounds: 1886, 95, 133, 67
+	offsets: 1, 2, 135, 70
+	rotate: 90
+minigun/minigunbarrelstationary
+	bounds: 1813, 95, 133, 67
+	offsets: 1, 2, 135, 70
+	rotate: 90
+minigun/minigunbase
+	bounds: 1689, 83, 145, 118
+	offsets: 3, 1, 149, 120
+	rotate: 90
+muzzle_flashes/base_muzzle_flash1
+	bounds: 1400, 43, 130, 185
+	offsets: 1, 1, 132, 187
+muzzle_flashes/base_muzzle_flash2
+	bounds: 1251, 6, 143, 222
+	offsets: 1, 1, 145, 224

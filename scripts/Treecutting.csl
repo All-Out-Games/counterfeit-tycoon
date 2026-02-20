@@ -50,10 +50,10 @@ Treecutting_Tree :: class : Interactable {
 
         // Default tuning (only if not set in editor)
         if min_wood_drops <= 0 {
-            min_wood_drops = 3;
+            min_wood_drops = 6;
         }
         if max_wood_drops <= 0 {
-            max_wood_drops = 5;
+            max_wood_drops = 6;
         }
         if max_wood_drops < min_wood_drops {
             max_wood_drops = min_wood_drops;

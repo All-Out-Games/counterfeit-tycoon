@@ -518,6 +518,25 @@ quest_check_instant_completion :: proc(player: Player, slot: s64) {
             }
             quest_set_progress(player, slot, count);
         }
+        case .RUN_LANES_AT_FULL: {
+            // Count how many lanes have all 4 stations at max level.
+            count: s64 = 0;
+            for lane: 0..UPGRADES_LANE_COUNT-1 {
+                if !lanes_is_unlocked(player, lane) continue;
+                all_max := true;
+                for st: 0..UPGRADES_STATION_COUNT-1 {
+                    kind := station_kind_from_index(st);
+                    lvl := get_player_station_level(player, lane, kind);
+                    if lvl < UPGRADES_MAX_LEVEL {
+                        all_max = false;
+                    }
+                }
+                if all_max {
+                    count += 1;
+                }
+            }
+            quest_set_progress(player, slot, count);
+        }
     }
 }
 
