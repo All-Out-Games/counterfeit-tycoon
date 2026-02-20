@@ -5,14 +5,16 @@
   "name": "Bank",
   "local_enabled": true,
   "local_position": {
-    "X": 60
+    "X": 80,
+    "Y": 7
   },
   "local_rotation": 0,
   "local_scale": {
     "X": 1,
     "Y": 1
   },
-  "previous_sibling": "164577922572106:1770196189432132800"
+  "previous_sibling": "164577922572106:1770196189432132800",
+  "next_sibling": "1534811295073799:1771539838056703600"
 },
 {
   "cid": 1,

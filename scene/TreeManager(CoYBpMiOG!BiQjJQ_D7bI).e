@@ -39,4 +39,17 @@
     "is_trigger": true,
     "size": 20
   }
+},
+{
+  "cid": 3,
+  "aoid": "1534854944929117:1771539858724254000",
+  "component_type": "Internal_Component",
+  "internal_component_type": "Box_Collider",
+  "data": {
+    "is_trigger": true,
+    "size": {
+      "X": 60,
+      "Y": 50
+    }
+  }
 }

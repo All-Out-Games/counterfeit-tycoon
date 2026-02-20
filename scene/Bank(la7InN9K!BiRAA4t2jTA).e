@@ -5,7 +5,8 @@
   "name": "Bank",
   "local_enabled": true,
   "local_position": {
-    "X": -60
+    "X": -80,
+    "Y": 7
   },
   "local_rotation": 0,
   "local_scale": {

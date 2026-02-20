@@ -1,8 +1,8 @@
 13
-339302416385
-1346073894400614 1771450473637937100
+339302416386
+1536069942576020 1771540434007350100
 {
-  "name": "New Entity",
+  "name": "sprite",
   "local_enabled": false,
   "local_position": {
 
@@ -15,15 +15,15 @@
   "parent": "740522846200710:1770069221880870600"
 },
 {
-  "cid": 1,
-  "aoid": "1346080055622067:1771450476555184300",
+  "cid": 2,
+  "aoid": "1536097961975473:1771540447274111800",
   "component_type": "Internal_Component",
   "internal_component_type": "Sprite_Renderer",
   "data": {
-    "texture": "$AO/circle.png",
+    "texture": "$AO/editor/icons/Resize Plus (Square).png",
     "scale": {
-      "X": 9.5000000000000000,
-      "Y": 9.5000000000000000
+      "X": 32,
+      "Y": 26.5000000000000000
     }
   }
 }
