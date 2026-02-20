@@ -5,7 +5,7 @@
   "name": "PaperMill",
   "local_enabled": true,
   "local_position": {
-    "X": -6.5000000000000000,
+    "X": -6,
     "Y": -5.5000000000000000
   },
   "local_rotation": 0,

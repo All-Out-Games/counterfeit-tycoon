@@ -16,8 +16,9 @@ TreeManager :: class : Component {
     // Prefab path in /res, like: "Trees/Tree.prefab"
     tree_prefab_path: string @ao_serialize;
 
-    // Spawn area (circle) centered on this entity's world position + offset.
-    spawn_radius: float @ao_serialize;
+    // Spawn area (rectangle) centered on this entity's world position + offset.
+    // x = width, y = height
+    spawn_rect_size: v2 @ao_serialize;
     spawn_center_offset: v2 @ao_serialize;
 
     // Limits
@@ -44,8 +45,11 @@ TreeManager :: class : Component {
         }
 
         // Defaults (only if not set in editor)
-        if spawn_radius <= 0 {
-            spawn_radius = 12.0;
+        if spawn_rect_size.x <= 0 {
+            spawn_rect_size.x = 65.0;
+        }
+        if spawn_rect_size.y <= 0 {
+            spawn_rect_size.y = 50.0;
         }
         if max_trees <= 0 {
             max_trees = 25;
@@ -173,15 +177,13 @@ TreeManager :: class : Component {
     sample_spawn_position :: method() -> v2 {
         center := entity.world_position + spawn_center_offset;
 
-        // Uniform random point in a circle:
-        // r = sqrt(u) * R, theta = v * 2PI
-        u := rng_range_float(ref rng, 0.0, 1.0);
-        v := rng_range_float(ref rng, 0.0, 1.0);
+        half_w := spawn_rect_size.x * 0.5;
+        half_h := spawn_rect_size.y * 0.5;
 
-        r := sqrt(u) * spawn_radius;
-        theta := v * (PI * 2.0);
-
-        offset := v2{cos(theta), sin(theta)} * r;
+        offset := v2{
+            rng_range_float(ref rng, -half_w, half_w),
+            rng_range_float(ref rng, -half_h, half_h)
+        };
         return center + offset;
     }
 

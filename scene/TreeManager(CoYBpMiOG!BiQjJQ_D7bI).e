@@ -22,22 +22,11 @@
   "internal_component_type": "TreeManager",
   "data": {
     "tree_prefab_path": "BaseTree.prefab",
-    "spawn_radius": 20,
     "max_trees": 80,
-    "min_spacing_radius": 1.5000000000000000,
+    "min_spacing_radius": 3.5000000000000000,
     "attempts_per_tree": 3,
     "spawn_budget_per_tick": 10,
-    "respawn_interval": 1.5000000000000000
-  }
-},
-{
-  "cid": 2,
-  "aoid": "740564382974372:1770069241547899500",
-  "component_type": "Internal_Component",
-  "internal_component_type": "Circle_Collider",
-  "data": {
-    "is_trigger": true,
-    "size": 20
+    "respawn_interval": 2
   }
 },
 {
@@ -48,7 +37,7 @@
   "data": {
     "is_trigger": true,
     "size": {
-      "X": 60,
+      "X": 65,
       "Y": 50
     }
   }

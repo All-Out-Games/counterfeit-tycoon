@@ -56,7 +56,7 @@ ao_purchase_handler :: proc(player: Player, id: string) -> bool {
     if handled {
         // Debug: visible confirmation that the callback is firing (server only).
         if Game.is_server() {
-            Notifier.notify(player, "Purchase handled: %", {id});
+            log_info("Purchase handled: %", {id});
         }
         return true;
     }

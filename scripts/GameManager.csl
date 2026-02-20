@@ -117,6 +117,7 @@ GameManager :: class : Component {
     // - Ownership is set via PlayerBase.set_owner(player)
     player_base_prefab_path: string @ao_serialize; // e.g. "Plots/PlayerBase.prefab"
     PlayerSpawns: [6]Entity @ao_serialize;
+    TruckRoutes: [6]Entity @ao_serialize;
 
     // Managers (moving agents) spawned per-player based on unlock state.
     // Prefab path in /res, like: "Managers/PressOperator.prefab"

@@ -5,8 +5,8 @@
   "name": "PlayerSpawn4",
   "local_enabled": true,
   "local_position": {
-    "X": -24,
-    "Y": -20
+    "X": -32,
+    "Y": -40
   },
   "local_rotation": 0,
   "local_scale": {

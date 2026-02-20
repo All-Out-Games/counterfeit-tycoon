@@ -332,6 +332,7 @@ weapons_shop_try_handle_purchase :: proc(player: Player, id: string) -> bool {
     if id == WEAPON_SPARKS_PRODUCT_SMG {
         if Game.is_server() {
             _ := server_grant_weapon_purchase(player, .SUBMACHINE_GUN, "Sparks");
+            log_info("Returned true for SMG");
             return true;
         }
         return true;
