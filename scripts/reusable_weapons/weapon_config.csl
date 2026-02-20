@@ -59,9 +59,9 @@ get_weapon_config :: proc(wt: Weapon_Type) -> Weapon_Config {
         case .ASSAULT_RIFLE: {
             config.fire_mode = .CONTINUOUS;
             config.hand_type = .TWO_HAND;
-            // 3 shots/sec (24 DPS => 8 damage/shot)
-            config.fire_rate = 1.0 / 3.0;
-            config.base_damage = 8.0;
+            // 4 shots/sec, 18 dmg = 72 DPS
+            config.fire_rate = 0.25;
+            config.base_damage = 18.0;
             config.projectile_speed = 17.0;
             config.weapon_skin = "weapons/assault_rifle";
             config.weapon_icon_path = "reusable_weapons/sprites/reusable-weapons/weapon_icons/weapon_icons_250x250/assaultrifle.png";
@@ -76,9 +76,9 @@ get_weapon_config :: proc(wt: Weapon_Type) -> Weapon_Config {
         case .SUBMACHINE_GUN: {
             config.fire_mode = .CONTINUOUS;
             config.hand_type = .TWO_HAND;
-            // 4 shots/sec
+            // 4 shots/sec, 9 dmg = 36 DPS
             config.fire_rate = 0.25;
-            config.base_damage = 12.0;
+            config.base_damage = 9.0;
             config.projectile_speed = 17.0;
             config.weapon_skin = "weapons/smg";
             config.weapon_icon_path = "reusable_weapons/sprites/reusable-weapons/weapon_icons/weapon_icons_250x250/smg.png";
@@ -255,13 +255,14 @@ get_weapon_config :: proc(wt: Weapon_Type) -> Weapon_Config {
         case .EXPLOSIVE_SHOTGUN: {
             config.fire_mode = .SPREAD;
             config.hand_type = .TWO_HAND;
+            // 0.5/sec, 3x25 dmg + 20 AOE = ~100 DPS (close range)
             config.fire_rate = 2.0;
-            config.base_damage = 15.0;
+            config.base_damage = 25.0;
             config.projectile_count = 3;
             config.spread_angle = 10.0;
             config.projectile_speed = 17.0;
-            config.aoe_radius = 1.0;
-            config.aoe_damage = 10.0;
+            config.aoe_radius = 1.5;
+            config.aoe_damage = 20.0;
             config.weapon_skin = "weapons/shotgun";
             config.weapon_icon_path = "reusable_weapons/sprites/reusable-weapons/weapon_icons/weapon_icons_250x250/shotgun.png";
             config.item_id = "explosive_shotgun";
@@ -274,13 +275,14 @@ get_weapon_config :: proc(wt: Weapon_Type) -> Weapon_Config {
         case .SUNNY_SIDE_SHOTTY: {
             config.fire_mode = .SPREAD;
             config.hand_type = .TWO_HAND;
+            // 0.5/sec, 5x20 dmg + 25 AOE = ~125 DPS (close range)
             config.fire_rate = 2.0;
-            config.base_damage = 15.0;
+            config.base_damage = 20.0;
             config.projectile_count = 5;
             config.spread_angle = 10.0;
             config.projectile_speed = 17.0;
             config.aoe_radius = 1.5;
-            config.aoe_damage = 15.0;
+            config.aoe_damage = 25.0;
             config.weapon_skin = "weapons/sunny_side_shotty";
             config.weapon_icon_path = "reusable_weapons/sprites/reusable-weapons/weapon_icons/weapon_icons_250x250/sunny_side_shotty.png";
             config.item_id = "sunny_side_shotty";
@@ -469,9 +471,9 @@ get_weapon_config :: proc(wt: Weapon_Type) -> Weapon_Config {
         case .AKIMBO_PISTOLS: {
             config.fire_mode = .SPECIAL;
             config.hand_type = .CUSTOM;
-            // 3 shots/sec
-            config.fire_rate = 1.0 / 3.0;
-            config.base_damage = 16.0;
+            // 4 shots/sec, 13 dmg = 52 DPS
+            config.fire_rate = 0.25;
+            config.base_damage = 13.0;
             config.projectile_speed = 17.0;
             config.weapon_skin = "weapons/akimbo_revolvers";
             config.weapon_icon_path = "reusable_weapons/sprites/reusable-weapons/weapon_icons/weapon_icons_250x250/akimbo_pistols.png";
@@ -485,8 +487,8 @@ get_weapon_config :: proc(wt: Weapon_Type) -> Weapon_Config {
         case .PISTOL: {
             config.fire_mode = .CONTINUOUS;
             config.hand_type = .ONE_HAND;
-            // 2.2 shots/sec -> ~0.4545s between shots
-            config.fire_rate = 1.0 / 2.2;
+            // 2 shots/sec -> 20 DPS (starter weapon)
+            config.fire_rate = 0.5;
             config.base_damage = 10.0;
             config.projectile_speed = 17.0;
             config.weapon_skin = "weapons/pistol";

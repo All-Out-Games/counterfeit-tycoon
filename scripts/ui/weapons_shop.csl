@@ -228,18 +228,19 @@ weapon_shop_price :: proc(wt: Weapon_Type) -> s64 {
 
 ammo_shop_price :: proc(ammo_type_index: s64) -> s64 {
     // Price is for 100 units (WEAPONS_SHOP_AMMO_BUY_AMOUNT).
+    // Scaled so higher-DPS weapons have costlier ammo as a coin sink.
     switch ammo_type_index {
-        case 0: return 3000;  // AR Rounds
-        case 1: return 1200;  // Heavy Shots
-        case 2: return 6800;  // Explosive Rounds
-        case 3: return 55;  // Cryo Cells
-        case 4: return 50;  // Tornado Shots
-        case 5: return 60;  // Energy Cells
-        case 6: return 80;  // Solar Cores
-        case 7: return 75;  // Sawblades
-        case 8: return 5000;  // LMG Rounds
-        case 9: return 20;  // Water Balloons
-        case 10: return 500; // Pistol Ammo
+        case 0: return 5000;   // AR Rounds (Assault Rifle — 72 DPS)
+        case 1: return 1500;   // Heavy Shots (Akimbo Pistols — 52 DPS)
+        case 2: return 8000;   // Explosive Rounds (Explosive Shotgun — 100 DPS)
+        case 3: return 55;     // Cryo Cells
+        case 4: return 50;     // Tornado Shots
+        case 5: return 60;     // Energy Cells
+        case 6: return 80;     // Solar Cores
+        case 7: return 75;     // Sawblades
+        case 8: return 7500;   // LMG Rounds (Gatling Gun — 150 DPS)
+        case 9: return 20;     // Water Balloons
+        case 10: return 750;   // Pistol Ammo (Pistol/SMG — 20-36 DPS)
     }
     return 0;
 }
