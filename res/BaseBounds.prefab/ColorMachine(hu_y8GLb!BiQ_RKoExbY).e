@@ -18,19 +18,6 @@
   "parent": "150484291903114:1770189516079501100"
 },
 {
-  "cid": 1,
-  "aoid": "148364057426308:1770188512081166000",
-  "component_type": "Internal_Component",
-  "internal_component_type": "Sprite_Renderer",
-  "data": {
-    "texture": "ColorMachine.png",
-    "scale": {
-      "X": 1.5000000000000000,
-      "Y": 1.5000000000000000
-    }
-  }
-},
-{
   "cid": 2,
   "aoid": "148432663573817:1770188544569234800",
   "component_type": "Internal_Component",
@@ -47,8 +34,27 @@
     "collect_radius": 1.5000000000000000,
     "collect_cooldown": 2,
     "loot_spawn_radius": 1.5000000000000000,
+    "spine_animator": "1608462818739216:1771574710951211000",
     "ui_offset": {
       "y": 1.5000000000000000
+    }
+  }
+},
+{
+  "cid": 1,
+  "aoid": "1608603267214642:1771574777451405800",
+  "component_type": "Internal_Component",
+  "internal_component_type": "Box_Collider",
+  "data": {
+    "make_navmesh_loop": true,
+    "flip_navmesh_loop": true,
+    "size": {
+      "X": 2.5839161872863770,
+      "Y": 0.6914398670196533
+    },
+    "offset": {
+      "X": 0.1000368893146515,
+      "Y": -0.4044636785984039
     }
   }
 }

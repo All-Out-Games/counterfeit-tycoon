@@ -1,0 +1,63 @@
+RUB109_solver_machine.png
+	size: 1648, 348
+	filter: Linear, Linear
+	scale: 0.5
+Rocket + Boost/ADO97_Elon_Test_Smoke_Cloud_1
+	bounds: 1252, 235, 107, 81
+	offsets: 0, 0, 107, 82
+	rotate: 90
+Rocket + Boost/ADO97_Elon_Test_Smoke_Cloud_2
+	bounds: 1336, 287, 55, 49
+	offsets: 0, 1, 56, 50
+	rotate: 90
+Rocket + Boost/ADO97_Elon_Test_Smoke_Cloud_3
+	bounds: 1604, 317, 24, 25
+	offsets: 1, 0, 26, 26
+building_L
+	bounds: 314, 3, 190, 339
+building_R
+	bounds: 3, 34, 308, 308
+building_top_L
+	bounds: 784, 219, 99, 123
+building_top_R
+	bounds: 682, 219, 99, 123
+chimney_L
+	bounds: 602, 158, 77, 184
+chimney_R
+	bounds: 995, 214, 77, 128
+connection
+	bounds: 507, 131, 92, 211
+hole_in
+	bounds: 1075, 230, 85, 112
+hole_out
+	bounds: 1163, 232, 110, 86
+	rotate: 90
+pointer_red_bot
+	bounds: 1631, 306, 13, 36
+pointer_red_top
+	bounds: 1631, 306, 13, 36
+valve_big
+	bounds: 886, 233, 109, 106
+	rotate: 90
+valve_small_a
+	bounds: 1388, 303, 39, 39
+valve_small_b
+	bounds: 1388, 303, 39, 39
+visor_blue_1
+	bounds: 1575, 286, 56, 26
+	rotate: 90
+visor_blue_2
+	bounds: 1546, 286, 56, 26
+	rotate: 90
+visor_green_1
+	bounds: 1517, 286, 56, 26
+	rotate: 90
+visor_green_2
+	bounds: 1488, 286, 56, 26
+	rotate: 90
+visor_yellow_1
+	bounds: 1459, 286, 56, 26
+	rotate: 90
+visor_yellow_2
+	bounds: 1430, 286, 56, 26
+	rotate: 90

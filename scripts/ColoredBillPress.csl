@@ -32,6 +32,12 @@ Colored_Bill_Press :: class : Interactable {
     upgrade_level: s64;                    // 1..10
     base_seconds_per_colored_bill: float;  // captured from editor/default tuning at ao_start
 
+    // Spine visuals
+    // ColoredBillPress's spine is expected to live on a child entity. Assign that child to `spine_entity`.
+    // (Optional: assign the Spine_Animator directly if you prefer.)
+    spine_animator: Spine_Animator @ao_serialize;
+    spine_entity: Entity @ao_serialize;
+
     // World UI
     ui_offset: v2 @ao_serialize;
 
@@ -48,6 +54,9 @@ Colored_Bill_Press :: class : Interactable {
 
     // Runtime
     last_collect_time: float;
+
+    spine: Spine_Animator;
+    spine_sm: State_Machine;
 
     // Save/load (server only)
     loaded_from_save: bool;
@@ -115,6 +124,11 @@ Colored_Bill_Press :: class : Interactable {
         // Ensure our derived speed is consistent with the current upgrade level.
         // This covers cases where the GameManager applies upgrades before ao_start runs.
         apply_upgrade_level(upgrade_level);
+
+        // Spine visuals
+        resolve_spine();
+        setup_spine_state_machine();
+        update_spine_state();
     }
 
     // Server-only: apply upgrade level to processing speed.
@@ -218,6 +232,10 @@ Colored_Bill_Press :: class : Interactable {
     }
 
     ao_update :: method(dt: float) {
+        // Keep spine state in sync with stored input (runs on server + clients).
+        // `stored_blank_bills` is replicated, so clients will update visuals correctly too.
+        update_spine_state();
+
         // Server authoritative conversion + collection.
         if Game.is_server() {
             server_try_load_from_save();
@@ -232,6 +250,67 @@ Colored_Bill_Press :: class : Interactable {
             try_auto_collect();
             server_try_save_to_save(force=false);
         }
+    }
+
+    resolve_spine :: method() {
+        spine = null;
+
+        if spine_animator != null {
+            spine = spine_animator;
+        }
+        else if spine_entity != null && spine_entity.self != null {
+            spine = spine_entity->get_component(Spine_Animator);
+        }
+        else {
+            spine = entity->get_component(Spine_Animator);
+        }
+
+        if spine != null {
+            spine->awaken();
+        }
+    }
+
+    setup_spine_state_machine :: method() {
+        if spine == null return;
+        if spine.instance == null return;
+        if spine_sm != null return;
+
+        spine_sm = State_Machine.create();
+
+        processing_var := spine_sm->create_variable("is_processing", .BOOL);
+        _ := processing_var;
+        layer := spine_sm->create_layer("main", 0);
+
+        // Note: state names must match animation names in the Spine rig.
+        idle_state := layer->create_state("idle", true);
+        processing_state := layer->create_state("solving_loop", true);
+        layer->set_initial_state(idle_state);
+
+        idle_to_processing := layer->create_transition(idle_state, processing_state, false);
+        idle_to_processing->create_bool_condition(processing_var, true);
+
+        processing_to_idle := layer->create_transition(processing_state, idle_state, false);
+        processing_to_idle->create_bool_condition(processing_var, false);
+
+        spine.instance->set_state_machine(spine_sm, true); // transfer ownership to spine instance
+    }
+
+    update_spine_state :: method() {
+        // If animator was assigned after start, resolve lazily.
+        if spine == null {
+            resolve_spine();
+            setup_spine_state_machine();
+        }
+
+        if spine == null return;
+        if spine.instance == null return;
+        if spine.instance.state_machine == null return;
+
+        // Requirements:
+        // - play "idle" when there are no input items
+        // - play "solving_loop" when processing items
+        is_processing := stored_blank_bills > 0 && !vault_owner_has_full_vault(entity);
+        spine.instance.state_machine->set_bool("is_processing", is_processing);
     }
 
     // Client-only hook: called immediately after this component's state sync.
