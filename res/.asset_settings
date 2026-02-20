@@ -1,5 +1,32 @@
 [
   {
+    "id": "Animations/car1/016ARP_Car.png",
+    "texture": {
+      "resample_multiplier": 1
+    }
+  },
+  {
+    "id": "plant3_c8febd010f6a638b.png",
+    "texture": {
+      "resample_multiplier": 1,
+      "pixels_per_unit": 120
+    }
+  },
+  {
+    "id": "Plant_02_f4382c12d8ea5d5a.png",
+    "texture": {
+      "resample_multiplier": 1,
+      "pixels_per_unit": 120
+    }
+  },
+  {
+    "id": "plant1_d17035a9c9bba491.png",
+    "texture": {
+      "resample_multiplier": 1,
+      "pixels_per_unit": 80
+    }
+  },
+  {
     "id": "Cliffs/Boundary.png",
     "texture": {
       "slice": [

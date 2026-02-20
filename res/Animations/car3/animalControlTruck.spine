@@ -1,0 +1,296 @@
+{
+"skeleton": { "hash": "eGv0orni3D0", "spine": "4.0.49", "x": -523.26, "y": -129.92, "width": 1098, "height": 555 },
+"bones": [
+	{ "name": "root" },
+	{ "name": "base", "parent": "root", "y": -85 },
+	{ "name": "shadow", "parent": "root", "y": -85 },
+	{ "name": "Wheel_back", "parent": "base", "x": -294.9, "y": 29.19 },
+	{ "name": "Wheel_front", "parent": "base", "x": 398.97, "y": 28.3 },
+	{ "name": "main_body", "parent": "base", "x": 2.41, "y": 58.73 },
+	{ "name": "Back_door", "parent": "main_body", "length": 29.55, "rotation": 143.53, "x": -440.07, "y": 181.81 }
+],
+"slots": [
+	{ "name": "Shadow", "bone": "shadow", "attachment": "Animal Control Truck/Shadow" },
+	{ "name": "Back_door", "bone": "Back_door" },
+	{ "name": "Wheel Arches", "bone": "main_body", "attachment": "Animal Control Truck/Wheel Arches" },
+	{ "name": "Wheel_front", "bone": "Wheel_front", "attachment": "Animal Control Truck/Front Wheel" },
+	{ "name": "Wheel_back", "bone": "Wheel_back", "attachment": "Animal Control Truck/Back Wheel" },
+	{ "name": "main_body", "bone": "main_body", "attachment": "Animal Control Truck/Main Body" },
+	{ "name": "flash_blue_back", "bone": "main_body" },
+	{ "name": "flash_orange_back", "bone": "main_body" },
+	{ "name": "flash_red_back", "bone": "main_body" },
+	{ "name": "flash_blue_front", "bone": "main_body" },
+	{ "name": "flash_orange_front", "bone": "main_body" },
+	{ "name": "flash_red_front", "bone": "main_body" }
+],
+"skins": [
+	{
+		"name": "default",
+		"attachments": {
+			"Back_door": {
+				"Animal Control Truck/Back Door Down": { "x": 39.32, "y": 118.55, "rotation": -143.53, "width": 143, "height": 221 },
+				"Animal Control Truck/Back Door Up": { "x": 68.29, "y": -0.55, "rotation": -143.53, "width": 239, "height": 232 }
+			},
+			"flash_blue_back": {
+				"Animal Control Truck/Blue Flash": { "x": -333.84, "y": 442.26, "width": 375, "height": 374 }
+			},
+			"flash_blue_front": {
+				"Animal Control Truck/Blue Flash": { "x": -382.66, "y": 327.85, "width": 375, "height": 374 }
+			},
+			"flash_orange_back": {
+				"Animal Control Truck/Orange Flash": { "x": -143.66, "y": 434.85, "width": 374, "height": 374 }
+			},
+			"flash_orange_front": {
+				"Animal Control Truck/Orange Flash": { "x": -198.58, "y": 328.06, "width": 374, "height": 374 }
+			},
+			"flash_red_back": {
+				"Animal Control Truck/Red Flash": { "x": 43.53, "y": 433.69, "width": 375, "height": 374 }
+			},
+			"flash_red_front": {
+				"Animal Control Truck/Red Flash": { "x": 2.34, "y": 323.85, "width": 375, "height": 374 }
+			},
+			"main_body": {
+				"Animal Control Truck/Main Body": { "x": 23.34, "y": 210.35, "width": 1098, "height": 482 }
+			},
+			"Shadow": {
+				"Animal Control Truck/Shadow": { "x": 20.74, "y": 58.08, "width": 1055, "height": 124 }
+			},
+			"Wheel Arches": {
+				"Animal Control Truck/Wheel Arches": { "x": 54.84, "y": 21.35, "width": 873, "height": 103 }
+			},
+			"Wheel_back": {
+				"Animal Control Truck/Back Wheel": { "x": 1.14, "y": -0.62, "width": 147, "height": 147 }
+			},
+			"Wheel_front": {
+				"Animal Control Truck/Front Wheel": { "x": 0.27, "y": 0.28, "width": 147, "height": 147 }
+			}
+		}
+	}
+],
+"animations": {
+	"backdoor_open_close": {
+		"slots": {
+			"Back_door": {
+				"attachment": [
+					{ "name": "Animal Control Truck/Back Door Up" },
+					{ "time": 0.1667, "name": "Animal Control Truck/Back Door Down" },
+					{ "time": 0.625, "name": "Animal Control Truck/Back Door Up" },
+					{ "time": 0.75, "name": null }
+				]
+			}
+		},
+		"bones": {
+			"Back_door": {
+				"rotate": [
+					{ "curve": "stepped" },
+					{
+						"time": 0.1667,
+						"value": -37.72,
+						"curve": [ 0.222, -12.57, 0.278, 2.95 ]
+					},
+					{
+						"time": 0.3333,
+						"value": 2.95,
+						"curve": [ 0.361, 2.95, 0.389, 0 ]
+					},
+					{
+						"time": 0.4167,
+						"curve": [ 0.444, 0, 0.472, 0 ]
+					},
+					{
+						"time": 0.5,
+						"curve": [ 0.542, 0, 0.542, -12.57 ]
+					},
+					{ "time": 0.5833, "value": -37.72, "curve": "stepped" },
+					{ "time": 0.625 }
+				],
+				"translate": [
+					{ "curve": "stepped" },
+					{
+						"time": 0.1667,
+						"x": 39.8,
+						"curve": [ 0.222, 13.27, 0.278, 0, 0.222, 0, 0.278, 0 ]
+					},
+					{
+						"time": 0.3333,
+						"curve": [ 0.389, 0, 0.444, 0, 0.389, 0, 0.444, 0 ]
+					},
+					{
+						"time": 0.5,
+						"curve": [ 0.542, 0, 0.542, 13.27, 0.542, 0, 0.542, 0 ]
+					},
+					{ "time": 0.5833, "x": 39.8, "curve": "stepped" },
+					{ "time": 0.625 }
+				],
+				"shear": [
+					{
+						"x": -39.83,
+						"curve": [ 0.042, -39.83, 0.083, -26.56, 0.042, 0, 0.083, 0 ]
+					},
+					{ "time": 0.125, "curve": "stepped" },
+					{ "time": 0.625 },
+					{ "time": 0.75, "x": -39.83 }
+				]
+			},
+			"main_body": {
+				"translate": [
+					{
+						"time": 0.75,
+						"curve": [ 0.778, 9.63, 0.806, 5.34, 0.778, 0, 0.806, 0 ]
+					},
+					{
+						"time": 0.8333,
+						"x": 5.34,
+						"curve": [ 0.889, 5.34, 0.944, -4.82, 0.889, 0, 0.944, 0 ]
+					},
+					{
+						"time": 1,
+						"x": -4.82,
+						"curve": [ 1.056, -4.82, 1.111, -1.61, 1.056, 0, 1.111, 0 ]
+					},
+					{ "time": 1.1667 }
+				],
+				"shear": [
+					{
+						"time": 0.75,
+						"curve": [ 0.778, 0, 0.806, 0, 0.778, -2.13, 0.806, -3.19 ]
+					},
+					{
+						"time": 0.8333,
+						"y": -3.19,
+						"curve": [ 0.889, 0, 0.944, 0, 0.889, -3.19, 0.944, 0 ]
+					},
+					{ "time": 1 }
+				]
+			}
+		}
+	},
+	"door_open_close": {
+		"bones": {
+			"base": {
+				"scale": [
+					{
+						"curve": [ 0.056, 1.04, 0.028, 1.061, 0.056, 0.96, 0.028, 0.939 ]
+					},
+					{
+						"time": 0.0833,
+						"x": 1.061,
+						"y": 0.939,
+						"curve": [ 0.139, 1.061, 0.194, 0.97, 0.139, 0.939, 0.194, 1.03 ]
+					},
+					{
+						"time": 0.25,
+						"x": 0.97,
+						"y": 1.03,
+						"curve": [ 0.306, 0.97, 0.361, 0.99, 0.306, 1.03, 0.361, 1.01 ]
+					},
+					{ "time": 0.4167 }
+				]
+			}
+		}
+	},
+	"drive": {
+		"bones": {
+			"main_body": {
+				"translate": [
+					{
+						"curve": [ 0.111, 0, 0.139, 0, 0.111, 0, 0.139, -10.83 ]
+					},
+					{
+						"time": 0.25,
+						"y": -10.83,
+						"curve": [ 0.361, 0, 0.389, 0, 0.361, -10.83, 0.389, 0 ]
+					},
+					{ "time": 0.5 }
+				]
+			},
+			"Wheel_back": {
+				"rotate": [
+					{},
+					{ "time": 0.5, "value": -360 }
+				]
+			},
+			"Wheel_front": {
+				"rotate": [
+					{},
+					{ "time": 0.5, "value": -360 }
+				]
+			},
+			"base": {
+				"shear": [
+					{
+						"y": -0.13,
+						"curve": [ 0.014, 0, 0.028, 0, 0.014, -0.05, 0.028, 0 ]
+					},
+					{
+						"time": 0.0417,
+						"curve": [ 0.125, 0, 0.208, 0, 0.125, 0, 0.208, -1.66 ]
+					},
+					{
+						"time": 0.2917,
+						"y": -1.66,
+						"curve": [ 0.361, 0, 0.431, 0, 0.361, -1.66, 0.431, -0.51 ]
+					},
+					{ "time": 0.5, "y": -0.13 }
+				]
+			}
+		}
+	},
+	"drive_reverse": {
+		"bones": {
+			"main_body": {
+				"translate": [
+					{
+						"curve": [ 0.111, 0, 0.139, 0, 0.111, 0, 0.139, -10.83 ]
+					},
+					{
+						"time": 0.25,
+						"y": -10.83,
+						"curve": [ 0.361, 0, 0.389, 0, 0.361, -10.83, 0.389, 0 ]
+					},
+					{ "time": 0.5 }
+				]
+			},
+			"Wheel_back": {
+				"rotate": [
+					{ "value": -360 },
+					{ "time": 0.5 }
+				]
+			},
+			"Wheel_front": {
+				"rotate": [
+					{ "value": -360 },
+					{ "time": 0.5 }
+				]
+			},
+			"base": {
+				"shear": [
+					{
+						"y": -1.53,
+						"curve": [ 0.014, 0, 0.028, 0, 0.014, -1.6, 0.028, -1.66 ]
+					},
+					{
+						"time": 0.0417,
+						"y": -1.66,
+						"curve": [ 0.125, 0, 0.208, 0, 0.125, -1.66, 0.208, 0 ]
+					},
+					{
+						"time": 0.2917,
+						"curve": [ 0.361, 0, 0.431, 0, 0.361, 0, 0.431, -1.14 ]
+					},
+					{ "time": 0.5, "y": -1.53 }
+				]
+			}
+		}
+	},
+	"idle": {
+		"bones": {
+			"main_body": {
+				"translate": [
+					{ "time": 0.0833 }
+				]
+			}
+		}
+	}
+}
+}

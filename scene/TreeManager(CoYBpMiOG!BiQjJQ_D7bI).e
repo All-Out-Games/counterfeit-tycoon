@@ -22,7 +22,7 @@
   "internal_component_type": "TreeManager",
   "data": {
     "tree_prefab_path": "BaseTree.prefab",
-    "max_trees": 80,
+    "max_trees": 100,
     "min_spacing_radius": 3.5000000000000000,
     "attempts_per_tree": 3,
     "spawn_budget_per_tick": 10,

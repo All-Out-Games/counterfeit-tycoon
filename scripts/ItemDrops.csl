@@ -73,7 +73,7 @@ Item_Drop_Magnet :: class : Component {
             pickup_radius = 0.35;
         }
         if attract_strength <= 0 {
-            attract_strength = 10.0;
+            attract_strength = 25.0;
         }
     }
 

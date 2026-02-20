@@ -16,6 +16,68 @@ Truck_State :: enum {
     RETURN_HOME;
 }
 
+get_truck_route_root_for_player :: proc(player: Player) -> Entity {
+    if player == null return null;
+    gm := get_game_manager();
+    if gm == null return null;
+
+    idx := player.base_spawn_index;
+    if idx < 0 || idx >= 6 return null;
+
+    e := gm.TruckRoutes[idx];
+    if e == null return null;
+    if e.self == null return null;
+    if !e->get_world_enabled() return null;
+    return e;
+}
+
+collect_route_waypoints_ordered :: proc(route_root: Entity, start_world_pos: v2, out: ref [..]v2) {
+    if route_root == null return;
+    if route_root.self == null return;
+
+    // Gather enabled direct children.
+    children: [..]Entity;
+    foreach e: entity_iterator() {
+        if e == null continue;
+        if e.self == null continue;
+        if e.parent != route_root continue;
+        if !e->get_world_enabled() continue;
+        children->append(e);
+    }
+
+    cur := start_world_pos;
+
+    // Order children by nearest-neighbor from the start point.
+    // This gives a stable "path along the points" ordering without relying on editor hierarchy order.
+    while children.count > 0 {
+        best_i: s64 = 0;
+        best_d2 := 0.0;
+        found: bool = false;
+
+        for i: 0..children.count-1 {
+            c := children[i];
+            if c == null || c.self == null continue;
+            d2 := length_squared(c.world_position - cur);
+            if !found || d2 < best_d2 {
+                found = true;
+                best_d2 = d2;
+                best_i = i;
+            }
+        }
+
+        if !found {
+            break;
+        }
+
+        c := children[best_i];
+        if c != null && c.self != null {
+            out->append(c.world_position);
+            cur = c.world_position;
+        }
+        children->unordered_remove_by_index(best_i);
+    }
+}
+
 find_connected_player_by_user_id :: proc(user_id: string) -> Player {
     if user_id.count <= 0 return null;
 
@@ -137,6 +199,14 @@ Truck :: class : Interactable {
     home_world_pos_locked: bool;
     target_world_pos: v2;
     drive_start_time: float;
+    
+    // Route state (synced)
+    // Waypoints are derived from GameManager.TruckRoutes[spawnIndex] children.
+    route_waypoints: [32]v2;
+    route_waypoint_count: s64;
+    route_points: [32]v2; // active traversal targets (outgoing includes bank dest; return includes home)
+    route_point_count: s64;
+    route_point_index: s64;
 
     base_move_speed: float;
     base_move_speed_initialized: bool;
@@ -193,6 +263,9 @@ Truck :: class : Interactable {
         carried_finished_bills = 0;
         owner_user_id = {};
         drive_start_time = 0;
+        route_waypoint_count = 0;
+        route_point_count = 0;
+        route_point_index = 0;
         
         delivery_seq = 0;
         delivery_bills = 0;
@@ -311,8 +384,42 @@ Truck :: class : Interactable {
             owner_user_id = base.owner_user_id;
         }
 
-        // Drive to bank.
-        target_world_pos = get_bank_destination_world_pos(bank);
+        // Build the waypoint route for this player's base spawn.
+        // Outgoing path: TruckRoutes[spawnIndex] children (ordered) then bank destination.
+        route_waypoint_count = 0;
+        route_point_count = 0;
+        route_point_index = 0;
+
+        route_root := get_truck_route_root_for_player(player);
+        tmp_waypoints: [..]v2;
+        if route_root != null {
+            collect_route_waypoints_ordered(route_root, entity.world_position, ref tmp_waypoints);
+        }
+
+        // Copy waypoints into fixed arrays (cap length).
+        max_wp := tmp_waypoints.count;
+        if max_wp > 31 { // reserve 1 slot (index 31) for bank destination
+            max_wp = 31;
+        }
+        route_waypoint_count = max_wp;
+        if max_wp > 0 {
+            for i: 0..max_wp-1 {
+                route_waypoints[i] = tmp_waypoints[i];
+            }
+        }
+
+        // Active route points = waypoints + final bank destination.
+        if route_waypoint_count > 0 {
+            for i: 0..route_waypoint_count-1 {
+                route_points[i] = route_waypoints[i];
+            }
+        }
+        bank_dest := get_bank_destination_world_pos(bank);
+        route_points[route_waypoint_count] = bank_dest;
+        route_point_count = route_waypoint_count + 1;
+
+        // Start driving toward the first point (or directly to bank if there are no waypoints).
+        target_world_pos = route_points[0];
         state = .TO_BANK;
         drive_start_time = get_time();
 
@@ -342,21 +449,13 @@ Truck :: class : Interactable {
             notifyFlag = false;
         }
 
-        // Movement target should be set on BOTH client and server (for smooth local motion),
-        // but gameplay state changes remain server-authoritative.
+        // Movement target should be set on BOTH client and server (for smooth local motion).
         if state != .IDLE {
             if agent == null {
                 agent = entity->get_component(Movement_Agent);
             }
             if agent != null {
-                switch state {
-                    case .TO_BANK: {
-                        _ := agent->set_path_target(target_world_pos, move_speed);
-                    }
-                    case .RETURN_HOME: {
-                        _ := agent->set_path_target(home_world_pos, move_speed);
-                    }
-                }
+                _ := agent->set_path_target(target_world_pos, move_speed);
             }
         }
 
@@ -388,18 +487,31 @@ Truck :: class : Interactable {
         switch state {
             case .TO_BANK: {
                 if has_arrived(target_world_pos) {
-                    notifyFlag = true;
-                    on_arrive_at_bank();
+                    route_point_index += 1;
+                    if route_point_index >= route_point_count {
+                        // Arrived at final destination (bank).
+                        notifyFlag = true;
+                        on_arrive_at_bank();
+                    }
+                    else {
+                        target_world_pos = route_points[route_point_index];
+                    }
                 }
             }
             case .RETURN_HOME: {
-                if has_arrived(home_world_pos) {
-                    state = .IDLE;
-                    drive_start_time = 0;
-                    this->set_text("Send truck to bank");
-                    // Repair when it makes it home.
-                    if hp < hp_max {
-                        hp = hp_max;
+                if has_arrived(target_world_pos) {
+                    route_point_index += 1;
+                    if route_point_index >= route_point_count {
+                        state = .IDLE;
+                        drive_start_time = 0;
+                        this->set_text("Send truck to bank");
+                        // Repair when it makes it home.
+                        if hp < hp_max {
+                            hp = hp_max;
+                        }
+                    }
+                    else {
+                        target_world_pos = route_points[route_point_index];
                     }
                 }
             }
@@ -631,6 +743,9 @@ Truck :: class : Interactable {
 
         // Reset state at home
         target_world_pos = home_world_pos;
+        route_waypoint_count = 0;
+        route_point_count = 0;
+        route_point_index = 0;
         state = .IDLE;
         drive_start_time = 0;
         this->set_text("Send truck to bank");
@@ -784,8 +899,26 @@ Truck :: class : Interactable {
 
         carried_finished_bills = 0;
 
-        // Return home.
-        target_world_pos = home_world_pos;
+        // Return home along the same route in reverse, ending at home_world_pos.
+        route_point_index = 0;
+        route_point_count = 0;
+
+        // Reverse waypoints.
+        // NOTE: route_waypoint_count may be 0 (then we just go directly home).
+        out_count := 0;
+        if route_waypoint_count > 0 {
+            // Fill from last waypoint to first.
+            for ri: 0..route_waypoint_count-1 {
+                src := (route_waypoint_count - 1 - ri);
+                route_points[ri] = route_waypoints[src];
+            }
+            out_count = route_waypoint_count;
+        }
+        // Final target is always home.
+        route_points[out_count] = home_world_pos;
+        route_point_count = out_count + 1;
+
+        target_world_pos = route_points[0];
         state = .RETURN_HOME;
         drive_start_time = get_time(); // reuse for return timeout too
         this->set_text("Truck returning");
@@ -805,11 +938,20 @@ Truck :: class : Interactable {
         }
 
         carried_finished_bills = 0;
+
+        // Best-effort: return directly home (skip route reversal).
+        route_waypoint_count = 0;
+        route_point_index = 0;
+        route_point_count = 1;
+        route_points[0] = home_world_pos;
         target_world_pos = home_world_pos;
         state = .RETURN_HOME;
         drive_start_time = get_time();
         this->set_text("Truck returning");
     }
+
+    // If we teleport home (e.g. destroyed), clear route state so we don't resume old waypoints.
+    // (Called from server_on_destroyed_by.)
 }
 
 // ---------------------------------------------------------------------------

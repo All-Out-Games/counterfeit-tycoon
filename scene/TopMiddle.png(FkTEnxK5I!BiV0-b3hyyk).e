@@ -24,6 +24,7 @@
   "internal_component_type": "Sprite_Renderer",
   "data": {
     "texture": "Cliffs/TopMiddle.png",
+    "layer": 2,
     "scale": {
       "X": 2
     },

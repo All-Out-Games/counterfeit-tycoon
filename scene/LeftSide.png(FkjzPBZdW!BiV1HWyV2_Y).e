@@ -24,6 +24,7 @@
   "internal_component_type": "Sprite_Renderer",
   "data": {
     "texture": "Cliffs/LeftSide.png",
+    "layer": 1,
     "scale": {
       "X": 0.9800000190734863,
       "Y": 10

@@ -1,0 +1,87 @@
+016ARP_Car.png
+	size: 4096, 636
+	filter: Linear, Linear
+	scale: 0.5
+Images/Cars/Cabrio_60s
+	bounds: 2186, 390, 465, 238
+	offsets: 10, 3, 487, 241
+Images/Cars/Car_Dirty
+	bounds: 394, 6, 335, 206
+	offsets: 12, 3, 359, 209
+Images/Cars/Car_Funny
+	bounds: 692, 218, 410, 435
+	offsets: 14, 3, 438, 438
+	rotate: 90
+Images/Cars/Car_Modern
+	bounds: 6, 71, 382, 221
+	offsets: 13, 3, 408, 224
+Images/Cars/Car_Pink
+	bounds: 3533, 147, 383, 228
+	offsets: 13, 2, 409, 230
+Images/Cars/Car_Police
+	bounds: 3584, 381, 439, 247
+	offsets: 14, 3, 462, 250
+Images/Cars/Car_President
+	bounds: 1134, 408, 568, 220
+	offsets: 18, 2, 604, 222
+Images/Cars/Car_Taxi
+	bounds: 2657, 385, 455, 243
+	offsets: 15, 3, 485, 246
+Images/Cars/Car_Tesla_Red
+	bounds: 3118, 167, 409, 216
+	offsets: 14, 3, 437, 220
+Images/Cars/Car_Tesla_White
+	bounds: 2570, 164, 409, 215
+	offsets: 14, 3, 437, 219
+Images/Cars/Ferrari_90s
+	bounds: 1708, 378, 472, 250
+	offsets: 16, 3, 504, 253
+Images/Cars/Garbage_Truck
+	bounds: 6, 298, 681, 330
+	offsets: 23, 3, 727, 333
+Images/Cars/Lamba_90s
+	bounds: 2186, 141, 378, 243
+Images/Cars/Lando_30s
+	bounds: 3118, 389, 460, 239
+	offsets: 16, 3, 492, 242
+Images/Cars/Sedan_1_60s
+	bounds: 1134, 176, 445, 226
+	offsets: 15, 3, 475, 229
+Images/Cars/Sedan_30s
+	bounds: 1585, 163, 409, 209
+	offsets: 14, 3, 437, 212
+Images/Dust Cloud/dust_cloud_A
+	bounds: 3922, 133, 92, 84
+	offsets: 2, 2, 96, 88
+Images/Dust Cloud/dust_cloud_B
+	bounds: 394, 233, 59, 64
+	offsets: 2, 2, 63, 68
+	rotate: 90
+Images/Dust Cloud/dust_cloud_C
+	bounds: 4029, 585, 42, 43
+	offsets: 2, 2, 46, 47
+Images/Dust Cloud/dust_cloud_D
+	bounds: 3922, 223, 152, 134
+	offsets: 2, 2, 156, 137
+	rotate: 90
+Images/Dust Cloud/dust_cloud_E
+	bounds: 2985, 136, 108, 97
+	offsets: 1, 2, 110, 100
+Images/Dust Cloud/dust_cloud_F
+	bounds: 2000, 115, 124, 121
+	offsets: 2, 2, 128, 125
+Images/Siren/siren_1
+	bounds: 2985, 239, 126, 140
+	offsets: 6, 6, 139, 146
+Images/Siren/siren_2
+	bounds: 2000, 242, 126, 130
+	offsets: 6, 3, 139, 140
+Images/Spin VFX/wheelspin_fx_1
+	bounds: 4051, 563, 16, 16
+	offsets: 4, 1, 21, 19
+Images/Spin VFX/wheelspin_fx_2
+	bounds: 4073, 564, 15, 15
+	offsets: 3, 2, 21, 19
+Images/Spin VFX/wheelspin_fx_3
+	bounds: 4029, 563, 16, 16
+	offsets: 1, 2, 21, 19

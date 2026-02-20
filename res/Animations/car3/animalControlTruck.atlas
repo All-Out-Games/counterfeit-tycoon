@@ -1,0 +1,36 @@
+animalControlTruck.png
+	size: 1216, 1081
+	filter: Linear, Linear
+Animal Control Truck/Back Door Down
+	bounds: 883, 934, 141, 203
+	offsets: 1, 1, 143, 221
+	rotate: 90
+Animal Control Truck/Back Door Up
+	bounds: 6, 574, 226, 230
+	offsets: 1, 1, 239, 232
+	rotate: 90
+Animal Control Truck/Back Wheel
+	bounds: 6, 823, 145, 145
+	offsets: 1, 1, 147, 147
+Animal Control Truck/Front Wheel
+	bounds: 6, 823, 145, 145
+	offsets: 1, 1, 147, 147
+Animal Control Truck/Blue Flash
+	bounds: 242, 493, 308, 307
+	offsets: 33, 34, 375, 374
+Animal Control Truck/Main Body
+	bounds: 6, 6, 1096, 480
+	offsets: 1, 1, 1098, 482
+Animal Control Truck/Orange Flash
+	bounds: 556, 493, 307, 308
+	offsets: 32, 34, 374, 374
+	rotate: 90
+Animal Control Truck/Red Flash
+	bounds: 870, 492, 311, 308
+	offsets: 33, 34, 375, 374
+Animal Control Truck/Shadow
+	bounds: 157, 806, 1053, 122
+	offsets: 1, 1, 1055, 124
+Animal Control Truck/Wheel Arches
+	bounds: 6, 974, 871, 101
+	offsets: 1, 1, 873, 103
