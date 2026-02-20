@@ -765,7 +765,7 @@ GameManager :: class : Component {
         // (Even if the next manager is not the Press Operator.)
         mill := press_operator_find_paper_mill_for_base_and_lane(base, lane_index);
         if mill != null && mill.entity != null && mill.entity.self != null {
-            return mill.entity.world_position + v2{-1.5, 0.0};
+            return mill.entity.world_position + v2{-3.5, 0.0};
         }
 
         // Fallback: base position (should be rare; typically mills exist once lane prefab exists).

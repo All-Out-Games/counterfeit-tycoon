@@ -1,0 +1,291 @@
+import "core:ao"
+
+// ---------------------------------------------------------------------------
+// Sparks purchases: permanent 2x boosts (per-player, saved).
+//
+// Products created via MCP:
+// - "2x Manager Speed"
+// - "2x Machine Speed"
+//
+// Fulfillment is handled by `ao_purchase_handler` in `scripts/main.csl`.
+// ---------------------------------------------------------------------------
+
+SPARKS_BOOST_2X_MANAGER_SPEED_PRODUCT_ID :: "6998a147867b8ac8248e30e8";
+SPARKS_BOOST_2X_MACHINE_SPEED_PRODUCT_ID :: "6998a1473d518aa4fbfa1a1a";
+
+SPARKS_BOOST_2X_MANAGER_SPEED_SAVE_KEY :: "sparks_boost_2x_manager_speed";
+SPARKS_BOOST_2X_MACHINE_SPEED_SAVE_KEY :: "sparks_boost_2x_machine_speed";
+
+SPARKS_BOOST_2X_MANAGER_SPEED_FX_ICON_PATH :: "Buttons/2xspeed.png";
+SPARKS_BOOST_2X_MACHINE_SPEED_FX_ICON_PATH :: "Buttons/2xmachine.png";
+
+sparks_find_player_by_user_id :: proc(user_id: string) -> Player {
+    if user_id.count == 0 return null;
+    foreach p: component_iterator(Player) {
+        if p == null continue;
+        if p->get_user_id() == user_id {
+            return p;
+        }
+    }
+    return null;
+}
+
+sparks_manager_boost_speed_multiplier_for_owner_user_id :: proc(owner_user_id: string) -> float {
+    owner := sparks_find_player_by_user_id(owner_user_id);
+    if owner == null return 1.0;
+    return owner.sparks_boost_2x_manager_speed ? 2.0 : 1.0;
+}
+
+sparks_manager_boost_capacity_multiplier_for_owner_user_id :: proc(owner_user_id: string) -> s64 {
+    owner := sparks_find_player_by_user_id(owner_user_id);
+    if owner == null return 1;
+    return owner.sparks_boost_2x_manager_speed ? 2 : 1;
+}
+
+sparks_station_boost_speed_multiplier_for_entity :: proc(e: Entity) -> float {
+    if e == null return 1.0;
+    if e.self == null return 1.0;
+    pb := get_parent_player_base(e);
+    if pb == null return 1.0;
+    owner := sparks_find_player_by_user_id(pb.owner_user_id);
+    if owner == null return 1.0;
+    return owner.sparks_boost_2x_machine_speed ? 2.0 : 1.0;
+}
+
+sparks_boost_product_price :: proc(product_id: string, fallback: s64) -> s64 {
+    if product_id.count == 0 return 0;
+    p := Purchasing.get_product(product_id);
+    if p.id.count != 0 && p.price > 0 {
+        return p.price;
+    }
+    return fallback;
+}
+
+draw_rotated_ui_quad :: proc(rect: Rect, tex: Texture_Asset, rotation_degrees: float, tint: v4) {
+    if tex == null return;
+
+    // Rotate around rect center via UI matrix.
+    c := rect->center();
+    UI.push_matrix(Matrix4.translate(v3{c.x, c.y, 0}));
+    defer UI.pop_matrix();
+    UI.push_matrix(Matrix4.rotate(rotation_degrees, v3{0, 0, 1}));
+    defer UI.pop_matrix();
+    UI.push_matrix(Matrix4.translate(v3{-c.x, -c.y, 0}));
+    defer UI.pop_matrix();
+    UI.quad(rect, tex, tint);
+}
+
+server_grant_sparks_boost_2x_manager_speed :: proc(player: Player) -> bool {
+    if player == null return false;
+    if !Game.is_server() return false;
+    if player.sparks_boost_2x_manager_speed return false;
+
+    player.sparks_boost_2x_manager_speed = true;
+    Save.set_int(player, SPARKS_BOOST_2X_MANAGER_SPEED_SAVE_KEY, 1);
+
+    // Cosmetic: purchase FX + SFX on the owning client.
+    server_request_purchase_fx(player, SPARKS_BOOST_2X_MANAGER_SPEED_FX_ICON_PATH);
+    Notifier.notify(player, "2x Manager Speed activated!");
+    return true;
+}
+
+server_grant_sparks_boost_2x_machine_speed :: proc(player: Player) -> bool {
+    if player == null return false;
+    if !Game.is_server() return false;
+    if player.sparks_boost_2x_machine_speed return false;
+
+    player.sparks_boost_2x_machine_speed = true;
+    Save.set_int(player, SPARKS_BOOST_2X_MACHINE_SPEED_SAVE_KEY, 1);
+
+    // Re-apply station derived tuning immediately so processing timers update.
+    gm := get_game_manager();
+    if gm != null {
+        gm->server_apply_station_upgrade_levels_for_player(player);
+    }
+
+    // Cosmetic: purchase FX + SFX on the owning client.
+    server_request_purchase_fx(player, SPARKS_BOOST_2X_MACHINE_SPEED_FX_ICON_PATH);
+    Notifier.notify(player, "2x Machine Speed activated!");
+    return true;
+}
+
+sparks_boosts_try_handle_purchase_name :: proc(player: Player, purchase_name: string) -> bool {
+    if player == null return false;
+    if purchase_name.count == 0 return false;
+
+    if purchase_name == "2x Manager Speed" {
+        if Game.is_server() {
+            _ := server_grant_sparks_boost_2x_manager_speed(player);
+        }
+        return true;
+    }
+    if purchase_name == "2x Machine Speed" {
+        if Game.is_server() {
+            _ := server_grant_sparks_boost_2x_machine_speed(player);
+        }
+        return true;
+    }
+    return false;
+}
+
+// Called by `ao_purchase_handler` (defined in `scripts/main.csl`) when a purchase succeeds.
+// Return true if we handled the purchase id.
+sparks_boosts_try_handle_purchase :: proc(player: Player, id: string) -> bool {
+    if player == null return false;
+    if id.count == 0 return false;
+
+    // Fast path: product ids.
+    if id == SPARKS_BOOST_2X_MANAGER_SPEED_PRODUCT_ID {
+        if Game.is_server() {
+            _ := server_grant_sparks_boost_2x_manager_speed(player);
+        }
+        return true;
+    }
+    if id == SPARKS_BOOST_2X_MACHINE_SPEED_PRODUCT_ID {
+        if Game.is_server() {
+            _ := server_grant_sparks_boost_2x_machine_speed(player);
+        }
+        return true;
+    }
+
+    // Primary: resolve product id -> product name, then match by naming convention.
+    prod := Purchasing.get_product(id);
+    if prod.id.count != 0 {
+        if sparks_boosts_try_handle_purchase_name(player, prod.name) return true;
+    }
+
+    // Fallback: id might be the product name directly.
+    if sparks_boosts_try_handle_purchase_name(player, id) return true;
+
+    return false;
+}
+
+draw_sparks_boost_button :: proc(
+    player: Player,
+    rect: Rect,
+    icon: Texture_Asset,
+    id_tag: string,
+    product_id: string,
+    owned: bool,
+    fallback_price: s64
+) {
+    if player == null return;
+    if id_tag.count == 0 return;
+
+    UI.push_id("sparks_boost_btn_%", {id_tag});
+    defer UI.pop_id();
+
+    draw_rect := rect;
+    if icon != null {
+        draw_rect = rect->fit_aspect(icon->get_aspect());
+    }
+
+    bs := UI.default_button_settings();
+    bs.press_scaling = 0.8;
+    bs.sprite = icon;
+
+    ts := UI.default_text_settings();
+    ts.size = 30;
+    ts.halign = .CENTER;
+    ts.valign = .CENTER;
+    ts.do_outline = true;
+    ts.outline_thickness = 2;
+    ts.outline_color = {0, 0, 0, 1};
+
+    if owned {
+        bs.press_scaling = 0.0;
+        UI.push_disabled(true);
+        defer UI.pop_disabled();
+    }
+
+    // Backdrop + ray burst behind the button.
+    w := draw_rect->width();
+    h := draw_rect->height();
+    size := max(w, h) * 0.72 * 1.2; // ~20% bigger
+
+    base_rect := Rect{draw_rect->center(), draw_rect->center()}->grow_unscaled(size);
+
+    // Static backdrop: Cliffs boundary.
+    #static boundary := get_asset(Texture_Asset, "Cliffs/Boundary.png");
+    if boundary != null {
+        back_rect := base_rect->fit_aspect(boundary->get_aspect());
+        back_alpha := owned ? 0.18 : 0.35;
+        UI.quad(back_rect, boundary, {1, 1, 1, back_alpha});
+    }
+
+    // Spinning golden ray burst.
+    #static ray_burst := get_asset(Texture_Asset, "UI/ray_burst_2.png");
+    if ray_burst != null {
+        ray_rect := base_rect->fit_aspect(ray_burst->get_aspect());
+
+        // Spin over time (degrees).
+        rotation := get_time() * 90.0;
+
+        // Golden tint.
+        alpha := owned ? 0.25 : 0.85;
+        tint := v4{1.0, 0.82, 0.22, alpha};
+        draw_rotated_ui_quad(ray_rect, ray_burst, rotation, tint);
+    }
+
+    result := UI.begin_button(draw_rect, bs, ts, ""); {
+        defer UI.end_button();
+
+        // Subtle dim if owned.
+        if owned {
+            UI.quad(result.rect, core_globals.white_sprite, {0, 0, 0, 0.35});
+        }
+    }
+
+    if result.clicked {
+        if owned {
+            if player->is_local() {
+                Notifier.notify("Already owned.");
+            }
+            return;
+        }
+        Purchasing.prompt_purchase(player, product_id);
+    }
+}
+
+draw_sparks_boosts_ui :: proc(player: Player) {
+    if player == null return;
+    if !player->is_local_or_server() return;
+
+    safe := UI.get_safe_screen_rect();
+
+    // Left-side vertical strip (two buttons).
+    SCALE :: 1.2; // ~20% bigger
+    panel := safe->left_center_rect()->grow(160.0 * SCALE, 140.0 * SCALE, 160.0 * SCALE, 0)->offset(24.0 * SCALE, 0);
+    inner := panel->inset(10.0 * SCALE);
+
+    btn1 := inner->cut_top(140.0 * SCALE);
+    _ := inner->cut_top(16.0 * SCALE);
+    btn2 := inner->cut_top(140.0 * SCALE);
+
+    #static icon_mgr := get_asset(Texture_Asset, "Buttons/2xspeed.png");
+    #static icon_mch := get_asset(Texture_Asset, "Buttons/2xmachine.png");
+
+    if !player.sparks_boost_2x_manager_speed {
+        draw_sparks_boost_button(
+            player,
+            btn1,
+            icon_mgr,
+            "mgr",
+            SPARKS_BOOST_2X_MANAGER_SPEED_PRODUCT_ID,
+            false,
+            200
+        );
+    }
+    if !player.sparks_boost_2x_machine_speed {
+        draw_sparks_boost_button(
+            player,
+            btn2,
+            icon_mch,
+            "mch",
+            SPARKS_BOOST_2X_MACHINE_SPEED_PRODUCT_ID,
+            false,
+            200
+        );
+    }
+}
+

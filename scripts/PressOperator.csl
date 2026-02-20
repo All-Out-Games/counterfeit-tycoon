@@ -508,15 +508,17 @@ PressOperator :: class : Component {
 
         // Client+server: drive the movement target for smoother replicated motion.
         if agent != null {
+            spd_mult := sparks_manager_boost_speed_multiplier_for_owner_user_id(owner_user_id);
+            spd := move_speed * spd_mult;
             switch state {
                 case .TO_MILL: {
                     if mill != null {
-                        _ := agent->set_path_target(target_pos_for_mill(mill), move_speed);
+                        _ := agent->set_path_target(target_pos_for_mill(mill), spd);
                     }
                 }
                 case .TO_PRESS: {
                     if press != null {
-                        _ := agent->set_path_target(target_pos_for_press(press), move_speed);
+                        _ := agent->set_path_target(target_pos_for_press(press), spd);
                     }
                 }
             }
@@ -533,12 +535,18 @@ PressOperator :: class : Component {
             return;
         }
 
+        cap_mult := sparks_manager_boost_capacity_multiplier_for_owner_user_id(owner_user_id);
+        effective_cap := max_paper_capacity * cap_mult;
+        if effective_cap < 1 {
+            effective_cap = 1;
+        }
+
         // Clamp carried amount.
         if carried_paper < 0 {
             carried_paper = 0;
         }
-        if carried_paper > max_paper_capacity {
-            carried_paper = max_paper_capacity;
+        if carried_paper > effective_cap {
+            carried_paper = effective_cap;
         }
 
         // Timeout safety: if we get stuck, reset state.
@@ -587,9 +595,9 @@ PressOperator :: class : Component {
                 }
 
                 // If we have room, try to collect paper from the mill output.
-                if carried_paper < max_paper_capacity {
+                if carried_paper < effective_cap {
                     if last_action_time <= 0 || get_time() - last_action_time >= collect_interval {
-                        room := max_paper_capacity - carried_paper;
+                        room := effective_cap - carried_paper;
                         taken := mill->server_collect_paper_for_manager(owner_user_id, room);
                         if taken > 0 {
                             carried_paper += taken;
@@ -602,7 +610,7 @@ PressOperator :: class : Component {
                 // - If we have any paper and either we're full or the mill has nothing left right now.
                 if carried_paper > 0 {
                     mill_empty_now := mill.stored_paper <= 0;
-                    if carried_paper >= max_paper_capacity || mill_empty_now {
+                    if carried_paper >= effective_cap || mill_empty_now {
                         server_begin_pause(.TO_PRESS);
                     }
                 }

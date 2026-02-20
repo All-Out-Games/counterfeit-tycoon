@@ -27,15 +27,7 @@
     }
   },
   {
-    "id": "Cliffs/Boundary.png",
-    "texture": {
-      "slice": [
-        42,
-        42,
-        42,
-        42
-      ]
-    }
+    "id": "Cliffs/Boundary.png"
   },
   {
     "id": "Cliffs/RightTop.png",

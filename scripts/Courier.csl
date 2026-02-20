@@ -471,15 +471,17 @@ Courier :: class : Component {
         vault := courier_find_vault_for_base(pb);
 
         if agent != null {
+            spd_mult := sparks_manager_boost_speed_multiplier_for_owner_user_id(owner_user_id);
+            spd := move_speed * spd_mult;
             switch state {
                 case .TO_SOURCE: {
                     if source != null {
-                        _ := agent->set_path_target(target_pos_for_source(source), move_speed);
+                        _ := agent->set_path_target(target_pos_for_source(source), spd);
                     }
                 }
                 case .TO_VAULT: {
                     if vault != null {
-                        _ := agent->set_path_target(target_pos_for_vault(vault), move_speed);
+                        _ := agent->set_path_target(target_pos_for_vault(vault), spd);
                     }
                 }
             }
@@ -494,11 +496,17 @@ Courier :: class : Component {
             return;
         }
 
+        cap_mult := sparks_manager_boost_capacity_multiplier_for_owner_user_id(owner_user_id);
+        effective_cap := max_finished_bills_capacity * cap_mult;
+        if effective_cap < 1 {
+            effective_cap = 1;
+        }
+
         if carried_finished_bills < 0 {
             carried_finished_bills = 0;
         }
-        if carried_finished_bills > max_finished_bills_capacity {
-            carried_finished_bills = max_finished_bills_capacity;
+        if carried_finished_bills > effective_cap {
+            carried_finished_bills = effective_cap;
         }
 
         if (state == .TO_SOURCE || state == .TO_VAULT) && drive_start_time > 0 && max_drive_seconds > 0 {
@@ -554,9 +562,9 @@ Courier :: class : Component {
                     }
                 }
 
-                if !vault_full && carried_finished_bills < max_finished_bills_capacity {
+                if !vault_full && carried_finished_bills < effective_cap {
                     if last_action_time <= 0 || get_time() - last_action_time >= collect_interval {
-                        room := max_finished_bills_capacity - carried_finished_bills;
+                        room := effective_cap - carried_finished_bills;
                         taken := source->server_collect_finished_bills_for_manager(owner_user_id, room);
                         if taken > 0 {
                             carried_finished_bills += taken;
@@ -567,7 +575,7 @@ Courier :: class : Component {
 
                 if carried_finished_bills > 0 {
                     source_empty_now := source.stored_finished_bills <= 0;
-                    if carried_finished_bills >= max_finished_bills_capacity || source_empty_now {
+                    if carried_finished_bills >= effective_cap || source_empty_now {
                         server_begin_pause(.TO_VAULT);
                     }
                 }

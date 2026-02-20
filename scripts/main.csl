@@ -53,6 +53,9 @@ ao_purchase_handler :: proc(player: Player, id: string) -> bool {
     if !handled {
         handled = managers_try_handle_purchase(player, id);
     }
+    if !handled {
+        handled = sparks_boosts_try_handle_purchase(player, id);
+    }
     if handled {
         // Debug: visible confirmation that the callback is firing (server only).
         if Game.is_server() {
@@ -648,6 +651,10 @@ Player :: class : Player_Base {
     purchase_fx_seq: s64;
     purchase_fx_icon_path: string;
 
+    // Sparks permanent boosts (server authoritative, saved, replicated)
+    sparks_boost_2x_manager_speed: bool;
+    sparks_boost_2x_machine_speed: bool;
+
     // Reusable weapons shop UI (per-player, multiplayer safe)
     weapons_shop_open: bool;
     weapons_shop_movement_locked: bool;
@@ -1047,6 +1054,8 @@ Player :: class : Player_Base {
         if Game.is_server() {
             purchase_fx_seq = 0;
             purchase_fx_icon_path = "";
+            sparks_boost_2x_manager_speed = false;
+            sparks_boost_2x_machine_speed = false;
         }
 
         sell_shop_open = false;
@@ -1174,6 +1183,14 @@ Player :: class : Player_Base {
                 lane_unlock_mask = mask;
                 // Ensure key exists for new players / migrations.
                 Save.set_int(this, LANES_UNLOCK_SAVE_KEY, mask);
+            }
+
+            // Load Sparks permanent boosts (server authoritative, replicated).
+            {
+                mgr := Save.get_int(this, SPARKS_BOOST_2X_MANAGER_SPEED_SAVE_KEY, 0);
+                mch := Save.get_int(this, SPARKS_BOOST_2X_MACHINE_SPEED_SAVE_KEY, 0);
+                sparks_boost_2x_manager_speed = mgr != 0;
+                sparks_boost_2x_machine_speed = mch != 0;
             }
 
             // Load per-player Managers unlock masks (server authoritative, replicates to clients).
@@ -1580,6 +1597,9 @@ Player :: class : Player_Base {
         draw_finished_bills_per_sec_hud(this);
         draw_lane_labels(this);
         client_coin_gain_particles_tick();
+
+        // Left-side Sparks boost buttons (2x Manager Speed / 2x Machine Speed).
+        draw_sparks_boosts_ui(this);
 
         // Draw weapons shop button + modal UI.
         draw_weapons_shop_ui(this);

@@ -167,6 +167,13 @@ Paper_Mill :: class : Interactable {
         }
 
         seconds_per_paper = base_seconds_per_paper / mult;
+
+        // Permanent Sparks boost: 2x Machine Speed (halve seconds-per-item).
+        boost_mult := sparks_station_boost_speed_multiplier_for_entity(entity);
+        if boost_mult > 1.0 {
+            seconds_per_paper = seconds_per_paper / boost_mult;
+        }
+
         if seconds_per_paper < 0.05 {
             seconds_per_paper = 0.05;
         }

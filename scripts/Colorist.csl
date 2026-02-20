@@ -504,15 +504,17 @@ Colorist :: class : Component {
 
         // Client+server: drive the movement target for smoother replicated motion.
         if agent != null {
+            spd_mult := sparks_manager_boost_speed_multiplier_for_owner_user_id(owner_user_id);
+            spd := move_speed * spd_mult;
             switch state {
                 case .TO_SOURCE: {
                     if source != null {
-                        _ := agent->set_path_target(target_pos_for_source(source), move_speed);
+                        _ := agent->set_path_target(target_pos_for_source(source), spd);
                     }
                 }
                 case .TO_DEST: {
                     if dest != null {
-                        _ := agent->set_path_target(target_pos_for_dest(dest), move_speed);
+                        _ := agent->set_path_target(target_pos_for_dest(dest), spd);
                     }
                 }
             }
@@ -529,12 +531,18 @@ Colorist :: class : Component {
             return;
         }
 
+        cap_mult := sparks_manager_boost_capacity_multiplier_for_owner_user_id(owner_user_id);
+        effective_cap := max_blank_bills_capacity * cap_mult;
+        if effective_cap < 1 {
+            effective_cap = 1;
+        }
+
         // Clamp carried amount.
         if carried_blank_bills < 0 {
             carried_blank_bills = 0;
         }
-        if carried_blank_bills > max_blank_bills_capacity {
-            carried_blank_bills = max_blank_bills_capacity;
+        if carried_blank_bills > effective_cap {
+            carried_blank_bills = effective_cap;
         }
 
         // Timeout safety: if we get stuck, reset state.
@@ -583,9 +591,9 @@ Colorist :: class : Component {
                 }
 
                 // If we have room, try to collect blank bills from the source output.
-                if carried_blank_bills < max_blank_bills_capacity {
+                if carried_blank_bills < effective_cap {
                     if last_action_time <= 0 || get_time() - last_action_time >= collect_interval {
-                        room := max_blank_bills_capacity - carried_blank_bills;
+                        room := effective_cap - carried_blank_bills;
                         taken := source->server_collect_blank_bills_for_manager(owner_user_id, room);
                         if taken > 0 {
                             carried_blank_bills += taken;
@@ -598,7 +606,7 @@ Colorist :: class : Component {
                 // - If we have any blank bills and either we're full or the source has nothing left right now.
                 if carried_blank_bills > 0 {
                     source_empty_now := source.stored_blank_bills <= 0;
-                    if carried_blank_bills >= max_blank_bills_capacity || source_empty_now {
+                    if carried_blank_bills >= effective_cap || source_empty_now {
                         server_begin_pause(.TO_DEST);
                     }
                 }
