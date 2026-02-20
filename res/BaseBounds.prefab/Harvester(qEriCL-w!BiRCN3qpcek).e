@@ -29,7 +29,7 @@
     "prompt_offset": {
       "Y": 1
     },
-    "move_speed": 80,
+    "move_speed": 120,
     "arrive_radius": 0.0500000007450581,
     "spine_entity": "185080792299809:1770205897267456600",
     "max_wood_capacity": 10,

@@ -26,8 +26,8 @@
     "prompt_offset": {
       "Y": 1.7999999523162842
     },
-    "min_wood_drops": 2,
-    "max_wood_drops": 5,
+    "min_wood_drops": 6,
+    "max_wood_drops": 6,
     "trunk_length": 0.5000000000000000,
     "drop_spread_along": 0.5000000000000000,
     "drop_spread_perp": 0.5000000000000000
