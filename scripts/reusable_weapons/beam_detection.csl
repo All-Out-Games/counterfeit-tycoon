@@ -50,6 +50,26 @@ beam_line_damage :: proc(player: Player, origin: v2, direction: v2, range: float
             _ := t->server_register_weapon_hit(player.entity.id, damage);
         }
     }
+
+    nearby_turrets: [..]Turret;
+    Scene.get_all_components_in_range(origin, range, ref nearby_turrets);
+    for t: nearby_turrets {
+        if t == null continue;
+        if t.entity == null || t.entity.self == null continue;
+
+        target_pos := t.entity.world_position;
+        to_target := v2{target_pos.x - origin.x, target_pos.y - origin.y};
+        dot := to_target.x * dir.x + to_target.y * dir.y;
+        if dot < 0 || dot > range continue;
+
+        proj := v2{dir.x * dot, dir.y * dot};
+        perp := v2{to_target.x - proj.x, to_target.y - proj.y};
+        perp_dist := length(perp);
+
+        if perp_dist <= width {
+            _ := t->server_register_weapon_hit(player.entity.id, damage);
+        }
+    }
 }
 
 // Cone beam: damage players within a cone from origin
@@ -59,6 +79,7 @@ beam_cone_damage :: proc(player: Player, origin: v2, direction: v2, range: float
 
     dir := normalize(direction);
     half_angle := cone_angle_deg * 0.5 * 3.14159 / 180.0;
+    cos_half := cos(half_angle);
 
     for target: nearby {
         if target.entity.id == player.entity.id continue;
@@ -74,8 +95,6 @@ beam_cone_damage :: proc(player: Player, origin: v2, direction: v2, range: float
         dot := dir.x * to_target_norm.x + dir.y * to_target_norm.y;
         if dot > 1.0 { dot = 1.0; }
         if dot < -1.0 { dot = -1.0; }
-
-        cos_half := cos(half_angle);
 
         if dot >= cos_half {
             target->take_damage(damage, player, true);
@@ -101,7 +120,27 @@ beam_cone_damage :: proc(player: Player, origin: v2, direction: v2, range: float
         if dot > 1.0 { dot = 1.0; }
         if dot < -1.0 { dot = -1.0; }
 
-        cos_half := cos(half_angle);
+        if dot >= cos_half {
+            _ := t->server_register_weapon_hit(player.entity.id, damage);
+        }
+    }
+
+    nearby_turrets: [..]Turret;
+    Scene.get_all_components_in_range(origin, range, ref nearby_turrets);
+    for t: nearby_turrets {
+        if t == null continue;
+        if t.entity == null || t.entity.self == null continue;
+
+        target_pos := t.entity.world_position;
+        to_target := v2{target_pos.x - origin.x, target_pos.y - origin.y};
+        dist := length(to_target);
+        if dist < 0.1 || dist > range continue;
+
+        to_target_norm := normalize(to_target);
+        dot := dir.x * to_target_norm.x + dir.y * to_target_norm.y;
+        if dot > 1.0 { dot = 1.0; }
+        if dot < -1.0 { dot = -1.0; }
+
         if dot >= cos_half {
             _ := t->server_register_weapon_hit(player.entity.id, damage);
         }
@@ -128,6 +167,13 @@ beam_radius_damage :: proc(player: Player, origin: v2, range: float, damage: flo
     for t: nearby_trucks {
         if t == null continue;
         if t.entity == null || t.entity.self == null continue;
+        _ := t->server_register_weapon_hit(player.entity.id, damage);
+    }
+
+    nearby_turrets: [..]Turret;
+    Scene.get_all_components_in_range(origin, range, ref nearby_turrets);
+    for t: nearby_turrets {
+        if t == null continue;
         _ := t->server_register_weapon_hit(player.entity.id, damage);
     }
     return hit_count;

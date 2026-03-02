@@ -18,6 +18,8 @@ apply_aoe_damage :: proc(pos: v2, owner_id: u64, radius: float, damage: float) {
         if t.entity == null || t.entity.self == null continue;
         _ := t->server_register_weapon_hit(owner_id, damage);
     }
+
+    turret_apply_weapon_aoe_damage(pos, radius, owner_id, damage);
 }
 
 // AOE projectile: standard projectile that explodes on impact
@@ -95,6 +97,26 @@ AOE_Projectile :: class : Component {
                     entity->destroy();
                     return;
                 }
+            }
+
+            // Turret direct hit: explode on impact like truck/player direct hits.
+            if turret_try_register_weapon_hit_nearest(pos, 1.25, owner_id, damage) {
+                if aoe_radius > 0 {
+                    apply_aoe_damage(pos, owner_id, aoe_radius, aoe_damage);
+                }
+
+                sfx := get_asset(SFX_Asset, "reusable_weapons/sounds/reusable-weapons/cannon_explode.wav");
+                sfx_desc := SFX.default_sfx_desc();
+                sfx_desc->set_position(pos);
+                sfx_desc.range_multiplier = 3.0;
+                if weapon_type == .EXPLOSIVE_SHOTGUN {
+                    // Lower Explosive Shotgun explosion volume by 70%.
+                    sfx_desc.volume = 0.3;
+                }
+                SFX.play(sfx, sfx_desc);
+
+                entity->destroy();
+                return;
             }
         }
     }

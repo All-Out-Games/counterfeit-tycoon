@@ -440,9 +440,10 @@ Colored_Bill_Press :: class : Interactable {
             return;
         }
 
-        UI_CULL_DISTANCE :: 20.0;
+        UI_CULL_DISTANCE :: 15.0;
+        UI_CULL_DISTANCE_SQ :: UI_CULL_DISTANCE * UI_CULL_DISTANCE;
         delta := local_player.entity.world_position - entity.world_position;
-        if length_squared(delta) > UI_CULL_DISTANCE * UI_CULL_DISTANCE {
+        if length_squared(delta) > UI_CULL_DISTANCE_SQ {
             return;
         }
         draw_world_status();

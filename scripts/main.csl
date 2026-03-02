@@ -722,6 +722,7 @@ Player :: class : Player_Base {
     // PlayerBase ownership state (per-player, multiplayer safe)
     base_entity: Entity;
     base_spawn_index: s64;
+    turrets_loaded_from_save: bool;
 
     // Vault theft hold tracking (per-player, multiplayer safe; server authoritative)
     vault_theft_target_entity_id: u64; // entity.id of the vault currently being stolen from (0 if none)
@@ -1088,6 +1089,7 @@ Player :: class : Player_Base {
                 manager_unlock_prompt_entities[i] = null;
             }
             woodchipper_unlock_prompt_entity = null;
+            turrets_loaded_from_save = false;
         }
 
         // Tutorial (server authoritative, loaded from Save and replicated).
@@ -1560,6 +1562,7 @@ Player :: class : Player_Base {
             draw_all_players_health_bars_local();
             draw_all_players_carried_bills_local();
             draw_all_truck_health_bars_local();
+            draw_all_turret_health_bars_local();
         }
 
          // Draw floating combat text damage numbers in world space.
@@ -1585,10 +1588,25 @@ Player :: class : Player_Base {
         client_purchase_fx_tick(hotbar.entire_rect);
 
         // Allow dropping items from the hotbar. Apply server-side so it is authoritative.
-        if Game.is_server() {
-            if hotbar.dropped_item != null {
-                drop_pos := entity.world_position + v2{0, 0.5};
-                _ := ItemDrops.spawn_from_inventory_item_with_dropper_lockout(drop_pos, hotbar.dropped_item, this, 7.0);
+        if hotbar.dropped_item != null {
+            // Turret items are placement-only and cannot be dropped as world loot.
+            // Use cursor/touch world target for placement.
+            drop_pos := turret_get_drop_target_world_pos(this);
+
+            // Client-only immediate feedback for invalid turret placement.
+            if this->is_local() && !Game.is_server() {
+                local_block_reason := turret_get_local_place_block_reason(this, hotbar.dropped_item, drop_pos);
+                if local_block_reason.count > 0 {
+                    Notifier.notify(local_block_reason);
+                }
+            }
+
+            if Game.is_server() {
+                handled_turret := turret_handle_inventory_drop(this, hotbar.dropped_item, drop_pos);
+                if !handled_turret {
+                    drop_pos = entity.world_position + v2{0, 0.5};
+                    _ := ItemDrops.spawn_from_inventory_item_with_dropper_lockout(drop_pos, hotbar.dropped_item, this, 7.0);
+                }
             }
         }
 

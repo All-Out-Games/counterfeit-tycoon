@@ -46,6 +46,13 @@ Spawn_Woodchipper_Userdata :: class {
     owner_user_id: string;
 }
 
+Spawn_Turret_Userdata :: class {
+    base_entity: Entity;
+    owner_user_id: string;
+    tier: s64;
+    initial_hp: s64;
+}
+
 Spawn_Lane_Userdata :: class {
     player: Player;
     base_entity: Entity;
@@ -130,6 +137,10 @@ GameManager :: class : Component {
     courier_prefab_path: string @ao_serialize;
     // Prefab path in /res, like: "Managers/Woodchipper.prefab"
     woodchipper_prefab_path: string @ao_serialize;
+    // Tiered turret prefabs in /res.
+    turret_tier_1_prefab_path: string @ao_serialize;
+    turret_tier_2_prefab_path: string @ao_serialize;
+    turret_tier_3_prefab_path: string @ao_serialize;
 
     // Runtime
     cached_player_base_prefab: Prefab_Asset;
@@ -146,8 +157,15 @@ GameManager :: class : Component {
     warned_missing_courier_prefab: bool;
     cached_woodchipper_prefab: Prefab_Asset;
     warned_missing_woodchipper_prefab: bool;
+    cached_turret_tier_1_prefab: Prefab_Asset;
+    warned_missing_turret_tier_1_prefab: bool;
+    cached_turret_tier_2_prefab: Prefab_Asset;
+    warned_missing_turret_tier_2_prefab: bool;
+    cached_turret_tier_3_prefab: Prefab_Asset;
+    warned_missing_turret_tier_3_prefab: bool;
     last_managers_reconcile_time: float;
     last_station_upgrades_reconcile_time: float;
+    last_turrets_reconcile_time: float;
 
     // Lanes (Lane.prefab) spawned per-player based on lane unlock mask.
     cached_lane_prefab: Prefab_Asset;
@@ -285,6 +303,7 @@ GameManager :: class : Component {
             needs_base_reconcile = true;
             last_managers_reconcile_time = -99999.0;
             last_station_upgrades_reconcile_time = -99999.0;
+            last_turrets_reconcile_time = -99999.0;
             last_lanes_reconcile_time = -99999.0;
             last_lane_unlock_prompt_reconcile_time = -99999.0;
             last_manager_unlock_prompt_reconcile_time = -99999.0;
@@ -330,6 +349,13 @@ GameManager :: class : Component {
                 this->server_apply_station_upgrade_levels_for_player(p);
                 this->server_apply_vault_level_for_player(p);
             }
+        }
+
+        // Reconcile player turret save-load once base ownership is available.
+        TURRETS_RECONCILE_INTERVAL :: 0.5;
+        if get_time() - last_turrets_reconcile_time >= TURRETS_RECONCILE_INTERVAL {
+            last_turrets_reconcile_time = get_time();
+            this->server_reconcile_turrets();
         }
 
         // Reconcile lane prefabs periodically (covers unlock-at-runtime and unlocks loaded on join).
@@ -1345,6 +1371,19 @@ GameManager :: class : Component {
         }
     }
 
+    server_reconcile_turrets :: method() {
+        if !Game.is_server() return;
+
+        foreach p: component_iterator(Player) {
+            if p == null continue;
+            if p.base_entity == null || p.base_entity.self == null continue;
+            if p.turrets_loaded_from_save continue;
+
+            turret_load_player_data(p, this);
+            p.turrets_loaded_from_save = true;
+        }
+    }
+
     request_base_reconcile :: method() {
         if !Game.is_server() {
             return;
@@ -1482,6 +1521,9 @@ GameManager :: class : Component {
                     vault->server_try_load_from_save();
                     Save.set_int(player, VAULT_SAVE_KEY_FINISHED_BILLS, vault.stored_finished_bills);
                 }
+
+                // Persist turret placements relative to this player's base.
+                turret_save_player_data(player);
 
                 // Persist station storage per lane (sorted by lane_index for determinism).
                 {
@@ -1692,6 +1734,110 @@ GameManager :: class : Component {
             return;
         }
         cached_woodchipper_prefab = get_asset(Prefab_Asset, woodchipper_prefab_path);
+    }
+
+    ensure_turret_tier_1_prefab_loaded :: method() {
+        if cached_turret_tier_1_prefab != null return;
+        if turret_tier_1_prefab_path.count == 0 return;
+        cached_turret_tier_1_prefab = get_asset(Prefab_Asset, turret_tier_1_prefab_path);
+    }
+
+    ensure_turret_tier_2_prefab_loaded :: method() {
+        if cached_turret_tier_2_prefab != null return;
+        if turret_tier_2_prefab_path.count == 0 return;
+        cached_turret_tier_2_prefab = get_asset(Prefab_Asset, turret_tier_2_prefab_path);
+    }
+
+    ensure_turret_tier_3_prefab_loaded :: method() {
+        if cached_turret_tier_3_prefab != null return;
+        if turret_tier_3_prefab_path.count == 0 return;
+        cached_turret_tier_3_prefab = get_asset(Prefab_Asset, turret_tier_3_prefab_path);
+    }
+
+    server_spawn_turret_for_player :: method(player: Player, tier: s64, spawn_pos: v2, save_after_spawn: bool = true, initial_hp: s64 = -1) -> bool {
+        if !Game.is_server() return false;
+        if player == null return false;
+        if player.base_entity == null || player.base_entity.self == null return false;
+        if tier < 1 || tier > 3 return false;
+        if !turret_is_position_inside_player_base(player, spawn_pos) return false;
+        if turret_count_for_player(player) >= TURRET_MAX_PER_BASE return false;
+
+        owner_user_id := player->get_user_id();
+        if owner_user_id.count == 0 return false;
+
+        prefab: Prefab_Asset;
+        switch tier {
+            case 1: {
+                ensure_turret_tier_1_prefab_loaded();
+                prefab = cached_turret_tier_1_prefab;
+                if prefab == null && !warned_missing_turret_tier_1_prefab {
+                    warned_missing_turret_tier_1_prefab = true;
+                    log_warning("GameManager: turret_tier_1_prefab_path is empty or invalid.", {});
+                }
+            }
+            case 2: {
+                ensure_turret_tier_2_prefab_loaded();
+                prefab = cached_turret_tier_2_prefab;
+                if prefab == null && !warned_missing_turret_tier_2_prefab {
+                    warned_missing_turret_tier_2_prefab = true;
+                    log_warning("GameManager: turret_tier_2_prefab_path is empty or invalid.", {});
+                }
+            }
+            case 3: {
+                ensure_turret_tier_3_prefab_loaded();
+                prefab = cached_turret_tier_3_prefab;
+                if prefab == null && !warned_missing_turret_tier_3_prefab {
+                    warned_missing_turret_tier_3_prefab = true;
+                    log_warning("GameManager: turret_tier_3_prefab_path is empty or invalid.", {});
+                }
+            }
+        }
+
+        if prefab == null {
+            return false;
+        }
+
+        ud := new(Spawn_Turret_Userdata);
+        ud.base_entity = player.base_entity;
+        ud.owner_user_id = owner_user_id;
+        ud.tier = tier;
+        ud.initial_hp = initial_hp;
+
+        spawned := Scene.instantiate(
+            prefab,
+            spawn_pos,
+            ud,
+            proc(spawned_entity: Entity, userdata: Object) {
+                ud := userdata.(Spawn_Turret_Userdata);
+                if ud == null return;
+                if spawned_entity == null || spawned_entity.self == null return;
+
+                if ud.base_entity != null && ud.base_entity.self != null {
+                    spawned_entity->set_parent(ud.base_entity, true);
+                }
+
+                turret := spawned_entity->get_component(Turret);
+                if turret == null {
+                    turret = spawned_entity->add_component(Turret);
+                }
+
+                if turret != null {
+                    turret->server_init(ud.owner_user_id, ud.tier, ud.initial_hp);
+                }
+                else {
+                    log_warning("GameManager: Turret prefab is missing Turret component on its root entity", {});
+                }
+            }
+        );
+
+        if spawned == null || spawned.self == null {
+            return false;
+        }
+
+        if save_after_spawn {
+            turret_save_player_data(player);
+        }
+        return true;
     }
 
     find_press_operator_for_base :: method(base: PlayerBase, lane_index: s64) -> PressOperator {
@@ -2231,6 +2377,7 @@ GameManager :: class : Component {
             if p.base_spawn_index < 0 || p.base_spawn_index >= MAX_BASES {
                 p.base_spawn_index = -1;
                 p.base_entity = null;
+                p.turrets_loaded_from_save = false;
                 continue;
             }
 
@@ -2251,6 +2398,7 @@ GameManager :: class : Component {
                 // Reserved index but no base entity (e.g., prefab missing or base destroyed)
                 // Treat as no-base so we can attempt a respawn.
                 p.base_entity = null;
+                p.turrets_loaded_from_save = false;
             }
         }
 
@@ -2279,6 +2427,7 @@ GameManager :: class : Component {
                 }
                 p.base_spawn_index = -1;
                 p.base_entity = null;
+                p.turrets_loaded_from_save = false;
                 continue;
             }
 
@@ -2310,6 +2459,7 @@ GameManager :: class : Component {
                 // Reserve the slot anyway so we don't stack all players on the same spawn.
                 p.base_spawn_index = free_idx;
                 p.base_entity = null;
+                p.turrets_loaded_from_save = false;
                 used[free_idx] = true;
                 continue;
             }
@@ -2374,6 +2524,7 @@ GameManager :: class : Component {
 
             p.base_spawn_index = free_idx;
             p.base_entity = spawned;
+            p.turrets_loaded_from_save = false;
             used[free_idx] = true;
         }
     }

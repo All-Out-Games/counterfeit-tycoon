@@ -42,7 +42,10 @@
     "colorist_prefab_path": "Colorist.prefab",
     "stamper_prefab_path": "Stamper.prefab",
     "courier_prefab_path": "Courier.prefab",
-    "woodchipper_prefab_path": "Woodchipper.prefab"
+    "woodchipper_prefab_path": "Woodchipper.prefab",
+    "turret_tier_1_prefab_path": "TurretTier1.prefab",
+    "turret_tier_2_prefab_path": "TurretTier2.prefab",
+    "turret_tier_3_prefab_path": "TurretTier3.prefab"
   }
 },
 {

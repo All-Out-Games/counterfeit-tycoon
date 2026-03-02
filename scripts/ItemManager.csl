@@ -67,6 +67,28 @@ ItemManager :: struct {
                 Item_Instance
             );
             defs->append(finished_bills);
+
+            // Turrets (icons are temporary placeholders until final art is provided).
+            turret_tier_1 := Items.register_item_definition(
+                {TURRET_ITEM_ID_TIER_1, "Turret Tier 1", get_asset(Texture_Asset, "Items/Turret1.png"), 16, .UNCOMMON},
+                Item_Definition,
+                Item_Instance
+            );
+            defs->append(turret_tier_1);
+
+            turret_tier_2 := Items.register_item_definition(
+                {TURRET_ITEM_ID_TIER_2, "Turret Tier 2", get_asset(Texture_Asset, "Items/Turret2.png"), 16, .RARE},
+                Item_Definition,
+                Item_Instance
+            );
+            defs->append(turret_tier_2);
+
+            turret_tier_3 := Items.register_item_definition(
+                {TURRET_ITEM_ID_TIER_3, "Turret Tier 3", get_asset(Texture_Asset, "Items/Turret3.png"), 16, .EPIC},
+                Item_Definition,
+                Item_Instance
+            );
+            defs->append(turret_tier_3);
         }
 
         return defs;

@@ -30,6 +30,7 @@ weapon_shop_weapon_types :: proc() -> [WEAPONS_SHOP_WEAPON_COUNT]Weapon_Type {
 }
 
 WEAPONS_SHOP_AMMO_COUNT :: 5;
+WEAPONS_SHOP_TURRET_COUNT :: 3;
 
 ammo_shop_ammo_types :: proc() -> [WEAPONS_SHOP_AMMO_COUNT]s64 {
     return {
@@ -39,6 +40,14 @@ ammo_shop_ammo_types :: proc() -> [WEAPONS_SHOP_AMMO_COUNT]s64 {
         0,  // AR Rounds (Assault Rifle, SMG)
         8,  // LMG Rounds (Gatling Gun)
         2,  // Explosive Rounds (Explosive Shotgun)
+    };
+}
+
+turret_shop_item_ids :: proc() -> [WEAPONS_SHOP_TURRET_COUNT]string {
+    return {
+        TURRET_ITEM_ID_TIER_1,
+        TURRET_ITEM_ID_TIER_2,
+        TURRET_ITEM_ID_TIER_3,
     };
 }
 
@@ -224,6 +233,91 @@ weapon_shop_price :: proc(wt: Weapon_Type) -> s64 {
         case .NONE:                   return 0;
     }
     return 0;
+}
+
+turret_shop_price_by_item_id :: proc(item_id: string) -> s64 {
+    switch item_id {
+        case TURRET_ITEM_ID_TIER_1: return 1000;
+        case TURRET_ITEM_ID_TIER_2: return 3000;
+        case TURRET_ITEM_ID_TIER_3: return 8000;
+    }
+    return -1;
+}
+
+server_try_buy_item_by_definition :: proc(player: Player, defn: Item_Definition, cost: s64, purchase_label: string) {
+    if player == null return;
+    if defn == null {
+        Notifier.notify(player, "Item not available.");
+        return;
+    }
+
+    inv := player.default_inventory;
+    if inv == null || inv.self == null {
+        Notifier.notify(player, "No inventory available.");
+        return;
+    }
+
+    room := Items.calculate_room_in_inventory_for_item(defn, inv);
+    if room < 1 {
+        Notifier.notify(player, "Inventory full!");
+        return;
+    }
+
+    if cost < 0 {
+        Notifier.notify(player, "Can't buy that item right now.");
+        return;
+    }
+
+    if cost > 0 {
+        if !Economy.can_withdraw_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost) {
+            Notifier.notify(player, "Not enough Coins!");
+            return;
+        }
+        Economy.withdraw_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost);
+    }
+
+    item := Items.create_item_instance(defn, 1);
+    if item == null || item.self == null {
+        if cost > 0 {
+            Economy.deposit_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost);
+        }
+        Notifier.notify(player, "Purchase failed.");
+        return;
+    }
+
+    will_destroy: bool;
+    if Items.can_move_item_to_inventory(item, inv, ref will_destroy) {
+        Items.move_item_to_inventory(item, inv);
+        if cost > 0 {
+            Notifier.notify(player, "Bought % for % Coins.", {defn->get_name(), format_int_with_commas(cost)});
+        }
+        else {
+            Notifier.notify(player, "Claimed % (Free).", {defn->get_name()});
+        }
+
+        // Reuse existing purchase FX path with a generic icon key.
+        server_request_purchase_fx(player, "Items/Coin.png");
+        return;
+    }
+
+    Items.destroy_item_instance(item);
+    if cost > 0 {
+        Economy.deposit_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost);
+    }
+    Notifier.notify(player, "Inventory full!");
+}
+
+server_try_buy_turret_item :: proc(player: Player, item_id: string) {
+    if player == null return;
+
+    defn := ItemManager.TryFindItem(item_id);
+    if defn == null {
+        Notifier.notify(player, "Turret item not available.");
+        return;
+    }
+
+    cost := turret_shop_price_by_item_id(item_id);
+    server_try_buy_item_by_definition(player, defn, cost, "Turret");
 }
 
 ammo_shop_price :: proc(ammo_type_index: s64) -> s64 {
@@ -752,6 +846,55 @@ draw_weapon_shop_item_card :: proc(player: Player, rect: Rect, wt: Weapon_Type) 
     }
 }
 
+draw_turret_shop_item_card :: proc(player: Player, rect: Rect, item_id: string) {
+    if player == null return;
+    if item_id.count == 0 return;
+
+    defn := ItemManager.TryFindItem(item_id);
+    if defn == null return;
+
+    icon := defn->get_icon();
+    cost := turret_shop_price_by_item_id(item_id);
+    can_afford := cost > 0 && Economy.can_withdraw_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost);
+
+    bs := UI.default_button_settings();
+    bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_2.png"); // Green
+    if !can_afford {
+        bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_3.png"); // Red
+    }
+    bs.press_scaling = 0.25;
+
+    ts := UI.default_text_settings();
+    ts.size = 22;
+    ts.halign = .CENTER;
+    ts.valign = .CENTER;
+    ts.word_wrap = true;
+    ts.do_outline = true;
+    ts.outline_thickness = 2;
+    ts.outline_color = {0, 0, 0, 1};
+
+    result := UI.begin_button(rect, bs, ts, ""); {
+        defer UI.end_button();
+
+        inner := result.rect->inset(12);
+        top := inner->cut_top_unscaled(inner->height() * 0.62);
+        _ := inner->cut_top(6);
+
+        if icon != null {
+            UI.quad(top->fit_aspect(icon->get_aspect()), icon);
+        }
+        else {
+            UI.quad(top, core_globals.white_sprite, {0.2, 0.2, 0.2, 1});
+        }
+
+        UI.text(inner, ts, "%\n$%", {defn->get_name(), format_int_with_commas(cost)});
+    }
+
+    if result.clicked {
+        server_try_buy_turret_item(player, item_id);
+    }
+}
+
 draw_ammo_shop_item_card :: proc(player: Player, rect: Rect, ammo_type_index: s64) {
     if player == null return;
 
@@ -879,7 +1022,8 @@ draw_weapons_shop_modal :: proc(player: Player) {
     // Tab: 0 = Weapons, 1 = Ammo
     if player.weapons_shop_tab == 0 {
         types := weapon_shop_weapon_types();
-        item_count := WEAPONS_SHOP_WEAPON_COUNT;
+        turret_ids := turret_shop_item_ids();
+        item_count := WEAPONS_SHOP_WEAPON_COUNT + WEAPONS_SHOP_TURRET_COUNT;
         page_count := (item_count + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE;
         draw_page_controls(player, page_controls, ref player.weapons_shop_weapon_page, page_count);
 
@@ -906,11 +1050,22 @@ draw_weapons_shop_modal :: proc(player: Player) {
             y2 := 1.0 - row.(float) / GRID_ROWS.(float);
 
             card := grid->subrect(x1, y1, x2, y2)->inset(10);
-            wt := types[idx];
-
-            UI.push_id("weapon_%", {wt.(s64)});
-            defer UI.pop_id();
-            draw_weapon_shop_item_card(player, card, wt);
+            if idx < WEAPONS_SHOP_WEAPON_COUNT {
+                wt := types[idx];
+                UI.push_id("weapon_%", {wt.(s64)});
+                defer UI.pop_id();
+                draw_weapon_shop_item_card(player, card, wt);
+            }
+            else {
+                turret_idx := idx - WEAPONS_SHOP_WEAPON_COUNT;
+                if turret_idx < 0 || turret_idx >= WEAPONS_SHOP_TURRET_COUNT {
+                    continue;
+                }
+                turret_id := turret_ids[turret_idx];
+                UI.push_id("turret_item_%", {turret_idx});
+                defer UI.pop_id();
+                draw_turret_shop_item_card(player, card, turret_id);
+            }
         }
     }
     else {

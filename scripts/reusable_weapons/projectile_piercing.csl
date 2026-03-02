@@ -94,6 +94,42 @@ Piercing_Projectile :: class : Component {
                     }
                 }
             }
+
+            // Turret hit registration (piercing: can hit multiple unique targets).
+            nearby_turrets: [..]Turret;
+            Scene.get_all_components_in_range(pos, 1.25, ref nearby_turrets);
+
+            for hit_turret: nearby_turrets {
+                if hit_turret == null continue;
+                if hit_turret.entity == null || hit_turret.entity.self == null continue;
+
+                // Check if already hit
+                already_hit := false;
+                j := 0;
+                while j < hit_count {
+                    if hit_ids[j] == hit_turret.entity.id {
+                        already_hit = true;
+                    }
+                    j += 1;
+                }
+                if already_hit continue;
+
+                if hit_turret->server_register_weapon_hit(owner_id, damage) {
+                    // Record hit (only if the hit was accepted)
+                    if hit_count < 32 {
+                        hit_ids[hit_count] = hit_turret.entity.id;
+                        hit_count += 1;
+                    }
+
+                    if !mute_hit_sound {
+                        hit_sfx := get_asset(SFX_Asset, "reusable_weapons/sounds/reusable-weapons/bullet_hit.wav");
+                        sfx_desc := SFX.default_sfx_desc();
+                        sfx_desc->set_position(pos);
+                        sfx_desc.range_multiplier = 2.0;
+                        SFX.play(hit_sfx, sfx_desc);
+                    }
+                }
+            }
         }
     }
 }

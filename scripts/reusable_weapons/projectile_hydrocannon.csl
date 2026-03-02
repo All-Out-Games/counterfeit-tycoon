@@ -141,6 +141,33 @@ Hydro_Cannon_Geyser :: class : Component {
                 }
             }
         }
+
+        // Damage nearby turrets.
+        nearby_turrets: [..]Turret;
+        Scene.get_all_components_in_range(pos, GEYSER_HIT_RADIUS, ref nearby_turrets);
+
+        for t: nearby_turrets {
+            if t == null continue;
+            if t.entity == null || t.entity.self == null continue;
+
+            // Check if already hit by this geyser
+            already_hit := false;
+            j := 0;
+            while j < hit_count {
+                if hit_ids[j] == t.entity.id {
+                    already_hit = true;
+                }
+                j += 1;
+            }
+            if already_hit continue;
+
+            if t->server_register_weapon_hit(owner_id, GEYSER_DAMAGE) {
+                if hit_count < 32 {
+                    hit_ids[hit_count] = t.entity.id;
+                    hit_count += 1;
+                }
+            }
+        }
     }
 }
 

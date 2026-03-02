@@ -63,6 +63,17 @@ PlotSign :: class : Component {
         if local_player == null {
             return;
         }
+        if local_player.entity == null || local_player.entity.self == null {
+            return;
+        }
+
+        // Distance cull: skip sign processing when local player is far away.
+        CULL_DISTANCE_UNITS :: 15.0;
+        cull_distance_sq := CULL_DISTANCE_UNITS * CULL_DISTANCE_UNITS;
+        to_local := entity.world_position - local_player.entity.world_position;
+        if length_squared(to_local) > cull_distance_sq {
+            return;
+        }
 
         owner := find_plot_owner();
         if owner == null {

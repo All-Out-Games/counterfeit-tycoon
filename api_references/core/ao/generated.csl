@@ -78,8 +78,9 @@ Component_Iterator :: struct($T: typeid) {
 } #foreign_struct "Hierarchical_Component_Iterator<Component_Base>" #size 40
 
 Sprite_Renderer :: class : Component {
-    set_texture :: method(texture: Texture_Asset) #foreign "sprite_renderer_set_texture";
-    get_texture :: method() -> Texture_Asset #foreign "sprite_renderer_get_texture";
+    set_texture  :: method(texture: Texture_Asset) #foreign "sprite_renderer_set_texture";
+    get_texture  :: method() -> Texture_Asset #foreign "sprite_renderer_get_texture";
+    set_material :: method(material: Material, transfer_ownership: bool) #foreign "sprite_renderer_set_material";
     color: v4           #offset 128;
     depth_offset: float #offset 144;
     layer: s32          #offset 148;
@@ -113,7 +114,10 @@ Navmesh_Loop :: class : Component {
 } #foreign_struct "Navmesh_Loop" #size 168
 
 Tilemap_Component :: class : Component {
-} #foreign_struct "Tilemap_Component" #size 264
+} #foreign_struct "Tilemap_Component" #size 256
+
+Terrain_Component :: class : Component {
+} #foreign_struct "Terrain_Component" #size 376
 
 Interactable :: class : Component {
     get_text      :: method() -> string   #foreign "interactable_get_text";
@@ -164,6 +168,7 @@ Light :: class : Component {
 
 Spine_Instance_Base :: class {
     set_color_replace_color :: method(color: Color_Replace_Color) #foreign "spine_instance_set_color_replace_color";
+    set_material            :: method(material: Material, transfer_ownership: bool) #foreign "spine_instance_set_material";
     self:             Spine_Instance #read_only #offset 152;
     state_machine:    State_Machine  #read_only #offset 48;
     color_multiplier: v4                        #offset 72;
@@ -228,6 +233,20 @@ Prefab_Asset :: class : Asset {
 
 Font_Asset :: class : Asset {
 } #foreign_struct "Font"
+
+Shader_Asset :: class : Asset {
+} #foreign_struct "Shader"
+
+Material :: class {
+    create      :: proc(shader: Shader_Asset) -> Material #foreign "material_create";
+    destroy     :: method() #foreign "material_destroy";
+    set_float   :: method(name: string, value: float) #foreign "material_set_float";
+    set_float2  :: method(name: string, value: v2) #foreign "material_set_float2";
+    set_float3  :: method(name: string, value: v3) #foreign "material_set_float3";
+    set_float4  :: method(name: string, value: v4) #foreign "material_set_float4";
+    set_int     :: method(name: string, value: int) #foreign "material_set_int";
+    set_texture :: method(name: string, texture: Texture_Asset) #foreign "material_set_texture";
+} #gc_root #foreign_struct "Pooled_User_Material" #size 32
 
 State_Machine :: class {
     create :: proc() -> State_Machine #foreign "state_machine_create";

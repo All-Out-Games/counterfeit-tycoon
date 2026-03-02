@@ -409,10 +409,6 @@ get_mouse_world_position :: proc() -> v2 #foreign;
 
 get_frame_number :: proc() -> u64 #foreign;
 
-Material :: class {
-    // todo(josh): @Incomplete: @CSL: we haven't exposed material stuff yet!
-}
-
 Scroll_View_Result :: struct {
     internal_content_rect: Rect;
     content_rect:          Rect;
