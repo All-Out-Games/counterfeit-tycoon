@@ -35,35 +35,26 @@ ManagerUnlock :: class : Interactable {
     find_child_spine_animator :: method() -> Spine_Animator {
         // Find the first descendant that has a Spine_Animator.
         // (Prefab convention: Spine_Animator lives on a child entity.)
-        is_descendant_of :: proc(child: Entity, ancestor: Entity) -> bool {
-            if child == null return false;
-            if child.self == null return false;
-            if ancestor == null return false;
-            if ancestor.self == null return false;
-
-            cur := child;
-            for step: 0..48 {
-                _ := step;
-                if cur == null break;
-                if cur.self == null break;
-                if cur == ancestor return true;
-                cur = cur.parent;
+        find_in_subtree :: proc(root: Entity) -> Spine_Animator {
+            if root == null return null;
+            if root.self == null return null;
+            current := root.first_child;
+            while current != null {
+                if current.self != null {
+                    sp := current->get_component(Spine_Animator);
+                    if sp != null return sp;
+                    found := find_in_subtree(current);
+                    if found != null return found;
+                }
+                current = current.next_sibling;
             }
-            return false;
+            return null;
         }
 
-        foreach e: entity_iterator() {
-            if e == null continue;
-            if e.self == null continue;
-            if e == entity continue;
-            if !is_descendant_of(e, entity) continue;
-
-            sp := e->get_component(Spine_Animator);
-            if sp != null {
-                return sp;
-            }
+        if entity == null || entity.self == null {
+            return null;
         }
-        return null;
+        return find_in_subtree(entity);
     }
 
     apply_spine_skin_and_crewchsia :: method() {
@@ -246,34 +237,25 @@ ManagerUnlock :: class : Interactable {
             }
         }
 
-        is_descendant_of :: proc(child: Entity, ancestor: Entity) -> bool {
-            if child == null return false;
-            if child.self == null return false;
-            if ancestor == null return false;
-            if ancestor.self == null return false;
-
-            cur := child;
-            for step: 0..48 {
-                _ := step;
-                if cur == null break;
-                if cur.self == null break;
-                if cur == ancestor return true;
-                cur = cur.parent;
+        apply_visual_visibility_in_subtree :: proc(root: Entity, visible: bool) {
+            if root == null return;
+            if root.self == null return;
+            current := root.first_child;
+            while current != null {
+                if current.self != null {
+                    sr := current->get_component(Sprite_Renderer);
+                    sp := current->get_component(Spine_Animator);
+                    if sr != null || sp != null {
+                        current->set_local_enabled(visible);
+                    }
+                    apply_visual_visibility_in_subtree(current, visible);
+                }
+                current = current.next_sibling;
             }
-            return false;
         }
 
-        foreach e: entity_iterator() {
-            if e == null continue;
-            if e.self == null continue;
-            if e == entity continue;
-            if !is_descendant_of(e, entity) continue;
-
-            // Disable common visual components (Sprite_Renderer or Spine_Animator).
-            sr := e->get_component(Sprite_Renderer);
-            sp := e->get_component(Spine_Animator);
-            if sr == null && sp == null continue;
-            e->set_local_enabled(visible);
+        if entity != null && entity.self != null {
+            apply_visual_visibility_in_subtree(entity, visible);
         }
     }
 }

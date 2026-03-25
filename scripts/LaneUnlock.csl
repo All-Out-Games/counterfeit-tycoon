@@ -114,35 +114,26 @@ LaneUnlock :: class : Interactable {
             }
         }
 
-        is_descendant_of :: proc(child: Entity, ancestor: Entity) -> bool {
-            if child == null return false;
-            if child.self == null return false;
-            if ancestor == null return false;
-            if ancestor.self == null return false;
+        set_sprite_descendants_enabled :: proc(e: Entity, visible: bool) {
+            if e == null return;
 
-            cur := child;
-            for step: 0..48 {
-                _ := step;
-                if cur == null break;
-                if cur.self == null break;
-                if cur == ancestor return true;
-                cur = cur.parent;
+            sr := e->get_component(Sprite_Renderer);
+            if sr != null {
+                e->set_local_enabled(visible);
             }
-            return false;
+
+            current := e.first_child;
+            while current != null {
+                set_sprite_descendants_enabled(current, visible);
+                current = current.next_sibling;
+            }
         }
 
         // Disable only child entities that contain Sprite_Renderers.
-        foreach e: entity_iterator() {
-            if e == null continue;
-            if e.self == null continue;
-            if e == entity continue;
-            if !is_descendant_of(e, entity) continue;
-
-            sr := e->get_component(Sprite_Renderer);
-            if sr == null continue;
-
-            // Use entity-local enable as a proxy for sprite renderer enable.
-            e->set_local_enabled(visible);
+        child := entity.first_child;
+        while child != null {
+            set_sprite_descendants_enabled(child, visible);
+            child = child.next_sibling;
         }
     }
 }

@@ -478,23 +478,6 @@ GameManager :: class : Component {
                 if spawned_entity == null return;
                 if spawned_entity.self == null return;
 
-                is_descendant_of :: proc(child: Entity, ancestor: Entity) -> bool {
-                    if child == null return false;
-                    if child.self == null return false;
-                    if ancestor == null return false;
-                    if ancestor.self == null return false;
-
-                    cur := child;
-                    for step: 0..48 {
-                        _ := step;
-                        if cur == null break;
-                        if cur.self == null break;
-                        if cur == ancestor return true;
-                        cur = cur.parent;
-                    }
-                    return false;
-                }
-
                 // Parent under the base so it is destroyed when the base is destroyed.
                 if ud.base_entity != null && ud.base_entity.self != null {
                     spawned_entity->set_parent(ud.base_entity, true);
@@ -513,15 +496,12 @@ GameManager :: class : Component {
                 // Stations inside Lane.prefab must have their `lane_index` set correctly so they
                 // save/load lane-specific keys (otherwise they default to Lane 1 values).
                 // After setting lane_index, force a re-load from Save for this lane.
-                pb := get_parent_player_base(spawned_entity);
-                if pb != null {
-                    foreach m: component_iterator(Paper_Mill) {
-                        if m == null continue;
-                        if m.entity == null || m.entity.self == null continue;
-                        if get_parent_player_base(m.entity) != pb continue;
-                        if !is_descendant_of(m.entity, spawned_entity) continue;
+                init_lane_stations :: proc(e: Entity, lane_index: s64) {
+                    if e == null return;
 
-                        m.lane_index = ud.lane_index;
+                    m := e->get_component(Paper_Mill);
+                    if m != null {
+                        m.lane_index = lane_index;
                         m.loaded_from_save = false;
                         m.loaded_for_user_id = {};
                         m.stored_wood = 0;
@@ -529,13 +509,10 @@ GameManager :: class : Component {
                         m.convert_timer = 0;
                         m->server_try_load_from_save();
                     }
-                    foreach b: component_iterator(Blank_Bill_Press) {
-                        if b == null continue;
-                        if b.entity == null || b.entity.self == null continue;
-                        if get_parent_player_base(b.entity) != pb continue;
-                        if !is_descendant_of(b.entity, spawned_entity) continue;
 
-                        b.lane_index = ud.lane_index;
+                    b := e->get_component(Blank_Bill_Press);
+                    if b != null {
+                        b.lane_index = lane_index;
                         b.loaded_from_save = false;
                         b.loaded_for_user_id = {};
                         b.stored_paper = 0;
@@ -543,13 +520,10 @@ GameManager :: class : Component {
                         b.convert_timer = 0;
                         b->server_try_load_from_save();
                     }
-                    foreach c: component_iterator(Colored_Bill_Press) {
-                        if c == null continue;
-                        if c.entity == null || c.entity.self == null continue;
-                        if get_parent_player_base(c.entity) != pb continue;
-                        if !is_descendant_of(c.entity, spawned_entity) continue;
 
-                        c.lane_index = ud.lane_index;
+                    c := e->get_component(Colored_Bill_Press);
+                    if c != null {
+                        c.lane_index = lane_index;
                         c.loaded_from_save = false;
                         c.loaded_for_user_id = {};
                         c.stored_blank_bills = 0;
@@ -557,13 +531,10 @@ GameManager :: class : Component {
                         c.convert_timer = 0;
                         c->server_try_load_from_save();
                     }
-                    foreach f: component_iterator(Finished_Bill_Press) {
-                        if f == null continue;
-                        if f.entity == null || f.entity.self == null continue;
-                        if get_parent_player_base(f.entity) != pb continue;
-                        if !is_descendant_of(f.entity, spawned_entity) continue;
 
-                        f.lane_index = ud.lane_index;
+                    f := e->get_component(Finished_Bill_Press);
+                    if f != null {
+                        f.lane_index = lane_index;
                         f.loaded_from_save = false;
                         f.loaded_for_user_id = {};
                         f.stored_colored_bills = 0;
@@ -571,7 +542,15 @@ GameManager :: class : Component {
                         f.convert_timer = 0;
                         f->server_try_load_from_save();
                     }
+
+                    current := e.first_child;
+                    while current != null {
+                        init_lane_stations(current, lane_index);
+                        current = current.next_sibling;
+                    }
                 }
+
+                init_lane_stations(spawned_entity, ud.lane_index);
 
                 // Newly spawned stations should reflect saved upgrade levels immediately.
                 gm := ud.gm;
