@@ -320,7 +320,7 @@ turret_handle_inventory_drop :: proc(player: Player, dropped_item: Item_Instance
         Items.destroy_item_instance(dropped_item, 1);
     }
 
-    Notifier.notify(player, "Placed Tier % Turret.", {tier});
+    //Notifier.notify(player, "Placed Tier % Turret.", {tier});
     return true;
 }
 
@@ -722,7 +722,7 @@ Turret :: class : Component {
 
         shooter := turret_find_player_by_entity_id(shooter_entity_id);
         if shooter != null {
-            Notifier.notify(shooter, "Destroyed enemy turret.");
+            //Notifier.notify(shooter, "Destroyed enemy turret.");
         }
 
         // Match Truck destruction feedback with the same explosion prefab.

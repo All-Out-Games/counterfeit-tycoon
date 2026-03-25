@@ -101,7 +101,7 @@ server_try_upgrade_vault :: proc(player: Player) {
     // Cosmetic purchase SFX (local-only for owning client) via purchase FX pipeline.
     server_request_purchase_fx(player, UPGRADES_PURCHASE_FX_ICON_PATH);
 
-    Notifier.notify(player, "Vault upgraded to Level %.", {new_level});
+    //Notifier.notify(player, "Vault upgraded to Level %.", {new_level});
 
     // Quest tracking: vault upgraded.
     quest_on_upgrade(player);
@@ -523,10 +523,10 @@ server_grant_station_upgrade_to_level :: proc(player: Player, lane_index: s64, k
     server_request_purchase_fx(player, UPGRADES_SPARKS_PURCHASE_FX_ICON_PATH);
 
     if purchase_source.count != 0 {
-        Notifier.notify(player, "% upgraded to Level % (Lane %) (%).", {station_display_name(kind), lvl, lane_index + 1, purchase_source});
+        //Notifier.notify(player, "% upgraded to Level % (Lane %) (%).", {station_display_name(kind), lvl, lane_index + 1, purchase_source});
     }
     else {
-        Notifier.notify(player, "% upgraded to Level % (Lane %).", {station_display_name(kind), lvl, lane_index + 1});
+       // Notifier.notify(player, "% upgraded to Level % (Lane %).", {station_display_name(kind), lvl, lane_index + 1});
     }
 
     // Quest tracking: machine upgraded.

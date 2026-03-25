@@ -24,6 +24,6 @@
   "internal_component_type": "Sprite_Renderer",
   "data": {
     "texture": "road_mid_horiz_9c25c798ef417b3f.png",
-    "layer": -2
+    "layer": -3
   }
 }

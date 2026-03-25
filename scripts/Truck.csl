@@ -330,39 +330,39 @@ Truck :: class : Interactable {
         }
 
         if !is_owner_of_parent_base(entity, player) {
-            Notifier.notify(player, "This truck belongs to someone else.");
+          //  Notifier.notify(player, "This truck belongs to someone else.");
             return;
         }
 
         if agent == null {
             agent = entity->get_component(Movement_Agent);
             if agent == null {
-                Notifier.notify(player, "Truck can't move (missing Movement Agent).");
+               // Notifier.notify(player, "Truck can't move (missing Movement Agent).");
                 return;
             }
         }
 
         base := get_parent_player_base(entity);
         if base == null {
-            Notifier.notify(player, "Truck has no owner base.");
+          //  Notifier.notify(player, "Truck has no owner base.");
             return;
         }
 
         vault := find_vault_for_base(base);
         if vault == null {
-            Notifier.notify(player, "No Piggy Bank found for your base.");
+           // Notifier.notify(player, "No Piggy Bank found for your base.");
             return;
         }
 
         bills := vault.stored_finished_bills;
         if bills <= 0 {
-            Notifier.notify(player, "No finished bills in your Piggy Bank.");
+           // Notifier.notify(player, "No finished bills in your Piggy Bank.");
             return;
         }
 
         bank := find_closest_bank_to_position(entity.world_position);
         if bank == null || bank.entity == null || bank.entity.self == null {
-            Notifier.notify(player, "No bank found.");
+           // Notifier.notify(player, "No bank found.");
             return;
         }
 
@@ -374,7 +374,7 @@ Truck :: class : Interactable {
             take = max_take;
         }
         if take <= 0 {
-            Notifier.notify(player, "Truck can't carry any Finished Bills right now.");
+           // Notifier.notify(player, "Truck can't carry any Finished Bills right now.");
             return;
         }
 
@@ -721,7 +721,7 @@ Truck :: class : Interactable {
             }
         }
         if shooter != null {
-            Notifier.notify(shooter, "Destroyed truck! The bills spilled out.");
+            //Notifier.notify(shooter, "Destroyed truck! The bills spilled out.");
 
             // Quest tracking: truck destroyed by shooter.
             quest_on_truck_destroyed(shooter);
@@ -1026,7 +1026,7 @@ Truck :: class : Interactable {
 
         owner := find_connected_player_by_user_id(owner_user_id);
         if owner != null {
-            Notifier.notify(owner, "Truck got stuck and returned the bills to your Piggy Bank.");
+           // Notifier.notify(owner, "Truck got stuck and returned the bills to your Piggy Bank.");
         }
 
         carried_finished_bills = 0;

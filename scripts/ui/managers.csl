@@ -211,10 +211,10 @@ server_grant_manager_unlock :: proc(player: Player, lane_index: s64, kind: Manag
     }
 
     if purchase_source.count != 0 {
-        Notifier.notify(player, "Unlocked % (Lane %) (%).", {manager_display_name(kind), lane_index + 1, purchase_source});
+        //Notifier.notify(player, "Unlocked % (Lane %) (%).", {manager_display_name(kind), lane_index + 1, purchase_source});
     }
     else {
-        Notifier.notify(player, "Unlocked % (Lane %).", {manager_display_name(kind), lane_index + 1});
+       // Notifier.notify(player, "Unlocked % (Lane %).", {manager_display_name(kind), lane_index + 1});
     }
 
     return true;

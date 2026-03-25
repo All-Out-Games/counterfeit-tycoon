@@ -72,9 +72,37 @@ ao_late_update :: proc(dt: float) {
 }
 
 COIN_CURRENCY :: "Coins";
+SpeedMod: float = 1.0;
 
 STARTER_COINS_AMOUNT :: 500;
 STARTER_COINS_GRANTED_SAVE_KEY :: "starter_coins_granted";
+
+get_speed_mod :: proc() -> float {
+    if SpeedMod <= 0.0 {
+        return 1.0;
+    }
+    return SpeedMod;
+}
+
+apply_speed_mod_to_seconds :: proc(seconds_per_item: float) -> float {
+    speed_mod := get_speed_mod();
+    if seconds_per_item <= 0.0 {
+        return seconds_per_item;
+    }
+    return seconds_per_item / speed_mod;
+}
+
+server_refresh_all_station_speed_mods :: proc() {
+    if !Game.is_server() return;
+
+    gm := get_game_manager();
+    if gm == null return;
+
+    foreach p: component_iterator(Player) {
+        if p == null continue;
+        gm->server_apply_station_upgrade_levels_for_player(p);
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Lanes progression (per-player, saved)
@@ -185,6 +213,9 @@ g :: proc(player: Player, item_id: string, count: s64 = 1) {
     }
 
     defn := ItemManager.TryFindItem(item_id);
+    if defn == null {
+        defn = find_weapon_or_ammo_item_def(item_id);
+    }
     if defn == null {
         Notifier.notify(player, "Unknown item_id: %", {item_id});
         return;
@@ -368,6 +399,23 @@ reset_player :: proc(player: Player, target: Player = null) {
     }
 } @chat_command @youtuber
 
+// Cheat: change the global production speed multiplier.
+// Usage:
+// - /multi <multiplier>
+multi :: proc(player: Player, multiplier: float) {
+    if player == null return;
+    if !Game.is_server() return;
+
+    if multiplier <= 0.0 {
+        Notifier.notify(player, "Usage: /multi <multiplier> (must be > 0)");
+        return;
+    }
+
+    SpeedMod = multiplier;
+    server_refresh_all_station_speed_mods();
+    Notifier.notify(player, "Set SpeedMod to %.", {format_float(SpeedMod, decimals=2)});
+} @chat_command @youtuber
+
 // Convert any legacy "coin" item stacks into Coin currency.
 // (We used to award Coins as an Item_Definition; now it's a currency.)
 migrate_legacy_coin_items_to_currency :: proc(player: Player) {
@@ -406,7 +454,7 @@ migrate_legacy_coin_items_to_currency :: proc(player: Player) {
 
     if total_converted > 0 {
         Economy.deposit_currency(player, COIN_CURRENCY, total_converted);
-        Notifier.notify(player, "Converted legacy Coin items into % Coins.", {total_converted});
+       // Notifier.notify(player, "Converted legacy Coin items into % Coins.", {total_converted});
     }
 }
 
@@ -1581,7 +1629,10 @@ Player :: class : Player_Base {
             }
         }
 
-        // Draw hotbar and handle equip/unequip
+        // Draw hotbar and handle equip/unequip.
+        // Guard against inherited UI layer state going too low (can break input).
+        UI.push_layer(-99);
+        defer UI.pop_layer();
         options := Inventory_Draw_Options.default();
         hotbar := Items.draw_hotbar(this, default_inventory, options);
         handle_equipped_item_changing(hotbar.selected_item_index);
@@ -1597,7 +1648,7 @@ Player :: class : Player_Base {
             if this->is_local() && !Game.is_server() {
                 local_block_reason := turret_get_local_place_block_reason(this, hotbar.dropped_item, drop_pos);
                 if local_block_reason.count > 0 {
-                    Notifier.notify(local_block_reason);
+                   // Notifier.notify(local_block_reason);
                 }
             }
 

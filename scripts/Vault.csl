@@ -377,12 +377,12 @@ Vault :: class : Interactable {
         }
 
         if taken <= 0 {
-            Notifier.notify(player, "No finished bills to deposit!");
+            //Notifier.notify(player, "No finished bills to deposit!");
             return;
         }
 
         stored_finished_bills += taken;
-        Notifier.notify(player, "Deposited Finished Bills x%", {taken});
+        //Notifier.notify(player, "Deposited Finished Bills x%", {taken});
 
         if stored_finished_bills >= max_capacity {
             stored_finished_bills = max_capacity;

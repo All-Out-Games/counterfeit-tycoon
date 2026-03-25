@@ -117,7 +117,7 @@ server_try_upgrade_harvester_level :: proc(player: Player) {
     player.harvester_level = level + 1;
     Save.set_int(player, HARVESTER_UPGRADES_LEVEL_SAVE_KEY, player.harvester_level);
 
-    Notifier.notify(player, "Harvester upgraded to Level %.", {player.harvester_level});
+   // Notifier.notify(player, "Harvester upgraded to Level %.", {player.harvester_level});
 
     // Quest tracking: harvester upgraded.
     quest_on_upgrade(player);

@@ -828,7 +828,7 @@ server_quest_claim :: proc(player: Player, slot: s64) {
     Save.set_int(player, "quest_rewards_earned", player.quest_rewards_earned);
 
     // Show reward notification.
-    Notifier.notify(player, "+$% Quest Reward!", {format_int_with_commas(reward)});
+    //Notifier.notify(player, "+$% Quest Reward!", {format_int_with_commas(reward)});
 
     // Pick a new quest for this slot.
     quest_pick_new(player, slot);

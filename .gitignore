@@ -16,3 +16,9 @@ res/.preprocessed
 *.psd
 .cursor
 debug.lock
+.agents
+.mcp.json
+AGENTS.md
+ao_debug.lock
+.claude
+.gemini

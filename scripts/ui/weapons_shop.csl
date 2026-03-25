@@ -289,10 +289,10 @@ server_try_buy_item_by_definition :: proc(player: Player, defn: Item_Definition,
     if Items.can_move_item_to_inventory(item, inv, ref will_destroy) {
         Items.move_item_to_inventory(item, inv);
         if cost > 0 {
-            Notifier.notify(player, "Bought % for % Coins.", {defn->get_name(), format_int_with_commas(cost)});
+           // Notifier.notify(player, "Bought % for % Coins.", {defn->get_name(), format_int_with_commas(cost)});
         }
         else {
-            Notifier.notify(player, "Claimed % (Free).", {defn->get_name()});
+           // Notifier.notify(player, "Claimed % (Free).", {defn->get_name()});
         }
 
         // Reuse existing purchase FX path with a generic icon key.
@@ -394,10 +394,10 @@ server_try_buy_weapon :: proc(player: Player, wt: Weapon_Type) {
     if Items.can_move_item_to_inventory(item, inv, ref will_destroy) {
         Items.move_item_to_inventory(item, inv);
         if cost > 0 {
-            Notifier.notify(player, "Bought % for % Coins.", {defn->get_name(), format_int_with_commas(cost)});
+           // Notifier.notify(player, "Bought % for % Coins.", {defn->get_name(), format_int_with_commas(cost)});
         }
         else {
-            Notifier.notify(player, "Claimed % (Free).", {defn->get_name()});
+           // Notifier.notify(player, "Claimed % (Free).", {defn->get_name()});
         }
 
         // Quest tracking: weapon bought.
@@ -588,7 +588,7 @@ server_try_buy_ammo :: proc(player: Player, ammo_type_index: s64) {
         remaining -= chunk;
     }
 
-    Notifier.notify(player, "Bought % x% for % Coins.", {info.name, WEAPONS_SHOP_AMMO_BUY_AMOUNT, format_int_with_commas(cost)});
+    //Notifier.notify(player, "Bought % x% for % Coins.", {info.name, WEAPONS_SHOP_AMMO_BUY_AMOUNT, format_int_with_commas(cost)});
 
     // Cosmetic purchase FX (icon -> hotbar) on the owning client.
     server_request_purchase_fx(player, info.icon_path);

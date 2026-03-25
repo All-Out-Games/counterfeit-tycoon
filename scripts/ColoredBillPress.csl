@@ -176,6 +176,8 @@ Colored_Bill_Press :: class : Interactable {
             seconds_per_colored_bill = seconds_per_colored_bill / boost_mult;
         }
 
+        seconds_per_colored_bill = apply_speed_mod_to_seconds(seconds_per_colored_bill);
+
         if seconds_per_colored_bill < 0.05 {
             seconds_per_colored_bill = 0.05;
         }
@@ -193,7 +195,7 @@ Colored_Bill_Press :: class : Interactable {
 
         // Server-authoritative safety check (in case client-side can_use is bypassed).
         if Game.is_server() && !is_owner_of_parent_base(entity, player) {
-            Notifier.notify(player, "This machine belongs to someone else.");
+            //Notifier.notify(player, "This machine belongs to someone else.");
             return;
         }
 
@@ -209,7 +211,7 @@ Colored_Bill_Press :: class : Interactable {
         cap := machine_queue_cap_for_level(upgrade_level);
         room := cap - stored_blank_bills;
         if room <= 0 {
-            Notifier.notify(player, "Machine queue is full!");
+            //Notifier.notify(player, "Machine queue is full!");
             return;
         }
 
@@ -228,12 +230,12 @@ Colored_Bill_Press :: class : Interactable {
         }
 
         if taken <= 0 {
-            Notifier.notify(player, "No blank bills to deposit!");
+            //Notifier.notify(player, "No blank bills to deposit!");
             return;
         }
 
         stored_blank_bills += taken;
-        Notifier.notify(player, "Deposited Blank Bills x%", {taken});
+       // Notifier.notify(player, "Deposited Blank Bills x%", {taken});
 
         save_dirty = true;
         server_try_save_to_save(force=true);

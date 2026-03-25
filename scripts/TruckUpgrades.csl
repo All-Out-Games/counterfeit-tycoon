@@ -212,7 +212,7 @@ server_try_upgrade_truck :: proc(player: Player, kind: Truck_Upgrade_Kind) {
     set_player_truck_level(player, kind, new_level);
     Save.set_int(player, truck_upgrade_level_save_key(kind), new_level);
 
-    Notifier.notify(player, "Truck % upgraded to Level %.", {truck_upgrade_display_name(kind), new_level});
+    //Notifier.notify(player, "Truck % upgraded to Level %.", {truck_upgrade_display_name(kind), new_level});
 
     // Quest tracking: truck upgraded.
     quest_on_upgrade(player);

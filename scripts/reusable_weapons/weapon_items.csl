@@ -352,3 +352,29 @@ get_ammo_def_for_weapon :: proc(wt: Weapon_Type) -> Item_Definition {
     if config.ammo_type_index < 0 return null;
     return g_ammo_item_defs[config.ammo_type_index];
 }
+
+find_weapon_or_ammo_item_def :: proc(item_id: string) -> Item_Definition {
+    if item_id == "" return null;
+
+    init_weapon_items();
+
+    i := 0;
+    while i < WEAPON_COUNT {
+        defn := g_weapon_item_defs[i];
+        if defn != null && defn->get_id() == item_id {
+            return defn;
+        }
+        i += 1;
+    }
+
+    i = 0;
+    while i < AMMO_TYPE_COUNT {
+        defn := g_ammo_item_defs[i];
+        if defn != null && defn->get_id() == item_id {
+            return defn;
+        }
+        i += 1;
+    }
+
+    return null;
+}

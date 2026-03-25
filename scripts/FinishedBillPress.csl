@@ -176,6 +176,8 @@ Finished_Bill_Press :: class : Interactable {
             seconds_per_finished_bill = seconds_per_finished_bill / boost_mult;
         }
 
+        seconds_per_finished_bill = apply_speed_mod_to_seconds(seconds_per_finished_bill);
+
         if seconds_per_finished_bill < 0.05 {
             seconds_per_finished_bill = 0.05;
         }
@@ -209,7 +211,7 @@ Finished_Bill_Press :: class : Interactable {
         cap := machine_queue_cap_for_level(upgrade_level);
         room := cap - stored_colored_bills;
         if room <= 0 {
-            Notifier.notify(player, "Machine queue is full!");
+           // Notifier.notify(player, "Machine queue is full!");
             return;
         }
 
@@ -228,12 +230,12 @@ Finished_Bill_Press :: class : Interactable {
         }
 
         if taken <= 0 {
-            Notifier.notify(player, "No colored bills to deposit!");
+           // Notifier.notify(player, "No colored bills to deposit!");
             return;
         }
 
         stored_colored_bills += taken;
-        Notifier.notify(player, "Deposited Colored Bills x%", {taken});
+       // Notifier.notify(player, "Deposited Colored Bills x%", {taken});
 
         save_dirty = true;
         server_try_save_to_save(force=true);

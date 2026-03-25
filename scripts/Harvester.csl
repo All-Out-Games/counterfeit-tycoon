@@ -265,7 +265,7 @@ Harvester :: class : Interactable {
 
         // Safety: verify ownership on the server.
         if !is_owner_of_parent_base(entity, player) {
-            Notifier.notify(player, "This harvester belongs to someone else.");
+           // Notifier.notify(player, "This harvester belongs to someone else.");
             return;
         }
 
@@ -287,7 +287,7 @@ Harvester :: class : Interactable {
             agent = entity->get_component(Movement_Agent);
             if agent == null {
                 if Game.is_server() {
-                    Notifier.notify(player, "Harvester can't move (missing Movement Agent).");
+                  //  Notifier.notify(player, "Harvester can't move (missing Movement Agent).");
                 }
                 return;
             }
@@ -304,7 +304,7 @@ Harvester :: class : Interactable {
         tree := find_closest_treecutting_tree_to_position(entity.world_position);
         if tree == null {
             if Game.is_server() {
-                Notifier.notify(player, "No trees found.");
+               // Notifier.notify(player, "No trees found.");
             }
             return;
         }
@@ -877,7 +877,7 @@ Harvester :: class : Interactable {
             remaining -= give_count;
         }
 
-        Notifier.notify(player, "Collected Wood x%.", {carried_wood});
+       // Notifier.notify(player, "Collected Wood x%.", {carried_wood});
     }
 
     draw_carried_ui :: method() {
