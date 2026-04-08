@@ -1,6 +1,6 @@
 ---
 name: navmeshes-and-collision
-description: "Reference this when implementing pathfinding, movement constraints, or navmesh-based spawning."
+description: Reference this when implementing pathfinding, movement constraints, or navmesh-based spawning.
 ---
 # CSL Navmesh System
 
@@ -30,15 +30,15 @@ point: v2 = {10, 10};
 result: v2;
 triangle_hint: s64;  // 0 = not set; reuse for repeated nearby queries for speed
 
-if navmesh->try_find_closest_point_on_navmesh(point, ref result, ref triangle_hint) {
-    spawn_entity->set_local_position(result);
+if navmesh.try_find_closest_point_on_navmesh(point, ref result, ref triangle_hint) {
+    spawn_entity.set_local_position(result);
 }
 ```
 
 ### Pathfinding with Movement_Agent
 
 ```csl
-result := agent->set_path_target(target, speed);
+result := agent.set_path_target(target, speed);
 
 if result.success {
     // result.next_point - next waypoint
@@ -53,8 +53,8 @@ if result.success {
 ### Locking Movement to a Navmesh
 
 ```csl
-agent->set_navmesh_to_lock_to(navmesh);  // constrains agent to navmesh each frame
-agent->set_navmesh_to_lock_to(null);     // clear constraint
+agent.set_navmesh_to_lock_to(navmesh);  // constrains agent to navmesh each frame
+agent.set_navmesh_to_lock_to(null);     // clear constraint
 ```
 
 ### Movement_Agent Properties
@@ -101,7 +101,7 @@ NPC :: class : Component {
 
     ao_update :: method(dt: float) {
         if !#alive(target) return;  // #alive checks entity validity
-        result := agent->set_path_target(target.world_position, agent.movement_speed);
+        result := agent.set_path_target(target.world_position, agent.movement_speed);
     }
 }
 ```

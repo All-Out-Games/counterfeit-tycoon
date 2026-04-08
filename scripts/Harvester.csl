@@ -79,7 +79,7 @@ find_closest_treecutting_tree_to_position :: proc(pos: v2) -> Treecutting_Tree {
     foreach t: component_iterator(Treecutting_Tree) {
         if t == null continue;
         if t.entity == null || t.entity.self == null continue;
-        if !t.entity->get_world_enabled() continue;
+        if !t.entity.get_world_enabled() continue;
         if t.is_falling continue;
 
         d2 := length_squared(t.entity.world_position - pos);
@@ -110,7 +110,7 @@ harvester_find_connected_player_by_user_id :: proc(user_id: string) -> Player {
     foreach p: component_iterator(Player) {
         if p == null continue;
         if p.self == null continue;
-        if p->get_user_id() == user_id {
+        if p.get_user_id() == user_id {
             return p;
         }
     }
@@ -164,7 +164,7 @@ Harvester :: class : Interactable {
     last_world_pos_initialized: bool;
 
     ao_start :: method() {
-        this->set_listener(this);
+        this.set_listener(this);
 
         // Defaults (only if not set in editor)
         if move_speed <= 0 {
@@ -217,7 +217,7 @@ Harvester :: class : Interactable {
         harvest_start_time = 0;
         last_collect_time = 0;
 
-        agent = entity->get_component(Movement_Agent);
+        agent = entity.get_component(Movement_Agent);
         if agent == null {
             log_warning("Harvester: missing Movement_Agent on Harvester entity", {});
         }
@@ -284,7 +284,7 @@ Harvester :: class : Interactable {
         }
 
         if agent == null {
-            agent = entity->get_component(Movement_Agent);
+            agent = entity.get_component(Movement_Agent);
             if agent == null {
                 if Game.is_server() {
                   //  Notifier.notify(player, "Harvester can't move (missing Movement Agent).");
@@ -337,7 +337,7 @@ Harvester :: class : Interactable {
         // Movement target should be set on BOTH client and server for smooth motion,
         // but gameplay state changes remain server-authoritative.
         if agent == null {
-            agent = entity->get_component(Movement_Agent);
+            agent = entity.get_component(Movement_Agent);
         }
 
         eff_move_speed := get_effective_move_speed();
@@ -350,7 +350,7 @@ Harvester :: class : Interactable {
                     cur_target := find_treecutting_tree_by_entity_id(target_tree_entity_id);
                     target_valid := false;
                     if cur_target != null && cur_target.entity != null && cur_target.entity.self != null {
-                        if cur_target.entity->get_world_enabled() && !cur_target.is_falling {
+                        if cur_target.entity.get_world_enabled() && !cur_target.is_falling {
                             target_valid = true;
                         }
                     }
@@ -363,10 +363,10 @@ Harvester :: class : Interactable {
                         }
                     }
 
-                    _ := agent->set_path_target(target_world_pos, eff_move_speed);
+                    _ := agent.set_path_target(target_world_pos, eff_move_speed);
                 }
                 case .RETURN_HOME: {
-                    _ := agent->set_path_target(home_world_pos, eff_move_speed);
+                    _ := agent.set_path_target(home_world_pos, eff_move_speed);
                 }
             }
         }
@@ -480,11 +480,11 @@ Harvester :: class : Interactable {
         }
 
         if target_entity != null && target_entity.self != null {
-            spine = target_entity->get_component(Spine_Animator);
+            spine = target_entity.get_component(Spine_Animator);
         }
 
         if spine != null {
-            spine->awaken();
+            spine.awaken();
         }
 
         // Cache initial scale for flip logic.
@@ -509,24 +509,24 @@ Harvester :: class : Interactable {
 
         spine_sm = State_Machine.create();
 
-        is_moving_var := spine_sm->create_variable("is_moving", .BOOL);
-        layer := spine_sm->create_layer("main", 0);
+        is_moving_var := spine_sm.create_variable("is_moving", .BOOL);
+        layer := spine_sm.create_layer("main", 0);
 
         // Note: state names must match animation names in the Spine rig.
         // Requested behavior:
         // - play "idle" when moving
         // - play "idle_pose" when stationary
-        idle_pose_state := layer->create_state("idle_pose", true);
-        idle_state := layer->create_state("move", true);
-        layer->set_initial_state(idle_pose_state);
+        idle_pose_state := layer.create_state("idle_pose", true);
+        idle_state := layer.create_state("move", true);
+        layer.set_initial_state(idle_pose_state);
 
-        to_idle := layer->create_transition(idle_pose_state, idle_state, false);
-        to_idle->create_bool_condition(is_moving_var, true);
+        to_idle := layer.create_transition(idle_pose_state, idle_state, false);
+        to_idle.create_bool_condition(is_moving_var, true);
 
-        to_pose := layer->create_transition(idle_state, idle_pose_state, false);
-        to_pose->create_bool_condition(is_moving_var, false);
+        to_pose := layer.create_transition(idle_state, idle_pose_state, false);
+        to_pose.create_bool_condition(is_moving_var, false);
 
-        spine.instance->set_state_machine(spine_sm, true); // transfer ownership to spine instance
+        spine.instance.set_state_machine(spine_sm, true); // transfer ownership to spine instance
     }
 
     update_spine_state :: method() {
@@ -534,7 +534,7 @@ Harvester :: class : Interactable {
         if spine.instance == null return;
         if spine.instance.state_machine == null return;
 
-        spine.instance.state_machine->set_bool("is_moving", is_moving());
+        spine.instance.state_machine.set_bool("is_moving", is_moving());
     }
 
     update_visuals :: method() {
@@ -562,10 +562,10 @@ Harvester :: class : Interactable {
 
             if target_entity != null && target_entity.self != null {
                 if delta.x > 0.001 {
-                    target_entity->set_local_scale({abs(spine_base_scale.x), spine_base_scale.y});
+                    target_entity.set_local_scale({abs(spine_base_scale.x), spine_base_scale.y});
                 }
                 else if delta.x < -0.001 {
-                    target_entity->set_local_scale({-abs(spine_base_scale.x), spine_base_scale.y});
+                    target_entity.set_local_scale({-abs(spine_base_scale.x), spine_base_scale.y});
                 }
             }
         }
@@ -576,17 +576,17 @@ Harvester :: class : Interactable {
 
     refresh_prompt_text :: method() {
         if carried_wood > 0 {
-            this->set_text("Collect wood");
-            this->set_hold_text("Collecting...");
+            this.set_text("Collect wood");
+            this.set_hold_text("Collecting...");
         }
         else {
             // Only show "Send" when idle; otherwise show "In transit".
             if state == .IDLE_AT_HOME {
-                this->set_text("Send harvester");
-                this->set_hold_text("Dispatching...");
+                this.set_text("Send harvester");
+                this.set_hold_text("Dispatching...");
             } else {
-                this->set_text("Harvester busy");
-                this->set_hold_text("...");
+                this.set_text("Harvester busy");
+                this.set_hold_text("...");
             }
         }
     }
@@ -683,7 +683,7 @@ Harvester :: class : Interactable {
         if carried_wood > 0 return false;
 
         if agent == null {
-            agent = entity->get_component(Movement_Agent);
+            agent = entity.get_component(Movement_Agent);
         }
         if agent == null {
             return false;
@@ -745,7 +745,7 @@ Harvester :: class : Interactable {
         }
         if tree != null {
             owner := harvester_find_connected_player_by_user_id(owner_user_id);
-            tree->on_interact(owner); // player param is ignored by Treecutting_Tree today
+            tree.on_interact(owner); // player param is ignored by Treecutting_Tree today
 
             // Grant guaranteed bonus wood based on Harvester level.
             // Do this server-side only, and clamp to current effective capacity.
@@ -796,10 +796,10 @@ Harvester :: class : Interactable {
         foreach d: component_iterator(Item_Drop_Magnet) {
             if d == null continue;
             if d.entity == null || d.entity.self == null continue;
-            if !d.entity->get_world_enabled() continue;
+            if !d.entity.get_world_enabled() continue;
             if d.defn == null continue;
             if d.count <= 0 continue;
-            if d.defn->get_id() != "wood" continue;
+            if d.defn.get_id() != "wood" continue;
 
             // Respect exclusivity: don't steal another player's exclusive drop.
             if d.exclusive_to_player.count > 0 && d.exclusive_to_player != owner_user_id {
@@ -831,7 +831,7 @@ Harvester :: class : Interactable {
                 // Let the drop play its claim shrink/fade logic rather than hard-destroying mid-frame.
                 d.claimed = true;
                 d.time_claimed = get_time();
-                d.entity->queue_for_destruction(1);
+                d.entity.queue_for_destruction(1);
             }
 
             if carried_wood >= eff_capacity {
@@ -852,7 +852,7 @@ Harvester :: class : Interactable {
         }
 
         // Spawn exclusive drops so other nearby players can't steal the payout.
-        rng := rng_seed_time();
+        rng := make_frame_rng(player.entity.id + entity.id + 261);
 
         remaining := carried_wood;
         if remaining <= 0 {
@@ -871,7 +871,7 @@ Harvester :: class : Interactable {
             spawn_pos := ItemDrops.random_point_on_circle_edge(player.entity.world_position, loot_spawn_radius, ref rng);
             drop := ItemDrops.spawn_from_definition(spawn_pos, wood_defn, give_count);
             if drop != null {
-                drop->set_exclusive(player);
+                drop.set_exclusive(player);
             }
 
             remaining -= give_count;
@@ -893,14 +893,14 @@ Harvester :: class : Interactable {
         pos := entity.world_position + ui_offset;
 
         // Simple row: [icon] [xN]
-        rect := Rect{pos, pos}->grow(0.18, 0.55, 0.18, 0.55);
+        rect := Rect{pos, pos}.grow(0.18, 0.55, 0.18, 0.55);
 
-        icon_rect := rect->cut_left(0.22)->inset(0.01);
+        icon_rect := rect.cut_left(0.22).inset(0.01);
         text_rect := rect;
 
         #static wood_icon := get_asset(Texture_Asset, "Items/Wood.png");
         if wood_icon != null {
-            UI.quad(icon_rect->fit_aspect(wood_icon->get_aspect()), wood_icon);
+            UI.quad(icon_rect.fit_aspect(wood_icon.get_aspect()), wood_icon);
         }
 
         ts := UI.default_text_settings();
@@ -929,7 +929,7 @@ Harvester :: class : Interactable {
     get_effective_level :: method() -> s64 {
         pb := get_parent_player_base(entity);
         if pb != null {
-            owner := pb->get_owner();
+            owner := pb.get_owner();
             if owner != null {
                 return clamp_level(owner.harvester_level);
             }

@@ -85,7 +85,7 @@ Item_Drop_Magnet :: class : Component {
         foreach p: component_iterator(Player) {
             if p == null continue;
             if p.self == null continue;
-            if p->get_user_id() == user_id {
+            if p.get_user_id() == user_id {
                 return p;
             }
         }
@@ -108,27 +108,27 @@ Item_Drop_Magnet :: class : Component {
             if !p.enabled continue;
             if p.entity == null continue;
             if p.entity.self == null continue;
-            if !p.entity->get_world_enabled() continue;
+            if !p.entity.get_world_enabled() continue;
             if p.default_inventory == null continue;
             if p.default_inventory.self == null continue;
             if p.default_inventory.capacity <= 0 continue;
 
             if exclusive_to_player.count > 0 {
-                if p->get_user_id() != exclusive_to_player {
+                if p.get_user_id() != exclusive_to_player {
                     continue;
                 }
             }
 
             // Death lockout: prevent the blocked player from targeting this drop while dead.
             if blocked_player_user_id.count > 0 {
-                if p->get_user_id() == blocked_player_user_id && p.death_pickup_lockout {
+                if p.get_user_id() == blocked_player_user_id && p.death_pickup_lockout {
                     continue;
                 }
             }
 
             // Dropper lockout: prevent the player who dropped this from attracting it briefly.
             if dropped_by_player_user_id.count > 0 {
-                if p->get_user_id() == dropped_by_player_user_id && get_time() < dropped_by_lockout_end_time {
+                if p.get_user_id() == dropped_by_player_user_id && get_time() < dropped_by_lockout_end_time {
                     continue;
                 }
             }
@@ -151,22 +151,22 @@ Item_Drop_Magnet :: class : Component {
         if player.self == null return false;
         if player.entity == null return false;
         if player.entity.self == null return false;
-        if !player.entity->get_world_enabled() return false;
+        if !player.entity.get_world_enabled() return false;
 
-        if exclusive_to_player.count > 0 && player->get_user_id() != exclusive_to_player {
+        if exclusive_to_player.count > 0 && player.get_user_id() != exclusive_to_player {
             return false;
         }
 
         // Death lockout: the blocked player can't pick this up until they respawn.
         if blocked_player_user_id.count > 0 {
-            if player->get_user_id() == blocked_player_user_id && player.death_pickup_lockout {
+            if player.get_user_id() == blocked_player_user_id && player.death_pickup_lockout {
                 return false;
             }
         }
 
         // Dropper lockout: the player who dropped this can't pick it back up yet.
         if dropped_by_player_user_id.count > 0 {
-            if player->get_user_id() == dropped_by_player_user_id && get_time() < dropped_by_lockout_end_time {
+            if player.get_user_id() == dropped_by_player_user_id && get_time() < dropped_by_lockout_end_time {
                 return false;
             }
         }
@@ -175,7 +175,7 @@ Item_Drop_Magnet :: class : Component {
 
         // Special-case: Coin world drops deposit directly into Economy currency.
         // This avoids inventory room checks and lets us spawn "coin showers".
-        if defn->get_id() == "coin" {
+        if defn.get_id() == "coin" {
             if !Game.is_server() {
                 return false;
             }
@@ -209,14 +209,14 @@ Item_Drop_Magnet :: class : Component {
                 ts.color = {1, 1, 1, 1};
                 dn.TextSettings = ts;
 
-                gm.damage_numbers->append(dn);
+                gm.damage_numbers.append(dn);
             }
 
             count = 0;
             claimed = true;
             time_claimed = get_time();
            // Notifier.notify(player, "Picked up Coins x%", {safe_count});
-            entity->queue_for_destruction(1);
+            entity.queue_for_destruction(1);
             return true;
         }
 
@@ -256,7 +256,7 @@ Item_Drop_Magnet :: class : Component {
 
         item_name := "item";
         if defn != null {
-            item_name = defn->get_name();
+            item_name = defn.get_name();
         }
 
         Items.move_item_to_inventory(pickup_item, player.default_inventory);
@@ -283,7 +283,7 @@ Item_Drop_Magnet :: class : Component {
             ts.color = {1, 1, 1, 1};
             dn.TextSettings = ts;
 
-            gm.damage_numbers->append(dn);
+            gm.damage_numbers.append(dn);
         }
 
         // Reduce remaining count for this world drop (supports partial pickup if inventory has limited room).
@@ -296,7 +296,7 @@ Item_Drop_Magnet :: class : Component {
            // Notifier.notify(player, "Picked up % x%", {item_name, give_count});
 
             // Let the pickup animation play before destroying.
-            entity->queue_for_destruction(1);
+            entity.queue_for_destruction(1);
         } else {
             // Partial pickup: keep the drop around for later.
             // Avoid spamming by only notifying on successful transfer.
@@ -308,7 +308,7 @@ Item_Drop_Magnet :: class : Component {
     set_exclusive :: method(player: Player) {
         exclusive_to_player = {};
         if player != null {
-            exclusive_to_player = player->get_user_id();
+            exclusive_to_player = player.get_user_id();
         }
     }
 
@@ -316,7 +316,7 @@ Item_Drop_Magnet :: class : Component {
         // Cosmetic spin (safe to do on all peers)
         if starburst != null {
             rotation := (get_time() - spawn_time) * 30;
-            starburst.entity->set_local_rotation(rotation);
+            starburst.entity.set_local_rotation(rotation);
         }
 
         if !smoothed_initialized {
@@ -327,8 +327,8 @@ Item_Drop_Magnet :: class : Component {
         if claimed {
             if visual_root != null {
                 t := Ease.out_quart(Ease.T(get_time() - time_claimed, 1));
-                visual_root->set_local_scale({lerp(1.0, 0.5, t), lerp(1.0, 1.5, t)});
-                visual_root->set_local_position(lerp(v2{}, v2{0, 2}, t));
+                visual_root.set_local_scale({lerp(1.0, 0.5, t), lerp(1.0, 1.5, t)});
+                visual_root.set_local_position(lerp(v2{}, v2{0, 2}, t));
             }
 
             if sprite != null {
@@ -346,7 +346,7 @@ Item_Drop_Magnet :: class : Component {
         if defn == null {
             // Nothing to give; just destroy.
             if Game.is_server() {
-                entity->destroy();
+                entity.destroy();
             }
             return;
         }
@@ -354,7 +354,7 @@ Item_Drop_Magnet :: class : Component {
         // Despawn after some time to avoid world clutter.
         if Game.is_server() {
             if get_time() - despawn_start_time >= DESPAWN_SECONDS {
-                entity->destroy();
+                entity.destroy();
                 return;
             }
         }
@@ -365,7 +365,7 @@ Item_Drop_Magnet :: class : Component {
             target = find_target_player();
             target_player_user_id = {};
             if target != null {
-                target_player_user_id = target->get_user_id();
+                target_player_user_id = target.get_user_id();
             }
         } else {
             target = find_player_by_user_id(target_player_user_id);
@@ -380,9 +380,9 @@ Item_Drop_Magnet :: class : Component {
             if !Game.is_server() && visual_root != null {
                 settle_t := clamp(15.0 * dt, 0.0, 1.0);
                 smoothed_world_position = lerp(smoothed_world_position, entity.world_position, settle_t);
-                visual_root->set_local_position(smoothed_world_position - entity.world_position);
+                visual_root.set_local_position(smoothed_world_position - entity.world_position);
             } else if Game.is_server() && visual_root != null {
-                visual_root->set_local_position(v2{});
+                visual_root.set_local_position(v2{});
             }
             return;
         }
@@ -408,15 +408,15 @@ Item_Drop_Magnet :: class : Component {
         t := clamp(attract_strength * dt, 0.0, 1.0);
         new_pos := lerp(origin, dest, t);
         if Game.is_server() {
-            entity->set_local_position(new_pos);
+            entity.set_local_position(new_pos);
             smoothed_world_position = new_pos;
             if visual_root != null {
-                visual_root->set_local_position(v2{});
+                visual_root.set_local_position(v2{});
             }
         } else {
             smoothed_world_position = new_pos;
             if visual_root != null {
-                visual_root->set_local_position(smoothed_world_position - entity.world_position);
+                visual_root.set_local_position(smoothed_world_position - entity.world_position);
             }
         }
     }
@@ -445,52 +445,52 @@ ItemDrops :: struct {
         }
 
         dropped_entity := Scene.create_entity();
-        dropped_entity->set_local_position(position);
+        dropped_entity.set_local_position(position);
 
         VISUAL_SCALE :: 0.5;
         DEPTH_OFFSET :: VISUAL_SCALE * 0.7;
 
         visual_root := Scene.create_entity();
-        visual_root->set_parent(dropped_entity, false);
-        visual_root->set_local_scale({VISUAL_SCALE, VISUAL_SCALE});
+        visual_root.set_parent(dropped_entity, false);
+        visual_root.set_local_scale({VISUAL_SCALE, VISUAL_SCALE});
 
         // Item icon
         icon_entity := Scene.create_entity();
-        icon_entity->set_parent(visual_root, false);
-        sprite := icon_entity->add_component(Sprite_Renderer);
-        icon := defn->get_icon();
+        icon_entity.set_parent(visual_root, false);
+        sprite := icon_entity.add_component(Sprite_Renderer);
+        icon := defn.get_icon();
         if icon != null {
-            sprite->set_texture(icon);
+            sprite.set_texture(icon);
             PIXELS_PER_UNIT :: 240.0;
-            icon_scale := PIXELS_PER_UNIT / max(icon->get_width(), icon->get_height()).(float);
-            icon_entity->set_local_scale({icon_scale, icon_scale});
+            icon_scale := PIXELS_PER_UNIT / max(icon.get_width(), icon.get_height()).(float);
+            icon_entity.set_local_scale({icon_scale, icon_scale});
             sprite.depth_offset = -DEPTH_OFFSET / icon_entity.local_scale.y;
         }
 
         // Starburst behind the icon, colored by tier
         starburst_entity := Scene.create_entity();
-        starburst_entity->set_parent(visual_root, false);
-        starburst_sprite := starburst_entity->add_component(Sprite_Renderer);
+        starburst_entity.set_parent(visual_root, false);
+        starburst_sprite := starburst_entity.add_component(Sprite_Renderer);
         #static starburst_texture := get_asset(Texture_Asset, "$AO/ui/starburst.png");
-        starburst_sprite->set_texture(starburst_texture);
+        starburst_sprite.set_texture(starburst_texture);
         starburst_sprite.color = get_tier_color(defn.tier);
         rarity_scale := 0.75 + defn.tier.(float) * 0.125;
-        starburst_entity->set_local_scale({rarity_scale, rarity_scale});
+        starburst_entity.set_local_scale({rarity_scale, rarity_scale});
         starburst_sprite.depth_offset = (-DEPTH_OFFSET + 0.002) / starburst_entity.local_scale.y;
 
         // Shadow
         shadow_entity := Scene.create_entity();
-        shadow_entity->set_parent(visual_root, false);
-        shadow_entity->set_local_position({0, -0.5});
-        shadow_entity->set_local_scale({0.2, 0.05});
-        shadow_sprite := shadow_entity->add_component(Sprite_Renderer);
+        shadow_entity.set_parent(visual_root, false);
+        shadow_entity.set_local_position({0, -0.5});
+        shadow_entity.set_local_scale({0.2, 0.05});
+        shadow_sprite := shadow_entity.add_component(Sprite_Renderer);
         #static circle_sprite := get_asset(Texture_Asset, "$AO/circle.png");
-        shadow_sprite->set_texture(circle_sprite);
+        shadow_sprite.set_texture(circle_sprite);
         shadow_sprite.depth_offset = (-DEPTH_OFFSET + 0.001) / shadow_entity.local_scale.y;
         shadow_sprite.color = {0, 0, 0, 0.5};
 
         // Component
-        dropped := dropped_entity->add_component(Item_Drop_Magnet);
+        dropped := dropped_entity.add_component(Item_Drop_Magnet);
         dropped.defn = defn;
         dropped.count = count;
         dropped.visual_root = visual_root;
@@ -512,7 +512,7 @@ ItemDrops :: struct {
         }
         // NOTE: We intentionally do NOT hold an Item_Instance reference for world drops.
         // We capture the definition + quantity now, destroy the instance, then recreate at pickup time.
-        defn := item->get_definition();
+        defn := item.get_definition();
         if defn == null {
             return null;
         }
@@ -539,7 +539,7 @@ ItemDrops :: struct {
         if dropped_by == null return dropped;
         if dropped_by.self == null return dropped;
 
-        dropped.dropped_by_player_user_id = dropped_by->get_user_id();
+        dropped.dropped_by_player_user_id = dropped_by.get_user_id();
         if lockout_seconds < 0.0 {
             lockout_seconds = 0.0;
         }

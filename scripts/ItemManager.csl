@@ -14,7 +14,7 @@ ItemManager :: struct {
 
         if !initted {
             initted = true;
-            defs->clear();
+            defs.clear();
 
             // Coin
             // - Used by the Sell Shop to pay players for sold resources.
@@ -26,7 +26,7 @@ ItemManager :: struct {
                 Item_Definition,
                 Item_Instance
             );
-            defs->append(coin);
+            defs.append(coin);
 
             // Wood
             wood := Items.register_item_definition(
@@ -34,7 +34,7 @@ ItemManager :: struct {
                 Item_Definition,
                 Item_Instance
             );
-            defs->append(wood);
+            defs.append(wood);
 
             // Paper
             paper := Items.register_item_definition(
@@ -42,7 +42,7 @@ ItemManager :: struct {
                 Item_Definition,
                 Item_Instance
             );
-            defs->append(paper);
+            defs.append(paper);
 
             // Blank Bills
             blank_bills := Items.register_item_definition(
@@ -50,7 +50,7 @@ ItemManager :: struct {
                 Item_Definition,
                 Item_Instance
             );
-            defs->append(blank_bills);
+            defs.append(blank_bills);
 
             // Colored Bills
             colored_bills := Items.register_item_definition(
@@ -58,7 +58,7 @@ ItemManager :: struct {
                 Item_Definition,
                 Item_Instance
             );
-            defs->append(colored_bills);
+            defs.append(colored_bills);
 
             // Finished Bills
             finished_bills := Items.register_item_definition(
@@ -66,7 +66,7 @@ ItemManager :: struct {
                 Item_Definition,
                 Item_Instance
             );
-            defs->append(finished_bills);
+            defs.append(finished_bills);
 
             // Turrets (icons are temporary placeholders until final art is provided).
             turret_tier_1 := Items.register_item_definition(
@@ -74,21 +74,21 @@ ItemManager :: struct {
                 Item_Definition,
                 Item_Instance
             );
-            defs->append(turret_tier_1);
+            defs.append(turret_tier_1);
 
             turret_tier_2 := Items.register_item_definition(
                 {TURRET_ITEM_ID_TIER_2, "Turret Tier 2", get_asset(Texture_Asset, "Items/Turret2.png"), 16, .RARE},
                 Item_Definition,
                 Item_Instance
             );
-            defs->append(turret_tier_2);
+            defs.append(turret_tier_2);
 
             turret_tier_3 := Items.register_item_definition(
                 {TURRET_ITEM_ID_TIER_3, "Turret Tier 3", get_asset(Texture_Asset, "Items/Turret3.png"), 16, .EPIC},
                 Item_Definition,
                 Item_Instance
             );
-            defs->append(turret_tier_3);
+            defs.append(turret_tier_3);
         }
 
         return defs;
@@ -113,7 +113,7 @@ ItemManager :: struct {
 
     GetArticle :: proc(defn: Item_Definition) -> string {
         if defn == null return "a";
-        switch defn->get_id() {
+        switch defn.get_id() {
             case "Gold":   return "some";
             case "Silver": return "some";
             case "Axe":    return "an";
@@ -143,20 +143,20 @@ ItemManager :: struct {
     TryUseItem :: proc(player: Player, item: Item_Instance) {
         // Placeholder port. Hook this up to inventory UI / hotbar selection if needed.
         if player == null return;
-        if !player->is_local_or_server() return;
+        if !player.is_local_or_server() return;
 
         if item == null {
             log_warning("Tried to use a null item", {});
             return;
         }
 
-        defn := item->get_definition();
+        defn := item.get_definition();
         if defn == null {
             log_warning("Tried to use an item with no definition", {});
             return;
         }
 
-        id := defn->get_id();
+        id := defn.get_id();
         if id == "" {
             log_warning("Tried to use an empty item", {});
         }
@@ -180,7 +180,7 @@ ItemManager :: struct {
     TryFindItem :: proc(item_id: string) -> Item_Definition {
         defs := ItemManager._definitions();
         for defn: defs {
-            if defn != null && defn->get_id() == item_id {
+            if defn != null && defn.get_id() == item_id {
                 return defn;
             }
         }
@@ -190,7 +190,7 @@ ItemManager :: struct {
     TryFindItemByName :: proc(item_name: string) -> Item_Definition {
         defs := ItemManager._definitions();
         for defn: defs {
-            if defn != null && defn->get_name() == item_name {
+            if defn != null && defn.get_name() == item_name {
                 return defn;
             }
         }

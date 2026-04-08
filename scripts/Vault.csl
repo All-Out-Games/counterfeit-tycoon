@@ -19,7 +19,7 @@ vault_is_full_for_base :: proc(base: PlayerBase) -> bool {
     foreach v: component_iterator(Vault) {
         if v == null continue;
         if v.entity == null || v.entity.self == null continue;
-        if !v.entity->get_world_enabled() continue;
+        if !v.entity.get_world_enabled() continue;
 
         pb := get_parent_player_base(v.entity);
         if pb != base continue;
@@ -78,7 +78,7 @@ Vault :: class : Interactable {
     loaded_for_user_id: string;
 
     ao_start :: method() {
-        this->set_listener(this);
+        this.set_listener(this);
 
         // Defaults (only if not set in editor)
         if max_capacity <= 0 {
@@ -106,8 +106,8 @@ Vault :: class : Interactable {
 
 
         // Interaction prompt
-        this->set_text("Deposit finished bills");
-        this->set_hold_text("Depositing...");
+        this.set_text("Deposit finished bills");
+        this.set_hold_text("Depositing...");
         if priority == 0 {
             priority = 50;
         }
@@ -171,41 +171,41 @@ Vault :: class : Interactable {
 
         // Lazily bind animator if not assigned in editor.
         if spine_animator == null {
-            spine_animator = entity->get_component(Spine_Animator);
+            spine_animator = entity.get_component(Spine_Animator);
         }
 
         // Setup a minimal state machine to handle add_money -> idle automatically.
         if !client_spine_ready {
             if spine_animator != null {
-                spine_animator->awaken();
+                spine_animator.awaken();
 
                 // Build a tiny state machine:
                 // - idle (loop)
                 // - add_money (one-shot), triggered via "add_money" trigger
                 sm := State_Machine.create();
-                add_money_trigger := sm->create_variable("add_money", .TRIGGER);
-                layer := sm->create_layer("main", 0);
-                idle_state := layer->create_state("idle", true);
-                add_state := layer->create_state("add_money", false);
-                layer->set_initial_state(idle_state);
+                add_money_trigger := sm.create_variable("add_money", .TRIGGER);
+                layer := sm.create_layer("main", 0);
+                idle_state := layer.create_state("idle", true);
+                add_state := layer.create_state("add_money", false);
+                layer.set_initial_state(idle_state);
 
-                to_add := layer->create_global_transition(add_state, false);
-                to_add->create_trigger_condition(add_money_trigger);
-                layer->create_transition(add_state, idle_state, true);
+                to_add := layer.create_global_transition(add_state, false);
+                to_add.create_trigger_condition(add_money_trigger);
+                layer.create_transition(add_state, idle_state, true);
 
                 // Track 1: stealing overlay (clear track <-> break_apart)
-                stealing_var := sm->create_variable("stealing", .BOOL);
-                steal_layer := sm->create_layer("steal_layer", 1);
-                steal_clear := steal_layer->create_state("__CLEAR_TRACK__", true);
-                steal_break := steal_layer->create_state("break_apart", true);
-                steal_layer->set_initial_state(steal_clear);
-                steal_layer->create_transition(steal_clear, steal_break, false)->create_bool_condition(stealing_var, true);
-                steal_layer->create_transition(steal_break, steal_clear, false)->create_bool_condition(stealing_var, false);
+                stealing_var := sm.create_variable("stealing", .BOOL);
+                steal_layer := sm.create_layer("steal_layer", 1);
+                steal_clear := steal_layer.create_state("__CLEAR_TRACK__", true);
+                steal_break := steal_layer.create_state("break_apart", true);
+                steal_layer.set_initial_state(steal_clear);
+                steal_layer.create_transition(steal_clear, steal_break, false).create_bool_condition(stealing_var, true);
+                steal_layer.create_transition(steal_break, steal_clear, false).create_bool_condition(stealing_var, false);
 
                 // Slow down only the break_apart animation.
                 steal_break.speed = 0.2;
 
-                spine_animator.instance->set_state_machine(sm, true);
+                spine_animator.instance.set_state_machine(sm, true);
                 client_spine_ready = true;
             }
 
@@ -217,7 +217,7 @@ Vault :: class : Interactable {
         // Detect deposits (increase only). Steals/decreases should not play this animation.
         if stored_finished_bills > client_last_stored_finished_bills {
             if spine_animator != null && spine_animator.instance != null && spine_animator.instance.state_machine != null {
-                spine_animator.instance.state_machine->set_trigger("add_money");
+                spine_animator.instance.state_machine.set_trigger("add_money");
             }
         }
 
@@ -227,7 +227,7 @@ Vault :: class : Interactable {
     client_update_steal_animation :: method() {
         // Lazily bind animator if not assigned in editor.
         if spine_animator == null {
-            spine_animator = entity->get_component(Spine_Animator);
+            spine_animator = entity.get_component(Spine_Animator);
         }
 
         if spine_animator == null {
@@ -236,7 +236,7 @@ Vault :: class : Interactable {
         }
 
         // Ensure instance exists (safe to call repeatedly).
-        spine_animator->awaken();
+        spine_animator.awaken();
 
         // Derive active steal state from the replicated thief hold tracking on Players.
         // This avoids relying on Vault-owned replicated fields (which may not update on clients).
@@ -252,7 +252,7 @@ Vault :: class : Interactable {
 
         // Drive the track-1 steal overlay layer via the state machine.
         if spine_animator.instance != null && spine_animator.instance.state_machine != null {
-            spine_animator.instance.state_machine->set_bool("stealing", is_active);
+            spine_animator.instance.state_machine.set_bool("stealing", is_active);
         }
 
         client_steal_anim_playing = is_active;
@@ -313,7 +313,7 @@ Vault :: class : Interactable {
         }
 
         // Persist immediately so disconnects/crashes don't lose progress.
-        owner := pb->get_owner();
+        owner := pb.get_owner();
         if owner != null {
             Save.set_int(owner, VAULT_SAVE_KEY_FINISHED_BILLS, stored_finished_bills);
 
@@ -409,7 +409,7 @@ Vault :: class : Interactable {
             return;
         }
 
-        owner := pb->get_owner();
+        owner := pb.get_owner();
         if owner == null {
             Notifier.notify(thief, "Owner is not available.");
             return;
@@ -509,7 +509,7 @@ Vault :: class : Interactable {
 
         // If there's leftover, spawn exclusive world drops in small stacks near the player.
         if remaining > 0 {
-            rng := rng_seed_time();
+            rng := make_frame_rng(player.entity.id + entity.id + 224);
             DROP_RADIUS :: 1.25;
             while remaining > 0 {
                 chunk := remaining;
@@ -520,7 +520,7 @@ Vault :: class : Interactable {
                 spawn_pos := ItemDrops.random_point_on_circle_edge(player.entity.world_position, DROP_RADIUS, ref rng);
                 drop := ItemDrops.spawn_from_definition(spawn_pos, defn, chunk);
                 if drop != null {
-                    drop->set_exclusive(player);
+                    drop.set_exclusive(player);
                 }
 
                 remaining -= chunk;
@@ -531,9 +531,9 @@ Vault :: class : Interactable {
     ensure_steal_interactable_exists :: method() {
         if entity == null || entity.self == null return;
 
-        steal := entity->get_component(Vault_Steal_Interactable);
+        steal := entity.get_component(Vault_Steal_Interactable);
         if steal == null {
-            steal = entity->add_component(Vault_Steal_Interactable);
+            steal = entity.add_component(Vault_Steal_Interactable);
         }
         if steal == null return;
 
@@ -560,7 +560,7 @@ Vault :: class : Interactable {
             return;
         }
 
-        owner := pb->get_owner();
+        owner := pb.get_owner();
         if owner == null {
             return; // owner not connected yet
         }
@@ -601,14 +601,14 @@ Vault :: class : Interactable {
         if inv.capacity <= 0 return false;
 
         for i: 0..inv.capacity-1 {
-            item := inv->get_item(i);
+            item := inv.get_item(i);
             if item == null continue;
             if item.self == null continue;
 
-            defn := item->get_definition();
+            defn := item.get_definition();
             if defn == null continue;
 
-            id := defn->get_id();
+            id := defn.get_id();
             if id == "finished_bills" || id == "FinishedBills" {
                 // Remove exactly 1 finished bill from this stack (engine will destroy stack if it hits 0).
                 Items.destroy_item_instance(item, 1);
@@ -656,17 +656,17 @@ Vault :: class : Interactable {
 
         // Panel rect in world units (meters).
         BG_SCALE :: 1.25;
-        panel_bg := Rect{pos, pos}->grow(0.24 * BG_SCALE, 0.90 * BG_SCALE, 0.24 * BG_SCALE, 0.90 * BG_SCALE);
-        panel_content := Rect{pos, pos}->grow(0.24, 0.75, 0.24, 0.75);
+        panel_bg := Rect{pos, pos}.grow(0.24 * BG_SCALE, 0.90 * BG_SCALE, 0.24 * BG_SCALE, 0.90 * BG_SCALE);
+        panel_content := Rect{pos, pos}.grow(0.24, 0.75, 0.24, 0.75);
         UI.quad(panel_bg, core_globals.white_sprite, {0, 0, 0, 0.6});
 
-        content := panel_content->inset(0.06);
-        icon_row := content->cut_top(0.30);
+        content := panel_content.inset(0.06);
+        icon_row := content.cut_top(0.30);
         bar_row := content;
 
         row_pad :: 0.02;
-        icon_row = icon_row->inset(row_pad);
-        bar_row = bar_row->inset(row_pad);
+        icon_row = icon_row.inset(row_pad);
+        bar_row = bar_row.inset(row_pad);
 
         ts := UI.default_text_settings();
         ts.size = 0.34;
@@ -686,17 +686,17 @@ Vault :: class : Interactable {
 
             // Anchor the icon to the left edge of the background panel.
             icon_cx := panel_bg.min.x + ICON_PAD + (ICON_W / 2);
-            icon_cy := icon_row->center().y;
+            icon_cy := icon_row.center().y;
             icon_center := v2{icon_cx, icon_cy};
-            icon_rect := Rect{icon_center, icon_center}->grow(icon_row->height() / 2, ICON_W / 2, icon_row->height() / 2, ICON_W / 2)->inset(0.01);
+            icon_rect := Rect{icon_center, icon_center}.grow(icon_row.height() / 2, ICON_W / 2, icon_row.height() / 2, ICON_W / 2).inset(0.01);
 
             // Keep the counts centered, but prevent overlap with the icon.
             avoid_left := max(0.0, (icon_rect.max.x - icon_row.min.x) + TEXT_GAP);
-            text_rect := icon_row->inset(0, 0, 0, avoid_left);
+            text_rect := icon_row.inset(0, 0, 0, avoid_left);
 
             #static finished_icon := get_asset(Texture_Asset, "Items/FinishedBills.png");
             if finished_icon != null {
-                UI.quad(icon_rect->fit_aspect(finished_icon->get_aspect()), finished_icon);
+                UI.quad(icon_rect.fit_aspect(finished_icon.get_aspect()), finished_icon);
             }
 
             cap := max_capacity;
@@ -716,7 +716,7 @@ Vault :: class : Interactable {
         }
 
         // "Timer" bar used as fullness (stored / capacity)
-        bar := bar_row->inset(0.04);
+        bar := bar_row.inset(0.04);
         UI.quad(bar, core_globals.white_sprite, {0, 0, 0, 0.7});
 
         progress := 0.0;
@@ -728,7 +728,7 @@ Vault :: class : Interactable {
             progress = clamp(stored_finished_bills.(float) / cap.(float), 0.0, 1.0);
         }
 
-        fill := bar->subrect(0, 0, progress, 1);
+        fill := bar.subrect(0, 0, progress, 1);
         UI.quad(fill, core_globals.white_sprite, {0.9, 0.8, 0.2, 1});
     }
 }
@@ -737,9 +737,9 @@ Vault :: class : Interactable {
 // without affecting the owner's deposit interaction.
 Vault_Steal_Interactable :: class : Interactable {
     ao_start :: method() {
-        this->set_listener(this);
-        this->set_text("Stealing");
-        this->set_hold_text("Stealing...");
+        this.set_listener(this);
+        this.set_text("Stealing");
+        this.set_hold_text("Stealing...");
         required_hold_time = VAULT_STEAL_HOLD_SECONDS;
         if priority == 0 {
             priority = 100;
@@ -778,9 +778,9 @@ Vault_Steal_Interactable :: class : Interactable {
         if !player.vault_theft_owner_notified {
             pb := get_parent_player_base(entity);
             if pb != null {
-                owner := pb->get_owner();
+                owner := pb.get_owner();
                 if owner != null {
-                    Notifier.notify(owner, "% is stealing from your Piggy Bank!", {player->get_username()});
+                    Notifier.notify(owner, "% is stealing from your Piggy Bank!", {player.get_username()});
                 }
             }
             player.vault_theft_owner_notified = true;
@@ -791,7 +791,7 @@ Vault_Steal_Interactable :: class : Interactable {
         if player == null return;
         if !Game.is_server() return;
 
-        vault := entity->get_component(Vault);
+        vault := entity.get_component(Vault);
         if vault == null {
             Notifier.notify(player, "Can't steal from this Piggy Bank right now.");
             return;
@@ -802,7 +802,7 @@ Vault_Steal_Interactable :: class : Interactable {
             return;
         }
 
-        vault->server_steal_finished_bills(player);
+        vault.server_steal_finished_bills(player);
 
         // Clear theft state immediately so the grace-period cleanup
         // doesn't misfire a vault defense event for the owner.

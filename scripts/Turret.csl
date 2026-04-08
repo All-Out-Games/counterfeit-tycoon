@@ -27,7 +27,7 @@ Turret_Save_Data :: class {
 
 turret_item_tier_from_definition :: proc(defn: Item_Definition) -> s64 {
     if defn == null return 0;
-    id := defn->get_id();
+    id := defn.get_id();
     switch id {
         case TURRET_ITEM_ID_TIER_1: return 1;
         case TURRET_ITEM_ID_TIER_2: return 2;
@@ -108,7 +108,7 @@ turret_is_too_close_to_any_station_in_base :: proc(base: PlayerBase, pos: v2) ->
 turret_is_too_close_to_player_station :: proc(player: Player, pos: v2) -> bool {
     if player == null return false;
     if player.base_entity == null || player.base_entity.self == null return false;
-    base := player.base_entity->get_component(PlayerBase);
+    base := player.base_entity.get_component(PlayerBase);
     if base == null return false;
     return turret_is_too_close_to_any_station_in_base(base, pos);
 }
@@ -142,7 +142,7 @@ turret_count_for_base :: proc(base: PlayerBase) -> s64 {
     foreach t: component_iterator(Turret) {
         if t == null continue;
         if t.entity == null || t.entity.self == null continue;
-        if !t.entity->get_world_enabled() continue;
+        if !t.entity.get_world_enabled() continue;
         if get_parent_player_base(t.entity) != base continue;
         count += 1;
     }
@@ -152,7 +152,7 @@ turret_count_for_base :: proc(base: PlayerBase) -> s64 {
 turret_count_for_player :: proc(player: Player) -> s64 {
     if player == null return 0;
     if player.base_entity == null || player.base_entity.self == null return 0;
-    pb := player.base_entity->get_component(PlayerBase);
+    pb := player.base_entity.get_component(PlayerBase);
     if pb == null return 0;
     return turret_count_for_base(pb);
 }
@@ -169,7 +169,7 @@ turret_save_player_data_excluding_entity_id :: proc(player: Player, excluded_ent
         return;
     }
 
-    pb := player.base_entity->get_component(PlayerBase);
+    pb := player.base_entity.get_component(PlayerBase);
     if pb == null {
         Save.set_json(player, TURRET_SAVE_KEY, ref save);
         return;
@@ -179,7 +179,7 @@ turret_save_player_data_excluding_entity_id :: proc(player: Player, excluded_ent
         if t == null continue;
         if t.entity == null || t.entity.self == null continue;
         if excluded_entity_id != 0 && t.entity.id == excluded_entity_id continue;
-        if !t.entity->get_world_enabled() continue;
+        if !t.entity.get_world_enabled() continue;
         if get_parent_player_base(t.entity) != pb continue;
 
         if save.entries.count >= TURRET_MAX_PER_BASE {
@@ -192,7 +192,7 @@ turret_save_player_data_excluding_entity_id :: proc(player: Player, excluded_ent
         if entry.tier > 3 entry.tier = 3;
         max_hp := t.hp_max;
         if max_hp <= 0 {
-            max_hp = t->get_max_health();
+            max_hp = t.get_max_health();
         }
         if max_hp <= 0 {
             max_hp = TURRET_HEALTH_STEP;
@@ -204,7 +204,7 @@ turret_save_player_data_excluding_entity_id :: proc(player: Player, excluded_ent
         lp := t.entity.local_position;
         entry.rel_x = lp.x;
         entry.rel_y = lp.y;
-        save.entries->append(entry);
+        save.entries.append(entry);
     }
 
     Save.set_json(player, TURRET_SAVE_KEY, ref save);
@@ -217,7 +217,7 @@ turret_save_player_data :: proc(player: Player) {
 turret_clear_for_player_base :: proc(player: Player) {
     if player == null return;
     if player.base_entity == null || player.base_entity.self == null return;
-    pb := player.base_entity->get_component(PlayerBase);
+    pb := player.base_entity.get_component(PlayerBase);
     if pb == null return;
 
     to_destroy: [..]Entity;
@@ -225,12 +225,12 @@ turret_clear_for_player_base :: proc(player: Player) {
         if t == null continue;
         if t.entity == null || t.entity.self == null continue;
         if get_parent_player_base(t.entity) != pb continue;
-        to_destroy->append(t.entity);
+        to_destroy.append(t.entity);
     }
 
     for e: to_destroy {
         if e != null && e.self != null {
-            e->destroy();
+            e.destroy();
         }
     }
 }
@@ -265,7 +265,7 @@ turret_load_player_data :: proc(player: Player, gm: GameManager) {
             continue;
         }
 
-        if gm->server_spawn_turret_for_player(player, entry.tier, spawn_pos, false, entry.hp) {
+        if gm.server_spawn_turret_for_player(player, entry.tier, spawn_pos, false, entry.hp) {
             spawned += 1;
         }
     }
@@ -281,7 +281,7 @@ turret_handle_inventory_drop :: proc(player: Player, dropped_item: Item_Instance
     if player == null return false;
     if dropped_item == null return false;
 
-    defn := dropped_item->get_definition();
+    defn := dropped_item.get_definition();
     tier := turret_item_tier_from_definition(defn);
     if tier <= 0 {
         return false;
@@ -307,7 +307,7 @@ turret_handle_inventory_drop :: proc(player: Player, dropped_item: Item_Instance
         return true;
     }
 
-    if !gm->server_spawn_turret_for_player(player, tier, place_pos, true) {
+    if !gm.server_spawn_turret_for_player(player, tier, place_pos, true) {
         Notifier.notify(player, "Can't place turret right now.");
         return true;
     }
@@ -330,7 +330,7 @@ turret_get_local_place_block_reason :: proc(player: Player, dropped_item: Item_I
     if player == null return {};
     if dropped_item == null return {};
 
-    defn := dropped_item->get_definition();
+    defn := dropped_item.get_definition();
     tier := turret_item_tier_from_definition(defn);
     if tier <= 0 {
         return {};
@@ -365,7 +365,7 @@ turret_find_player_by_user_id :: proc(user_id: string) -> Player {
     if user_id.count <= 0 return null;
     foreach p: component_iterator(Player) {
         if p == null continue;
-        if p->get_user_id() == user_id {
+        if p.get_user_id() == user_id {
             return p;
         }
     }
@@ -376,7 +376,7 @@ turret_try_register_weapon_hit_nearest :: proc(pos: v2, radius: float, shooter_e
     if !Game.is_server() return false;
     hit_turret, found := Scene.get_closest_component_in_range(pos, radius, Turret);
     if !found || hit_turret == null return false;
-    return hit_turret->server_register_weapon_hit(shooter_entity_id, damage);
+    return hit_turret.server_register_weapon_hit(shooter_entity_id, damage);
 }
 
 turret_apply_weapon_aoe_damage :: proc(pos: v2, radius: float, shooter_entity_id: u64, damage: float) {
@@ -385,7 +385,7 @@ turret_apply_weapon_aoe_damage :: proc(pos: v2, radius: float, shooter_entity_id
     Scene.get_all_components_in_range(pos, radius, ref nearby_turrets);
     for t: nearby_turrets {
         if t == null continue;
-        _ := t->server_register_weapon_hit(shooter_entity_id, damage);
+        _ := t.server_register_weapon_hit(shooter_entity_id, damage);
     }
 }
 
@@ -428,16 +428,16 @@ Turret_Projectile :: class : Component {
             max_lifetime = 3.0;
         }
         if lifetime > max_lifetime {
-            entity->destroy();
+            entity.destroy();
             return;
         }
 
         move := v2{direction.x * speed * dt, direction.y * speed * dt};
-        entity->add_local_position(move);
+        entity.add_local_position(move);
 
         // Keep projectile combat strictly inside the base bounds.
         if !turret_is_position_inside_box_centered_at(entity.world_position, base_center, base_half_size) {
-            entity->destroy();
+            entity.destroy();
             return;
         }
 
@@ -451,22 +451,22 @@ Turret_Projectile :: class : Component {
         if hit_player.entity == null || hit_player.entity.self == null {
             return;
         }
-        if hit_player->get_user_id() == owner_user_id {
+        if hit_player.get_user_id() == owner_user_id {
             return;
         }
         if !turret_is_position_inside_box_centered_at(hit_player.entity.world_position, base_center, base_half_size) {
             return;
         }
 
-        did_damage := hit_player->take_damage(damage, null, true);
+        did_damage := hit_player.take_damage(damage, null, true);
         if did_damage {
             hit_sfx := get_asset(SFX_Asset, "reusable_weapons/sounds/reusable-weapons/bullet_hit.wav");
             sfx_desc := SFX.default_sfx_desc();
-            sfx_desc->set_position(pos);
+            sfx_desc.set_position(pos);
             sfx_desc.range_multiplier = 2.0;
             SFX.play(hit_sfx, sfx_desc);
         }
-        entity->destroy();
+        entity.destroy();
     }
 }
 
@@ -489,7 +489,7 @@ Turret :: class : Component {
         if tier > 3 tier = 3;
 
         if spine_animator == null {
-            spine_animator = entity->get_component(Spine_Animator);
+            spine_animator = entity.get_component(Spine_Animator);
         }
 
         hp_max = get_max_health();
@@ -507,24 +507,24 @@ Turret :: class : Component {
         if spine_animator == null return;
         if spine_animator.entity == null || spine_animator.entity.self == null return;
 
-        spine_animator->awaken();
+        spine_animator.awaken();
         if spine_animator.instance == null return;
 
         sm := State_Machine.create();
-        layer := sm->create_layer("main", 0);
+        layer := sm.create_layer("main", 0);
 
-        firing_var := sm->create_variable("firing", .BOOL);
-        aim_state := layer->create_state("RED013/Aim_mIK", true);
-        fire_state := layer->create_state("RED013/Fire_mIK", false);
-        layer->set_initial_state(aim_state);
+        firing_var := sm.create_variable("firing", .BOOL);
+        aim_state := layer.create_state("RED013/Aim_mIK", true);
+        fire_state := layer.create_state("RED013/Fire_mIK", false);
+        layer.set_initial_state(aim_state);
 
-        aim_to_fire := layer->create_transition(aim_state, fire_state, false);
-        aim_to_fire->create_bool_condition(firing_var, true);
+        aim_to_fire := layer.create_transition(aim_state, fire_state, false);
+        aim_to_fire.create_bool_condition(firing_var, true);
 
-        fire_to_aim := layer->create_transition(fire_state, aim_state, false);
-        fire_to_aim->create_bool_condition(firing_var, false);
+        fire_to_aim := layer.create_transition(fire_state, aim_state, false);
+        fire_to_aim.create_bool_condition(firing_var, false);
 
-        spine_animator.instance->set_state_machine(sm, true); // transfer ownership to spine instance
+        spine_animator.instance.set_state_machine(sm, true); // transfer ownership to spine instance
         spine_state_machine = sm;
     }
 
@@ -538,13 +538,13 @@ Turret :: class : Component {
         target_is_right := target_world_pos.x > entity.world_position.x;
         scale := spine_animator.entity.local_scale;
         scale.x = target_is_right ? 1.0 : -1.0;
-        spine_animator.entity->set_local_scale(scale);
+        spine_animator.entity.set_local_scale(scale);
 
-        spine_animator->awaken();
+        spine_animator.awaken();
         if spine_animator.instance == null return;
 
         aim_local := turret_world_to_spine_local(spine_animator.entity, target_world_pos);
-        spine_animator.instance->set_bone_local_position("AIM", aim_local);
+        spine_animator.instance.set_bone_local_position("AIM", aim_local);
     }
 
     update_spine_visual_state :: method() {
@@ -555,7 +555,7 @@ Turret :: class : Component {
 
         // Fire animation plays only while actively firing at a valid target.
         firing_now := has_target && fire_anim_t > 0.0;
-        spine_animator.instance.state_machine->set_bool("firing", firing_now);
+        spine_animator.instance.state_machine.set_bool("firing", firing_now);
     }
 
     get_max_health :: method() -> s64 {
@@ -602,7 +602,7 @@ Turret :: class : Component {
         foreach p: component_iterator(Player) {
             if p == null continue;
             if p.entity == null || p.entity.self == null continue;
-            if p->get_user_id() == owner_user_id continue;
+            if p.get_user_id() == owner_user_id continue;
 
             p_pos := p.entity.world_position;
             if !turret_is_position_inside_box_centered_at(p_pos, center, TURRET_BASE_HALF_SIZE) {
@@ -635,17 +635,17 @@ Turret :: class : Component {
         dir := normalize(to_target);
 
         proj_entity := Scene.create_entity();
-        proj_entity->set_local_position(start);
-        proj_entity->set_local_rotation(to_degrees(atan2(dir.y, dir.x)));
-        proj_entity->set_local_scale(v2{1.3, 1.3});
+        proj_entity.set_local_position(start);
+        proj_entity.set_local_rotation(to_degrees(atan2(dir.y, dir.x)));
+        proj_entity.set_local_scale(v2{1.3, 1.3});
 
         bullet_texture := get_asset(Texture_Asset, "reusable_weapons/sprites/reusable-weapons/projectiles/MachineGunBullet.png");
-        sprite := proj_entity->add_component(Sprite_Renderer);
+        sprite := proj_entity.add_component(Sprite_Renderer);
         if sprite != null && bullet_texture != null {
-            sprite->set_texture(bullet_texture);
+            sprite.set_texture(bullet_texture);
         }
 
-        proj := proj_entity->add_component(Turret_Projectile);
+        proj := proj_entity.add_component(Turret_Projectile);
         proj.damage = get_damage();
         proj.direction = dir;
         proj.owner_user_id = owner_user_id;
@@ -672,7 +672,7 @@ Turret :: class : Component {
 
         shooter := turret_find_player_by_entity_id(shooter_entity_id);
         if shooter == null return false;
-        if shooter->get_user_id() == owner_user_id return false;
+        if shooter.get_user_id() == owner_user_id return false;
 
         // Shooter must be inside this base to damage its turrets.
         if shooter.entity == null || shooter.entity.self == null return false;
@@ -712,7 +712,7 @@ Turret :: class : Component {
         if owner == null {
             pb := get_parent_player_base(entity);
             if pb != null {
-                owner = pb->get_owner();
+                owner = pb.get_owner();
             }
         }
         if owner != null {
@@ -730,13 +730,13 @@ Turret :: class : Component {
         if explosion_prefab != null {
             fx := Scene.instantiate(explosion_prefab);
             if fx != null && fx.self != null {
-                fx->set_local_position(death_pos);
-                fx->queue_for_destruction(1);
+                fx.set_local_position(death_pos);
+                fx.queue_for_destruction(1);
             }
         }
 
         if entity != null && entity.self != null {
-            entity->destroy();
+            entity.destroy();
         }
     }
 
@@ -758,9 +758,9 @@ Turret :: class : Component {
 
         // Keep owner binding valid even if this turret was spawned from legacy data.
         if owner_user_id.count == 0 {
-            owner := pb->get_owner();
+            owner := pb.get_owner();
             if owner != null {
-                owner_user_id = owner->get_user_id();
+                owner_user_id = owner.get_user_id();
             }
         }
         if owner_user_id.count == 0 return;
@@ -801,7 +801,7 @@ draw_all_turret_health_bars_local :: proc() {
     foreach t: component_iterator(Turret) {
         if t == null continue;
         if t.entity == null || t.entity.self == null continue;
-        if !t.entity->get_world_enabled() continue;
+        if !t.entity.get_world_enabled() continue;
         draw_turret_health_bar_in_world_context(t);
     }
 }
@@ -816,8 +816,8 @@ draw_turret_health_bar_in_world_context :: proc(turret: Turret) {
     UI.push_z(turret.entity.world_position.y - 0.002);
     defer UI.pop_z();
 
-    health_rect := Rect{pos, pos}->grow(0.05, 0.45, 0.05, 0.45);
-    border_rect := health_rect->grow(0.02, 0.02, 0.02, 0.02);
+    health_rect := Rect{pos, pos}.grow(0.05, 0.45, 0.05, 0.45);
+    border_rect := health_rect.grow(0.02, 0.02, 0.02, 0.02);
 
     #static back := get_asset(Texture_Asset, "reusable_weapons/sprites/reusable-weapons/hud_elements/health_bar_green/healthbar_back.png");
     #static fill := get_asset(Texture_Asset, "reusable_weapons/sprites/reusable-weapons/hud_elements/health_bar_green/healthbar_fill.png");
@@ -833,7 +833,7 @@ draw_turret_health_bar_in_world_context :: proc(turret: Turret) {
     if pct < 0 { pct = 0; }
     if pct > 1 { pct = 1; }
 
-    fill_rect := health_rect->subrect(0, 0, pct, 1);
+    fill_rect := health_rect.subrect(0, 0, pct, 1);
     if fill != null {
         UI.quad(fill_rect, fill, {1, 1, 1, 1});
     }

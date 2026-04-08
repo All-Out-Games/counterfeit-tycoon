@@ -306,7 +306,7 @@ quest_pick_new :: proc(player: Player, slot: s64) {
         }
         if dupe continue;
 
-        candidates->append(q);
+        candidates.append(q);
     }
 
     // If no candidates found (pool exhausted for tier), try any tier quest.
@@ -328,7 +328,7 @@ quest_pick_new :: proc(player: Player, slot: s64) {
             }
             if dupe continue;
 
-            candidates->append(q);
+            candidates.append(q);
         }
     }
 
@@ -336,7 +336,7 @@ quest_pick_new :: proc(player: Player, slot: s64) {
         // Absolute fallback: just pick any quest from current tier, ignore category constraint.
         for q: 0..QUEST_POOL_COUNT-1 {
             if pool[q].tier == tier {
-                candidates->append(q);
+                candidates.append(q);
                 break;
             }
         }
@@ -345,7 +345,7 @@ quest_pick_new :: proc(player: Player, slot: s64) {
     if candidates.count == 0 return;
 
     // Random pick.
-    rng: u64 = rng_seed_time();
+    rng: u64 = make_frame_rng(player.entity.id + 341);
     pick_idx := rng_range_int(ref rng, 0, candidates.count - 1);
     chosen_id := candidates[pick_idx];
 
@@ -918,7 +918,7 @@ quest_load_active :: proc(player: Player) {
 
 draw_quests_ui :: proc(player: Player) {
     if player == null return;
-    if !player->is_local_or_server() return;
+    if !player.is_local_or_server() return;
     // Gate quest UI until tutorial completion (step 11 = "Tutorial Complete").
     if player.tutorial_step < 11 return;
 
@@ -931,11 +931,11 @@ draw_quests_ui :: proc(player: Player) {
     safe := UI.get_safe_screen_rect();
 
     // Padding from the top of the screen.
-    _ := safe->cut_top(20);
+    _ := safe.cut_top(20);
 
     // Top-center strip: half the old width (40% of screen), 50% taller (120px).
-    top_strip := safe->cut_top(120)->inset(0, 6, 0, 6);
-    bar := top_strip->subrect(0.30, 0, 0.70, 1);
+    top_strip := safe.cut_top(120).inset(0, 6, 0, 6);
+    bar := top_strip.subrect(0.30, 0, 0.70, 1);
 
     // 3 equal cards side-by-side.
     THIRD :: 0.3333;
@@ -945,7 +945,7 @@ draw_quests_ui :: proc(player: Player) {
 
         x1 := THIRD * s.(float);
         x2 := x1 + THIRD;
-        card_rect := bar->subrect(x1, 0, x2, 1)->inset(2, 4, 2, 4);
+        card_rect := bar.subrect(x1, 0, x2, 1).inset(2, 4, 2, 4);
         draw_quest_card(player, card_rect, s);
     }
 }
@@ -970,15 +970,15 @@ draw_quest_card :: proc(player: Player, rect: Rect, slot: s64) {
         UI.quad(rect, card_bg, {1, 1, 1, 0.97});
     }
 
-    inner := rect->inset(10, 12, 10, 12);
+    inner := rect.inset(10, 12, 10, 12);
 
     // Split: left content | right reward column.
-    reward_area := inner->cut_right(56);
-    _ := inner->cut_right(6); // gap between content and reward
+    reward_area := inner.cut_right(56);
+    _ := inner.cut_right(6); // gap between content and reward
     content := inner;
 
     // ---- Left: Title ----
-    title_row := content->cut_top(34);
+    title_row := content.cut_top(34);
     ts_title := UI.default_text_settings();
     ts_title.size = 22;
     ts_title.halign = .LEFT;
@@ -989,10 +989,10 @@ draw_quest_card :: proc(player: Player, rect: Rect, slot: s64) {
     ts_title.font = bold_font;
     UI.text(title_row, ts_title, quest_get_display_title(def, target));
 
-    _ := content->cut_top(4);
+    _ := content.cut_top(4);
 
     // ---- Left: "Progress:" label ----
-    label_row := content->cut_top(22);
+    label_row := content.cut_top(22);
     ts_label := UI.default_text_settings();
     ts_label.size = 18;
     ts_label.halign = .LEFT;
@@ -1001,7 +1001,7 @@ draw_quest_card :: proc(player: Player, rect: Rect, slot: s64) {
     ts_label.do_outline = false;
     UI.text(label_row, ts_label, "Progress:");
 
-    _ := content->cut_top(2);
+    _ := content.cut_top(2);
 
     // ---- Left: Progress numbers (large bold) ----
     num_row := content;
@@ -1028,7 +1028,7 @@ draw_quest_card :: proc(player: Player, rect: Rect, slot: s64) {
         grow_amt := pulse * 3.0;              // up to 3px extra each side
         bright := 0.85 + pulse * 0.15;        // 0.85..1.0 brightness
 
-        claim_rect := reward_area->inset(2)->grow_unscaled(grow_amt, grow_amt, grow_amt, grow_amt);
+        claim_rect := reward_area.inset(2).grow_unscaled(grow_amt, grow_amt, grow_amt, grow_amt);
 
         bs_claim := UI.default_button_settings();
         bs_claim.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_2.png");
@@ -1050,12 +1050,12 @@ draw_quest_card :: proc(player: Player, rect: Rect, slot: s64) {
         // Coin icon (top 60%).
         coin_tex := get_asset(Texture_Asset, "Items/Coin.png");
         if coin_tex != null {
-            icon_area := reward_area->subrect(0, 0.38, 1, 1)->inset(4);
-            UI.quad(icon_area->fit_aspect(coin_tex->get_aspect()), coin_tex);
+            icon_area := reward_area.subrect(0, 0.38, 1, 1).inset(4);
+            UI.quad(icon_area.fit_aspect(coin_tex.get_aspect()), coin_tex);
         }
 
         // Reward amount below icon (bottom 40%).
-        reward_text_area := reward_area->subrect(0, 0, 1, 0.42);
+        reward_text_area := reward_area.subrect(0, 0, 1, 0.42);
         ts_reward := UI.default_text_settings();
         ts_reward.size = 20;
         ts_reward.halign = .CENTER;

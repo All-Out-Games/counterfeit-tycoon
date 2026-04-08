@@ -24,13 +24,13 @@ Hydro_Cannon_Projectile :: class : Component {
             max_lifetime = 3.0;
         }
         if lifetime > max_lifetime {
-            entity->destroy();
+            entity.destroy();
             return;
         }
 
         // Move projectile
         move := v2{direction.x * speed * dt, direction.y * speed * dt};
-        entity->add_local_position(move);
+        entity.add_local_position(move);
 
         // Spawn geysers along path (server only)
         if Game.is_server() {
@@ -42,26 +42,26 @@ Hydro_Cannon_Projectile :: class : Component {
 
                     geyser_prefab := get_asset(Prefab_Asset, "reusable_weapons/Weapon_HydroCannonGeyser.prefab");
                     geyser_entity := Scene.instantiate(geyser_prefab);
-                    geyser_entity->set_local_position(entity.world_position);
+                    geyser_entity.set_local_position(entity.world_position);
 
-                    geyser := geyser_entity->add_component(Hydro_Cannon_Geyser);
+                    geyser := geyser_entity.add_component(Hydro_Cannon_Geyser);
                     geyser.owner_id = owner_id;
 
                     // Set up splash animation
-                    spine := geyser_entity->get_component(Spine_Animator);
+                    spine := geyser_entity.get_component(Spine_Animator);
                     if spine != null {
-                        spine->awaken();
-                        spine.instance->set_animation("013RED/Splash", false, 0);
+                        spine.awaken();
+                        spine.instance.set_animation("013RED/Splash", false, 0);
                     }
 
                     // Play random splash sound
-                    rng: u64 = rng_seed_time();
+                    rng: u64 = make_frame_rng(entity.id + owner_id + 311);
                     splash_index := rng_range_int(ref rng, 1, 3);
                     splash_path := "reusable_weapons/sounds/reusable-weapons/geyser_splash_01.wav";
                     if splash_index == 2 { splash_path = "reusable_weapons/sounds/reusable-weapons/geyser_splash_02.wav"; }
                     if splash_index == 3 { splash_path = "reusable_weapons/sounds/reusable-weapons/geyser_splash_03.wav"; }
                     sfx_desc := SFX.default_sfx_desc();
-                    sfx_desc->set_position(entity.world_position);
+                    sfx_desc.set_position(entity.world_position);
                     sfx_desc.range_multiplier = 2.0;
                     SFX.play(get_asset(SFX_Asset, splash_path), sfx_desc);
                 }
@@ -81,7 +81,7 @@ Hydro_Cannon_Geyser :: class : Component {
 
         lifetime += dt;
         if lifetime >= GEYSER_LIFETIME {
-            entity->destroy();
+            entity.destroy();
             return;
         }
 
@@ -105,7 +105,7 @@ Hydro_Cannon_Geyser :: class : Component {
             }
             if already_hit continue;
 
-            did_damage := target->take_damage(GEYSER_DAMAGE, null, true);
+            did_damage := target.take_damage(GEYSER_DAMAGE, null, true);
             if did_damage {
                 // Record hit only if damage was accepted (spawn protection, death, etc. can block).
                 if hit_count < 32 {
@@ -134,7 +134,7 @@ Hydro_Cannon_Geyser :: class : Component {
             }
             if already_hit continue;
 
-            if t->server_register_weapon_hit(owner_id, GEYSER_DAMAGE) {
+            if t.server_register_weapon_hit(owner_id, GEYSER_DAMAGE) {
                 if hit_count < 32 {
                     hit_ids[hit_count] = t.entity.id;
                     hit_count += 1;
@@ -161,7 +161,7 @@ Hydro_Cannon_Geyser :: class : Component {
             }
             if already_hit continue;
 
-            if t->server_register_weapon_hit(owner_id, GEYSER_DAMAGE) {
+            if t.server_register_weapon_hit(owner_id, GEYSER_DAMAGE) {
                 if hit_count < 32 {
                     hit_ids[hit_count] = t.entity.id;
                     hit_count += 1;
@@ -175,17 +175,17 @@ spawn_hydrocannon_projectile :: proc(player: Player, direction: v2, wt: Weapon_T
     if !Game.is_server() return;
 
     config := get_weapon_config(wt);
-    dir := normalize(direction);
+    dir := safe_normalize_v2(direction, v2{1, 0});
     spawn_pos := get_projectile_spawn_pos(player, direction);
 
     proj_entity := Scene.create_entity();
-    proj_entity->set_local_position(spawn_pos);
-    proj_entity->set_local_rotation(to_degrees(atan2(direction.y, direction.x)));
-    proj_entity->set_local_scale({2, 2});
+    proj_entity.set_local_position(spawn_pos);
+    proj_entity.set_local_rotation(to_degrees(atan2(direction.y, direction.x)));
+    proj_entity.set_local_scale({2, 2});
 
     setup_projectile_spine(proj_entity, "water_gun", TRAVEL_LOOP);
 
-    proj := proj_entity->add_component(Hydro_Cannon_Projectile);
+    proj := proj_entity.add_component(Hydro_Cannon_Projectile);
     proj.direction = dir;
     proj.owner_id = player.entity.id;
     proj.speed = config.projectile_speed;

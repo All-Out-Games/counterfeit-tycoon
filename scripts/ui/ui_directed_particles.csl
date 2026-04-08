@@ -21,7 +21,7 @@ UI_Directed_Particle_Handler :: class : Component {
     particles: [..]UI_Directed_Particle;
 
     clear_particles :: method() {
-        particles->clear();
+        particles.clear();
     }
 
     spawn :: method(
@@ -34,9 +34,9 @@ UI_Directed_Particle_Handler :: class : Component {
         layer: s64 = 250,
         color: v4 = {1, 1, 1, 1}
     ) {
-        owner := entity->get_component(Player);
+        owner := entity.get_component(Player);
         if owner == null return;
-        if !owner->is_local_or_server() return;
+        if !owner.is_local_or_server() return;
         if texture == null return;
 
         p: UI_Directed_Particle;
@@ -48,7 +48,7 @@ UI_Directed_Particle_Handler :: class : Component {
         p.size_px = size_px;
         p.color = color;
         p.layer = layer;
-        particles->append(p);
+        particles.append(p);
     }
 
     spawn_from_path :: method(
@@ -61,9 +61,9 @@ UI_Directed_Particle_Handler :: class : Component {
         layer: s64 = 250,
         color: v4 = {1, 1, 1, 1}
     ) {
-        owner := entity->get_component(Player);
+        owner := entity.get_component(Player);
         if owner == null return;
-        if !owner->is_local_or_server() return;
+        if !owner.is_local_or_server() return;
         if texture_path.count == 0 return;
         texture := get_asset(Texture_Asset, texture_path);
         spawn(texture, start_pos, dest_pos, size_px, speed_px_per_sec, kill_radius_px, layer, color);
@@ -71,9 +71,9 @@ UI_Directed_Particle_Handler :: class : Component {
 
     update_and_draw :: method(dt: float) {
         // Cosmetic-only: only draw/update on local client.
-        owner := entity->get_component(Player);
+        owner := entity.get_component(Player);
         if owner == null return;
-        if !owner->is_local_or_server() return;
+        if !owner.is_local_or_server() return;
 
         if dt <= 0 return;
         if dt > 0.1 dt = 0.1;
@@ -90,7 +90,7 @@ UI_Directed_Particle_Handler :: class : Component {
 
             kill_r := max(0.0, p.kill_radius_px);
             if dist_sq <= (kill_r * kill_r) {
-                particles->unordered_remove_by_index(i);
+                particles.unordered_remove_by_index(i);
                 continue;
             }
 
@@ -110,7 +110,7 @@ UI_Directed_Particle_Handler :: class : Component {
 
                 half_w := p.size_px.x * 0.5;
                 half_h := p.size_px.y * 0.5;
-                rect := Rect{p.pos, p.pos}->grow_unscaled(half_h, half_w, half_h, half_w);
+                rect := Rect{p.pos, p.pos}.grow_unscaled(half_h, half_w, half_h, half_w);
                 UI.quad(rect, p.texture, p.color);
             }
 
@@ -133,9 +133,9 @@ ui_directed_particles_spawn :: proc(
     color: v4 = {1, 1, 1, 1}
 ) {
     if player == null return;
-    if !player->is_local_or_server() return;
+    if !player.is_local_or_server() return;
     if player.ui_directed_particle_handler == null return;
-    player.ui_directed_particle_handler->spawn(texture, start_pos, dest_pos, size_px, speed_px_per_sec, kill_radius_px, layer, color);
+    player.ui_directed_particle_handler.spawn(texture, start_pos, dest_pos, size_px, speed_px_per_sec, kill_radius_px, layer, color);
 }
 
 ui_directed_particles_spawn_from_path :: proc(
@@ -150,8 +150,8 @@ ui_directed_particles_spawn_from_path :: proc(
     color: v4 = {1, 1, 1, 1}
 ) {
     if player == null return;
-    if !player->is_local_or_server() return;
+    if !player.is_local_or_server() return;
     if player.ui_directed_particle_handler == null return;
-    player.ui_directed_particle_handler->spawn_from_path(texture_path, start_pos, dest_pos, size_px, speed_px_per_sec, kill_radius_px, layer, color);
+    player.ui_directed_particle_handler.spawn_from_path(texture_path, start_pos, dest_pos, size_px, speed_px_per_sec, kill_radius_px, layer, color);
 }
 

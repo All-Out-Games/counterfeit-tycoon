@@ -27,7 +27,7 @@ get_truck_route_root_for_player :: proc(player: Player) -> Entity {
     e := gm.TruckRoutes[idx];
     if e == null return null;
     if e.self == null return null;
-    if !e->get_world_enabled() return null;
+    if !e.get_world_enabled() return null;
     return e;
 }
 
@@ -40,9 +40,9 @@ collect_route_waypoints_ordered :: proc(route_root: Entity, start_world_pos: v2,
     foreach e: entity_iterator() {
         if e == null continue;
         if e.self == null continue;
-        if e.parent != route_root continue;
-        if !e->get_world_enabled() continue;
-        children->append(e);
+        if e.get_parent() != route_root continue;
+        if !e.get_world_enabled() continue;
+        children.append(e);
     }
 
     cur := start_world_pos;
@@ -71,10 +71,10 @@ collect_route_waypoints_ordered :: proc(route_root: Entity, start_world_pos: v2,
 
         c := children[best_i];
         if c != null && c.self != null {
-            out->append(c.world_position);
+            out.append(c.world_position);
             cur = c.world_position;
         }
-        children->unordered_remove_by_index(best_i);
+        children.unordered_remove_by_index(best_i);
     }
 }
 
@@ -84,7 +84,7 @@ find_connected_player_by_user_id :: proc(user_id: string) -> Player {
     foreach p: component_iterator(Player) {
         if p == null continue;
         if p.self == null continue;
-        if p->get_user_id() == user_id {
+        if p.get_user_id() == user_id {
             return p;
         }
     }
@@ -95,7 +95,7 @@ find_local_player :: proc() -> Player {
     foreach p: component_iterator(Player) {
         if p == null continue;
         if p.self == null continue;
-        if p->is_local() {
+        if p.is_local() {
             return p;
         }
     }
@@ -126,7 +126,7 @@ find_closest_bank_to_position :: proc(pos: v2) -> Bank {
     foreach b: component_iterator(Bank) {
         if b == null continue;
         if b.entity == null || b.entity.self == null continue;
-        if !b.entity->get_world_enabled() continue;
+        if !b.entity.get_world_enabled() continue;
 
         d2 := length_squared(b.entity.world_position - pos);
         if !found || d2 < best_d2 {
@@ -147,8 +147,8 @@ find_first_child_entity :: proc(parent: Entity) -> Entity {
     foreach e: entity_iterator() {
         if e == null continue;
         if e.self == null continue;
-        if e.parent != parent continue;
-        if !e->get_world_enabled() continue;
+        if e.get_parent() != parent continue;
+        if !e.get_world_enabled() continue;
         return e;
     }
     return null;
@@ -227,7 +227,7 @@ Truck :: class : Interactable {
     last_world_pos_initialized: bool;
 
     ao_start :: method() {
-        this->set_listener(this);
+        this.set_listener(this);
 
         notifyFlag = false;
 
@@ -247,8 +247,8 @@ Truck :: class : Interactable {
         }
 
         // Interactable prompt
-        this->set_text("Send truck to bank");
-        this->set_hold_text("Dispatching...");
+        this.set_text("Send truck to bank");
+        this.set_hold_text("Dispatching...");
 
         // Interactable defaults if not set
         if radius <= 0 {
@@ -282,7 +282,7 @@ Truck :: class : Interactable {
         hp_max = truck_max_hp_for_level(1);
         hp = hp_max;
 
-        agent = entity->get_component(Movement_Agent);
+        agent = entity.get_component(Movement_Agent);
         if agent == null {
             log_warning("Truck: missing Movement_Agent on Truck entity", {});
         }
@@ -335,7 +335,7 @@ Truck :: class : Interactable {
         }
 
         if agent == null {
-            agent = entity->get_component(Movement_Agent);
+            agent = entity.get_component(Movement_Agent);
             if agent == null {
                // Notifier.notify(player, "Truck can't move (missing Movement Agent).");
                 return;
@@ -385,7 +385,7 @@ Truck :: class : Interactable {
         carried_finished_bills = take;
         // Resolve ownership via the interacting player's user id so the server can
         // reliably find the connected Player later for payout + notification.
-        owner_user_id = player->get_user_id();
+        owner_user_id = player.get_user_id();
         if owner_user_id.count <= 0 {
             owner_user_id = base.owner_user_id;
         }
@@ -429,7 +429,7 @@ Truck :: class : Interactable {
         state = .TO_BANK;
         drive_start_time = get_time();
 
-        this->set_text("Truck in transit");
+        this.set_text("Truck in transit");
         //Notifier.notify(player, "Truck dispatched with % Finished Bills.", {take});
     }
 
@@ -458,10 +458,10 @@ Truck :: class : Interactable {
         // Movement target should be set on BOTH client and server (for smooth local motion).
         if state != .IDLE {
             if agent == null {
-                agent = entity->get_component(Movement_Agent);
+                agent = entity.get_component(Movement_Agent);
             }
             if agent != null {
-                _ := agent->set_path_target(target_world_pos, move_speed);
+                _ := agent.set_path_target(target_world_pos, move_speed);
             }
         }
 
@@ -475,7 +475,7 @@ Truck :: class : Interactable {
         }
 
         if agent == null {
-            agent = entity->get_component(Movement_Agent);
+            agent = entity.get_component(Movement_Agent);
             if agent == null {
                 // Can't do anything without an agent; keep blocked until fixed.
                 return;
@@ -510,7 +510,7 @@ Truck :: class : Interactable {
                     if route_point_index >= route_point_count {
                         state = .IDLE;
                         drive_start_time = 0;
-                        this->set_text("Send truck to bank");
+                        this.set_text("Send truck to bank");
                         // Repair when it makes it home.
                         if hp < hp_max {
                             hp = hp_max;
@@ -536,7 +536,7 @@ Truck :: class : Interactable {
         if local_player == null return;
 
         // Only the owning client should display this message.
-        if local_player->get_user_id() != owner_user_id return;
+        if local_player.get_user_id() != owner_user_id return;
         if delivery_bills <= 0 || delivery_coins <= 0 return;
 
         Delivery_Seen_Entry :: struct {
@@ -581,7 +581,7 @@ Truck :: class : Interactable {
         if base == null return null;
 
         // Best case: owner component is available on this peer.
-        owner := base->get_owner();
+        owner := base.get_owner();
         if owner != null {
             return owner;
         }
@@ -690,7 +690,7 @@ Truck :: class : Interactable {
             if defn != null {
                 remaining := carried_finished_bills;
                 STACK_MAX :: 64;
-                rng: u64 = rng_seed_time();
+                rng: u64 = make_frame_rng(entity.id + 331);
 
                 while remaining > 0 {
                     give_count := remaining;
@@ -733,21 +733,22 @@ Truck :: class : Interactable {
         if explosion_prefab != null {
             fx := Scene.instantiate(explosion_prefab);
             if fx != null && fx.self != null {
-                fx->set_local_position(death_pos);
-                fx->queue_for_destruction(1);
+                fx.set_local_position(death_pos);
+                fx.queue_for_destruction(1);
             }
         }
 
         // Teleport home immediately (prevents soft-lock / keeps truck usable).
         //
         // NOTE: Trucks are typically children of the PlayerBase entity; set_local_position expects
-        // parent-local coordinates. We convert world->local in the simple/common case (no parent rotation).
+        // parent-local coordinates. We convert world.local in the simple/common case (no parent rotation).
         if entity != null && entity.self != null {
             local_home := home_world_pos;
-            if entity.parent != null && entity.parent.self != null {
-                local_home = home_world_pos - entity.parent.world_position;
+            parent := entity.get_parent();
+            if parent != null && parent.self != null {
+                local_home = home_world_pos - parent.world_position;
             }
-            entity->set_local_position(local_home);
+            entity.set_local_position(local_home);
         }
 
         // Reset state at home
@@ -757,7 +758,7 @@ Truck :: class : Interactable {
         route_point_index = 0;
         state = .IDLE;
         drive_start_time = 0;
-        this->set_text("Send truck to bank");
+        this.set_text("Send truck to bank");
 
         // Repair instantly after respawn
         if hp_max < 1 { hp_max = 1; }
@@ -789,7 +790,7 @@ Truck :: class : Interactable {
         // Never disable the Truck entity itself.
         if anim.entity == entity return;
 
-        anim.entity->set_local_enabled(should_enable);
+        anim.entity.set_local_enabled(should_enable);
     }
 
     pick_spine_for_tier :: method(tier: s64) -> Spine_Animator, Entity {
@@ -820,13 +821,13 @@ Truck :: class : Interactable {
 
         if spine_entity != null && spine_entity.self != null {
             chosen_entity = spine_entity;
-            chosen = spine_entity->get_component(Spine_Animator);
+            chosen = spine_entity.get_component(Spine_Animator);
             return chosen, chosen_entity;
         }
 
         chosen_entity = entity;
         if entity != null && entity.self != null {
-            chosen = entity->get_component(Spine_Animator);
+            chosen = entity.get_component(Spine_Animator);
         }
         return chosen, chosen_entity;
     }
@@ -838,8 +839,8 @@ Truck :: class : Interactable {
         // Rebuild state machine on tier switch.
         spine_sm = State_Machine.create();
 
-        is_moving := spine_sm->create_variable("is_moving", .BOOL);
-        layer := spine_sm->create_layer("main", 0);
+        is_moving := spine_sm.create_variable("is_moving", .BOOL);
+        layer := spine_sm.create_layer("main", 0);
 
         idle_anim := "idle";
         move_anim := "move";
@@ -852,7 +853,7 @@ Truck :: class : Interactable {
             // Preserve old behavior: if Tier2 is used, ensure skeleton is set.
             #static truck_spine_asset := get_asset(Spine_Asset, "Animations/010WD_Truck_spine/010WD_Truck.spine");
             if truck_spine_asset != null {
-                spine.instance->set_skeleton(truck_spine_asset);
+                spine.instance.set_skeleton(truck_spine_asset);
             }
         }
         else if tier == 3 {
@@ -860,17 +861,17 @@ Truck :: class : Interactable {
             move_anim = "drive";
         }
 
-        idle_state := layer->create_state(idle_anim, true);
-        move_state := layer->create_state(move_anim, true);
-        layer->set_initial_state(idle_state);
+        idle_state := layer.create_state(idle_anim, true);
+        move_state := layer.create_state(move_anim, true);
+        layer.set_initial_state(idle_state);
 
-        idle_to_move := layer->create_transition(idle_state, move_state, false);
-        idle_to_move->create_bool_condition(is_moving, true);
+        idle_to_move := layer.create_transition(idle_state, move_state, false);
+        idle_to_move.create_bool_condition(is_moving, true);
 
-        move_to_idle := layer->create_transition(move_state, idle_state, false);
-        move_to_idle->create_bool_condition(is_moving, false);
+        move_to_idle := layer.create_transition(move_state, idle_state, false);
+        move_to_idle.create_bool_condition(is_moving, false);
 
-        spine.instance->set_state_machine(spine_sm, true); // transfer ownership to spine instance
+        spine.instance.set_state_machine(spine_sm, true); // transfer ownership to spine instance
     }
 
     refresh_active_spine :: method() {
@@ -893,7 +894,7 @@ Truck :: class : Interactable {
                 spine_visual_entity = new_entity;
                 spine_active_tier = desired_tier;
 
-                spine->awaken();
+                spine.awaken();
 
                 // Cache initial scale for flip logic (per active rig).
                 spine_scale_initialized = false;
@@ -914,7 +915,7 @@ Truck :: class : Interactable {
         if spine.instance == null return;
         if spine.instance.state_machine == null return;
         
-        spine.instance.state_machine->set_bool("is_moving", state != .IDLE);
+        spine.instance.state_machine.set_bool("is_moving", state != .IDLE);
     }
     
     update_visuals :: method() {
@@ -939,10 +940,10 @@ Truck :: class : Interactable {
 
             if target_entity != null && target_entity.self != null {
                 if delta.x > 0.001 {
-                    target_entity->set_local_scale({abs(spine_base_scale.x), spine_base_scale.y});
+                    target_entity.set_local_scale({abs(spine_base_scale.x), spine_base_scale.y});
                 }
                 else if delta.x < -0.001 {
-                    target_entity->set_local_scale({-abs(spine_base_scale.x), spine_base_scale.y});
+                    target_entity.set_local_scale({-abs(spine_base_scale.x), spine_base_scale.y});
                 }
             }
         }
@@ -966,7 +967,7 @@ Truck :: class : Interactable {
 
         owner := find_connected_player_by_user_id(owner_user_id);
         if owner == null && base != null {
-            owner = base->get_owner();
+            owner = base.get_owner();
         }
 
         if owner != null && carried_finished_bills > 0 {
@@ -1013,7 +1014,7 @@ Truck :: class : Interactable {
         target_world_pos = route_points[0];
         state = .RETURN_HOME;
         drive_start_time = get_time(); // reuse for return timeout too
-        this->set_text("Truck returning");
+        this.set_text("Truck returning");
     }
 
     abort_and_return_to_vault :: method() {
@@ -1039,7 +1040,7 @@ Truck :: class : Interactable {
         target_world_pos = home_world_pos;
         state = .RETURN_HOME;
         drive_start_time = get_time();
-        this->set_text("Truck returning");
+        this.set_text("Truck returning");
     }
 
     // If we teleport home (e.g. destroyed), clear route state so we don't resume old waypoints.
@@ -1061,7 +1062,7 @@ draw_all_truck_health_bars_local :: proc() {
     foreach t: component_iterator(Truck) {
         if t == null continue;
         if t.entity == null || t.entity.self == null continue;
-        if !t.entity->get_world_enabled() continue;
+        if !t.entity.get_world_enabled() continue;
         draw_truck_health_bar_in_world_context(t);
         draw_truck_carried_ui_in_world_context(t);
     }
@@ -1084,8 +1085,8 @@ draw_truck_health_bar_in_world_context :: proc(truck: Truck) {
     #static pip := get_asset(Texture_Asset, "reusable_weapons/sprites/reusable-weapons/hud_elements/health_bar_green/healthbar_pip.png");
 
     // World-space sizing (meters).
-    health_rect := Rect{pos, pos}->grow(0.07, 0.70, 0.07, 0.70); // ~1.4m wide, ~0.14m tall
-    border_rect := health_rect->grow(0.02, 0.02, 0.02, 0.02);
+    health_rect := Rect{pos, pos}.grow(0.07, 0.70, 0.07, 0.70); // ~1.4m wide, ~0.14m tall
+    border_rect := health_rect.grow(0.02, 0.02, 0.02, 0.02);
 
     // Background
     if back != null {
@@ -1103,7 +1104,7 @@ draw_truck_health_bar_in_world_context :: proc(truck: Truck) {
         if health_pct > 1 { health_pct = 1; }
     }
 
-    fill_rect := health_rect->subrect(0, 0, health_pct, 1);
+    fill_rect := health_rect.subrect(0, 0, health_pct, 1);
     if fill != null {
         UI.quad(fill_rect, fill, {1, 1, 1, 1});
     }
@@ -1132,7 +1133,7 @@ draw_truck_health_bar_in_world_context :: proc(truck: Truck) {
             new_width := pip_width * shrink;
             new_x_min := x_min + (pip_width - new_width) / 2.0;
             new_x_max := new_x_min + new_width;
-            pip_rect := health_rect->subrect(new_x_min, 0, new_x_max, 1);
+            pip_rect := health_rect.subrect(new_x_min, 0, new_x_max, 1);
             if pip != null {
                 UI.quad(pip_rect, pip, {1, 1, 1, 1});
             }
@@ -1155,13 +1156,13 @@ draw_truck_carried_ui_in_world_context :: proc(truck: Truck) {
 
     pos := truck.entity.world_position + v2{0, 1.55};
 
-    rect := Rect{pos, pos}->grow(0.18, 0.55, 0.18, 0.55);
-    icon_rect := rect->cut_left(0.22)->inset(0.01);
+    rect := Rect{pos, pos}.grow(0.18, 0.55, 0.18, 0.55);
+    icon_rect := rect.cut_left(0.22).inset(0.01);
     text_rect := rect;
 
     #static bills_icon := get_asset(Texture_Asset, "Items/FinishedBills.png");
     if bills_icon != null {
-        UI.quad(icon_rect->fit_aspect(bills_icon->get_aspect()), bills_icon);
+        UI.quad(icon_rect.fit_aspect(bills_icon.get_aspect()), bills_icon);
     }
 
     ts := UI.default_text_settings();

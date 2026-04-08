@@ -28,7 +28,7 @@ courier_find_finished_bill_press_for_base_and_lane :: proc(base: PlayerBase, lan
     foreach p: component_iterator(Finished_Bill_Press) {
         if p == null continue;
         if p.entity == null || p.entity.self == null continue;
-        if !p.entity->get_world_enabled() continue;
+        if !p.entity.get_world_enabled() continue;
         if p.lane_index != lane_index continue;
 
         pb := get_parent_player_base(p.entity);
@@ -46,7 +46,7 @@ courier_find_vault_for_base :: proc(base: PlayerBase) -> Vault {
     foreach v: component_iterator(Vault) {
         if v == null continue;
         if v.entity == null || v.entity.self == null continue;
-        if !v.entity->get_world_enabled() continue;
+        if !v.entity.get_world_enabled() continue;
 
         pb := get_parent_player_base(v.entity);
         if pb == base {
@@ -127,7 +127,7 @@ Courier :: class : Component {
             lane_index = 0;
         }
 
-        agent = entity->get_component(Movement_Agent);
+        agent = entity.get_component(Movement_Agent);
         if agent == null {
             log_warning("Courier: missing Movement_Agent on Courier entity", {});
         }
@@ -217,7 +217,7 @@ Courier :: class : Component {
             return;
         }
 
-        rng := rng_seed_time();
+        rng := make_frame_rng(entity.id + 231);
         break_variant = rng_range_int(ref rng, 1, 2);
         pause_until_time = get_time() + path_wait_seconds;
         last_action_time = get_time();
@@ -242,15 +242,15 @@ Courier :: class : Component {
             }
         }
         else if spine_entity != null && spine_entity.self != null {
-            spine = spine_entity->get_component(Spine_Animator);
+            spine = spine_entity.get_component(Spine_Animator);
             target_entity = spine_entity;
         }
         else if target_entity != null && target_entity.self != null {
-            spine = target_entity->get_component(Spine_Animator);
+            spine = target_entity.get_component(Spine_Animator);
         }
 
         if spine != null {
-            spine->awaken();
+            spine.awaken();
         }
 
         if !spine_scale_initialized {
@@ -273,61 +273,61 @@ Courier :: class : Component {
         if spine_sm != null return;
 
         spine_sm = State_Machine.create();
-        mode_var := spine_sm->create_variable("anim_mode", .INT);
-        push_var := spine_sm->create_variable("push", .TRIGGER);
-        layer := spine_sm->create_layer("main", 0);
+        mode_var := spine_sm.create_variable("anim_mode", .INT);
+        push_var := spine_sm.create_variable("push", .TRIGGER);
+        layer := spine_sm.create_layer("main", 0);
 
-        idle_state := layer->create_state("Idle", true);
-        run_state := layer->create_state("Run", true);
-        break1_state := layer->create_state("Idle_Break_1", true);
-        break2_state := layer->create_state("Idle_Break_2", true);
-        push_state := layer->create_state("Push", false);
-        layer->set_initial_state(idle_state);
+        idle_state := layer.create_state("Idle", true);
+        run_state := layer.create_state("Run", true);
+        break1_state := layer.create_state("Idle_Break_1", true);
+        break2_state := layer.create_state("Idle_Break_2", true);
+        push_state := layer.create_state("Push", false);
+        layer.set_initial_state(idle_state);
 
-        idle_to_run := layer->create_transition(idle_state, run_state, false);
-        idle_to_run->create_int_condition(mode_var, 1, .EQUAL);
+        idle_to_run := layer.create_transition(idle_state, run_state, false);
+        idle_to_run.create_int_condition(mode_var, 1, .EQUAL);
 
-        idle_to_b1 := layer->create_transition(idle_state, break1_state, false);
-        idle_to_b1->create_int_condition(mode_var, 2, .EQUAL);
+        idle_to_b1 := layer.create_transition(idle_state, break1_state, false);
+        idle_to_b1.create_int_condition(mode_var, 2, .EQUAL);
 
-        idle_to_b2 := layer->create_transition(idle_state, break2_state, false);
-        idle_to_b2->create_int_condition(mode_var, 3, .EQUAL);
+        idle_to_b2 := layer.create_transition(idle_state, break2_state, false);
+        idle_to_b2.create_int_condition(mode_var, 3, .EQUAL);
 
-        run_to_idle := layer->create_transition(run_state, idle_state, false);
-        run_to_idle->create_int_condition(mode_var, 0, .EQUAL);
+        run_to_idle := layer.create_transition(run_state, idle_state, false);
+        run_to_idle.create_int_condition(mode_var, 0, .EQUAL);
 
-        run_to_b1 := layer->create_transition(run_state, break1_state, false);
-        run_to_b1->create_int_condition(mode_var, 2, .EQUAL);
+        run_to_b1 := layer.create_transition(run_state, break1_state, false);
+        run_to_b1.create_int_condition(mode_var, 2, .EQUAL);
 
-        run_to_b2 := layer->create_transition(run_state, break2_state, false);
-        run_to_b2->create_int_condition(mode_var, 3, .EQUAL);
+        run_to_b2 := layer.create_transition(run_state, break2_state, false);
+        run_to_b2.create_int_condition(mode_var, 3, .EQUAL);
 
-        b1_to_idle := layer->create_transition(break1_state, idle_state, false);
-        b1_to_idle->create_int_condition(mode_var, 0, .EQUAL);
+        b1_to_idle := layer.create_transition(break1_state, idle_state, false);
+        b1_to_idle.create_int_condition(mode_var, 0, .EQUAL);
 
-        b1_to_run := layer->create_transition(break1_state, run_state, false);
-        b1_to_run->create_int_condition(mode_var, 1, .EQUAL);
+        b1_to_run := layer.create_transition(break1_state, run_state, false);
+        b1_to_run.create_int_condition(mode_var, 1, .EQUAL);
 
-        b1_to_b2 := layer->create_transition(break1_state, break2_state, false);
-        b1_to_b2->create_int_condition(mode_var, 3, .EQUAL);
+        b1_to_b2 := layer.create_transition(break1_state, break2_state, false);
+        b1_to_b2.create_int_condition(mode_var, 3, .EQUAL);
 
-        b2_to_idle := layer->create_transition(break2_state, idle_state, false);
-        b2_to_idle->create_int_condition(mode_var, 0, .EQUAL);
+        b2_to_idle := layer.create_transition(break2_state, idle_state, false);
+        b2_to_idle.create_int_condition(mode_var, 0, .EQUAL);
 
-        b2_to_run := layer->create_transition(break2_state, run_state, false);
-        b2_to_run->create_int_condition(mode_var, 1, .EQUAL);
+        b2_to_run := layer.create_transition(break2_state, run_state, false);
+        b2_to_run.create_int_condition(mode_var, 1, .EQUAL);
 
-        b2_to_b1 := layer->create_transition(break2_state, break1_state, false);
-        b2_to_b1->create_int_condition(mode_var, 2, .EQUAL);
+        b2_to_b1 := layer.create_transition(break2_state, break1_state, false);
+        b2_to_b1.create_int_condition(mode_var, 2, .EQUAL);
 
-        to_push := layer->create_global_transition(push_state, false);
-        to_push->create_trigger_condition(push_var);
+        to_push := layer.create_global_transition(push_state, false);
+        to_push.create_trigger_condition(push_var);
         _ := to_push;
-        push_to_idle := layer->create_transition(push_state, idle_state, true);
+        push_to_idle := layer.create_transition(push_state, idle_state, true);
         _ := push_to_idle;
 
         _ := mode_var;
-        spine.instance->set_state_machine(spine_sm, true);
+        spine.instance.set_state_machine(spine_sm, true);
     }
 
     try_play_push_when_placing_items :: method() {
@@ -361,7 +361,7 @@ Courier :: class : Component {
 
         prev := seen[slot].seq;
         if deposit_seq > prev {
-            spine.instance.state_machine->set_trigger("push");
+            spine.instance.state_machine.set_trigger("push");
         }
         seen[slot].seq = deposit_seq;
     }
@@ -378,7 +378,7 @@ Courier :: class : Component {
         else if should_play_bored_idle() {
             mode = (break_variant == 1) ? 2 : 3;
         }
-        spine.instance.state_machine->set_int("anim_mode", mode);
+        spine.instance.state_machine.set_int("anim_mode", mode);
     }
 
     update_visuals :: method() {
@@ -403,10 +403,10 @@ Courier :: class : Component {
 
             if target_entity != null && target_entity.self != null {
                 if delta.x > 0.001 {
-                    target_entity->set_local_scale({abs(spine_base_scale.x), spine_base_scale.y});
+                    target_entity.set_local_scale({abs(spine_base_scale.x), spine_base_scale.y});
                 }
                 else if delta.x < -0.001 {
-                    target_entity->set_local_scale({-abs(spine_base_scale.x), spine_base_scale.y});
+                    target_entity.set_local_scale({-abs(spine_base_scale.x), spine_base_scale.y});
                 }
             }
         }
@@ -419,7 +419,7 @@ Courier :: class : Component {
         if spine == null return;
         pb := get_parent_player_base(entity);
         if pb == null return;
-        owner := pb->get_owner();
+        owner := pb.get_owner();
         if owner == null return;
         if owner.self == null return;
         if owner.animator == null return;
@@ -449,7 +449,7 @@ Courier :: class : Component {
             return true;
         }
 
-        owner := pb->get_owner();
+        owner := pb.get_owner();
         if owner == null {
             return true;
         }
@@ -463,7 +463,7 @@ Courier :: class : Component {
         try_play_push_when_placing_items();
 
         if agent == null {
-            agent = entity->get_component(Movement_Agent);
+            agent = entity.get_component(Movement_Agent);
         }
 
         pb := get_parent_player_base(entity);
@@ -476,12 +476,12 @@ Courier :: class : Component {
             switch state {
                 case .TO_SOURCE: {
                     if source != null {
-                        _ := agent->set_path_target(target_pos_for_source(source), spd);
+                        _ := agent.set_path_target(target_pos_for_source(source), spd);
                     }
                 }
                 case .TO_VAULT: {
                     if vault != null {
-                        _ := agent->set_path_target(target_pos_for_vault(vault), spd);
+                        _ := agent.set_path_target(target_pos_for_vault(vault), spd);
                     }
                 }
             }
@@ -492,7 +492,7 @@ Courier :: class : Component {
         }
 
         if server_should_despawn() {
-            entity->destroy();
+            entity.destroy();
             return;
         }
 
@@ -542,7 +542,7 @@ Courier :: class : Component {
                 // This prevents "bored" idles from being associated with path pauses.
                 if carried_finished_bills <= 0 && source.stored_finished_bills <= 0 {
                     if break_variant == 0 {
-                        rng := rng_seed_time();
+                        rng := make_frame_rng(entity.id + 232);
                         break_variant = rng_range_int(ref rng, 1, 2);
                     }
                 }
@@ -565,7 +565,7 @@ Courier :: class : Component {
                 if !vault_full && carried_finished_bills < effective_cap {
                     if last_action_time <= 0 || get_time() - last_action_time >= collect_interval {
                         room := effective_cap - carried_finished_bills;
-                        taken := source->server_collect_finished_bills_for_manager(owner_user_id, room);
+                        taken := source.server_collect_finished_bills_for_manager(owner_user_id, room);
                         if taken > 0 {
                             carried_finished_bills += taken;
                         }
@@ -607,7 +607,7 @@ Courier :: class : Component {
                 }
 
                 if last_action_time <= 0 || get_time() - last_action_time >= deposit_interval {
-                    deposited := vault->server_deposit_finished_bills_from_manager(owner_user_id, carried_finished_bills);
+                    deposited := vault.server_deposit_finished_bills_from_manager(owner_user_id, carried_finished_bills);
                     if deposited > 0 {
                         carried_finished_bills -= deposited;
                         if carried_finished_bills < 0 {
@@ -630,7 +630,7 @@ Courier :: class : Component {
                     }
                     if cap > 0 && vault.stored_finished_bills >= cap {
                         if !vault_full_notified_this_stop {
-                            owner := pb != null ? pb->get_owner() : null;
+                            owner := pb != null ? pb.get_owner() : null;
                             if owner != null {
                                 Notifier.notify(owner, "Piggy Bank is full! Courier is paused until there is space.");
                             }
@@ -678,13 +678,13 @@ Courier :: class : Component {
 
         pos := entity.world_position + ui_offset;
 
-        rect := Rect{pos, pos}->grow(0.18, 0.55, 0.18, 0.55);
-        icon_rect := rect->cut_left(0.22)->inset(0.01);
+        rect := Rect{pos, pos}.grow(0.18, 0.55, 0.18, 0.55);
+        icon_rect := rect.cut_left(0.22).inset(0.01);
         text_rect := rect;
 
         #static bills_icon := get_asset(Texture_Asset, "Items/FinishedBills.png");
         if bills_icon != null {
-            UI.quad(icon_rect->fit_aspect(bills_icon->get_aspect()), bills_icon);
+            UI.quad(icon_rect.fit_aspect(bills_icon.get_aspect()), bills_icon);
         }
 
         ts := UI.default_text_settings();

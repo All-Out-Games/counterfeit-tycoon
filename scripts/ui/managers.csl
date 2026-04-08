@@ -136,7 +136,7 @@ server_try_prompt_sparks_manager_unlock_purchase :: proc(player: Player, lane_in
     if kind == .WOODCHIPPER return;
 
     if lane_index < 0 || lane_index >= MANAGERS_LANE_COUNT {
-        if player->is_local() {
+        if player.is_local() {
             Notifier.notify("Invalid lane.");
         }
         return;
@@ -144,7 +144,7 @@ server_try_prompt_sparks_manager_unlock_purchase :: proc(player: Player, lane_in
 
     // Lane must be unlocked.
     if !lanes_is_unlocked(player, lane_index) {
-        if player->is_local() {
+        if player.is_local() {
             Notifier.notify("Lane % is locked.", {lane_index + 1});
         }
         return;
@@ -152,7 +152,7 @@ server_try_prompt_sparks_manager_unlock_purchase :: proc(player: Player, lane_in
 
     // Already unlocked?
     if is_manager_unlocked(player, lane_index, kind) {
-        if player->is_local() {
+        if player.is_local() {
             Notifier.notify("Already unlocked.");
         }
         return;
@@ -160,7 +160,7 @@ server_try_prompt_sparks_manager_unlock_purchase :: proc(player: Player, lane_in
 
     product_id := manager_unlock_sparks_product_id(lane_index, kind);
     if product_id.count == 0 {
-        if player->is_local() {
+        if player.is_local() {
             Notifier.notify("Sparks purchase not available.");
         }
         return;
@@ -202,11 +202,11 @@ server_grant_manager_unlock :: proc(player: Player, lane_index: s64, kind: Manag
     // Spawn the manager at the station anchor (so Sparks unlocks behave like in-world prompts).
     gm := get_game_manager();
     if gm != null && player.base_entity != null && player.base_entity.self != null {
-        pb := player.base_entity->get_component(PlayerBase);
+        pb := player.base_entity.get_component(PlayerBase);
         if pb != null {
-            spawn_pos := gm->manager_unlock_anchor_world_pos(pb, lane_index, kind);
-            gm->server_spawn_manager_kind_at(player, lane_index, kind, spawn_pos);
-            gm->server_reconcile_manager_unlock_prompts_for_player(player);
+            spawn_pos := gm.manager_unlock_anchor_world_pos(pb, lane_index, kind);
+            gm.server_spawn_manager_kind_at(player, lane_index, kind, spawn_pos);
+            gm.server_reconcile_manager_unlock_prompts_for_player(player);
         }
     }
 
@@ -345,11 +345,11 @@ draw_managers_unlock_lane_prompt :: proc(player: Player, rect: Rect, lane_index:
     if lane_index < 0 || lane_index >= MANAGERS_LANE_COUNT return;
 
     UI.quad(rect, core_globals.white_sprite, {0.08, 0.08, 0.08, 0.95});
-    inner := rect->inset(26);
+    inner := rect.inset(26);
 
-    title := inner->cut_top(90);
-    _ := inner->cut_top(10);
-    button_row := inner->cut_top(100);
+    title := inner.cut_top(90);
+    _ := inner.cut_top(10);
+    button_row := inner.cut_top(100);
 
     ts_title := UI.default_text_settings();
     ts_title.size = 44;
@@ -379,7 +379,7 @@ draw_managers_unlock_lane_prompt :: proc(player: Player, rect: Rect, lane_index:
         bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_8.png"); // Grey
         UI.push_disabled(true);
         defer UI.pop_disabled();
-        _ := UI.button(button_row->inset(10), bs, ts_btn, "Unlock previous lane first");
+        _ := UI.button(button_row.inset(10), bs, ts_btn, "Unlock previous lane first");
         return;
     }
 
@@ -389,18 +389,18 @@ draw_managers_unlock_lane_prompt :: proc(player: Player, rect: Rect, lane_index:
     }
 
     label := format_string("Unlock ($%)", {format_int_with_commas(cost)});
-    if UI.button(button_row->inset(10), bs, ts_btn, label).clicked {
+    if UI.button(button_row.inset(10), bs, ts_btn, label).clicked {
         server_try_unlock_lane(player, lane_index);
     }
 }
 
 draw_managers_button :: proc(player: Player) {
     if player == null return;
-    if !player->is_local_or_server() return;
+    if !player.is_local_or_server() return;
     if !SHOW_MANAGERS_BUTTON return;
 
     safe := UI.get_safe_screen_rect();
-    btn_rect := safe->right_center_rect()->grow(75)->offset(-100, 120);
+    btn_rect := safe.right_center_rect().grow(75).offset(-100, 120);
 
     bs := UI.default_button_settings();
     ts := UI.default_text_settings();
@@ -413,7 +413,7 @@ draw_managers_button :: proc(player: Player) {
     // Fit the clickable button rect to the sprite aspect ratio so the image doesn't stretch.
     draw_rect := btn_rect;
     if icon != null {
-        draw_rect = btn_rect->fit_aspect(icon->get_aspect());
+        draw_rect = btn_rect.fit_aspect(icon.get_aspect());
     }
 
     if UI.button(draw_rect, bs, ts, "Managers").clicked {
@@ -457,7 +457,7 @@ draw_lane_header_buttons :: proc(player: Player, rect: Rect) {
 
         x1 := i.(float) / MANAGERS_LANE_COUNT.(float);
         x2 := (i + 1).(float) / MANAGERS_LANE_COUNT.(float);
-        btn := rect->subrect(x1, 0, x2, 1)->inset(8);
+        btn := rect.subrect(x1, 0, x2, 1).inset(8);
 
         label := format_string("Lane %", {i + 1});
         is_selected := player.managers_selected_lane == i;
@@ -477,10 +477,10 @@ draw_manager_card :: proc(player: Player, rect: Rect, lane_index: s64, kind: Man
     // Card background
     UI.quad(rect, core_globals.white_sprite, {0.08, 0.08, 0.08, 0.95});
 
-    inner := rect->inset(18);
+    inner := rect.inset(18);
 
     // Title
-    title_rect := inner->cut_top(56);
+    title_rect := inner.cut_top(56);
     ts_title := UI.default_text_settings();
     ts_title.size = 34;
     ts_title.halign = .CENTER;
@@ -490,22 +490,22 @@ draw_manager_card :: proc(player: Player, rect: Rect, lane_index: s64, kind: Man
     ts_title.outline_color = {0, 0, 0, 1};
     UI.text(title_rect, ts_title, manager_display_name(kind));
 
-    _ := inner->cut_top(10);
+    _ := inner.cut_top(10);
 
     // Icon
-    icon_rect := inner->cut_top_unscaled(inner->height() * 0.62)->inset(10);
+    icon_rect := inner.cut_top_unscaled(inner.height() * 0.62).inset(10);
     icon := get_asset(Texture_Asset, "UI/Manager.png");
     if icon != null {
         tint := v4{1, 1, 1, 1};
         if !is_manager_unlocked(player, lane_index, kind) {
             tint = v4{0.45, 0.45, 0.45, 1};
         }
-        UI.quad(icon_rect->fit_aspect(icon->get_aspect()), icon, tint);
+        UI.quad(icon_rect.fit_aspect(icon.get_aspect()), icon, tint);
     }
 
     // Bottom button area
-    _ := inner->cut_top(10);
-    btn_rect := inner->cut_bottom(78);
+    _ := inner.cut_top(10);
+    btn_rect := inner.cut_bottom(78);
 
     unlocked := is_manager_unlocked(player, lane_index, kind);
 
@@ -534,7 +534,7 @@ draw_manager_card :: proc(player: Player, rect: Rect, lane_index: s64, kind: Man
             bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_8.png"); // Grey
             UI.push_disabled(true);
             defer UI.pop_disabled();
-            _ := UI.button(btn_rect->inset(6), bs, ts, "Lane Locked");
+            _ := UI.button(btn_rect.inset(6), bs, ts, "Lane Locked");
         }
         else {
             // Optional Sparks unlock button (if a product exists for this lane/kind).
@@ -545,7 +545,7 @@ draw_manager_card :: proc(player: Player, rect: Rect, lane_index: s64, kind: Man
             coins_btn_rect := btn_rect;
             sparks_btn_rect := btn_rect;
             if has_sparks {
-                left := btn_rect->cut_left_unscaled(btn_rect->width() * 0.5);
+                left := btn_rect.cut_left_unscaled(btn_rect.width() * 0.5);
                 coins_btn_rect = left;
                 sparks_btn_rect = btn_rect;
             }
@@ -553,7 +553,7 @@ draw_manager_card :: proc(player: Player, rect: Rect, lane_index: s64, kind: Man
             // Coins unlock
             label := format_string("Unlock $%", {format_int_with_commas(cost)});
             UI.push_id("mgr_coin_btn", {}); defer UI.pop_id();
-            if UI.button(coins_btn_rect->inset(6), bs, ts, label).clicked {
+            if UI.button(coins_btn_rect.inset(6), bs, ts, label).clicked {
                 server_try_unlock_manager(player, lane_index, kind);
             }
 
@@ -573,17 +573,17 @@ draw_manager_card :: proc(player: Player, rect: Rect, lane_index: s64, kind: Man
                 ts_sparks.autofit_min_size = 18;
                 ts_sparks.autofit_max_size = ts.size;
 
-                result_sparks := UI.begin_button(sparks_btn_rect->inset(6), bs_sparks, ts_sparks, ""); {
+                result_sparks := UI.begin_button(sparks_btn_rect.inset(6), bs_sparks, ts_sparks, ""); {
                     defer UI.end_button();
 
-                    inner_btn := result_sparks.rect->inset(10);
+                    inner_btn := result_sparks.rect.inset(10);
                     if sparks_icon != null {
-                        icon_rect := inner_btn->left_center_rect()->grow_unscaled(18)->offset_unscaled(22, 0);
-                        UI.quad(icon_rect->fit_aspect(sparks_icon->get_aspect()), sparks_icon);
+                        icon_rect := inner_btn.left_center_rect().grow_unscaled(18).offset_unscaled(22, 0);
+                        UI.quad(icon_rect.fit_aspect(sparks_icon.get_aspect()), sparks_icon);
                     }
 
                     label_rect := inner_btn;
-                    _ := label_rect->cut_left_unscaled(46);
+                    _ := label_rect.cut_left_unscaled(46);
                     UI.text(label_rect, ts_sparks, sparks_label);
                 }
 
@@ -608,7 +608,7 @@ draw_manager_card :: proc(player: Player, rect: Rect, lane_index: s64, kind: Man
 
         UI.push_disabled(true);
         defer UI.pop_disabled();
-        _ := UI.button(btn_rect->inset(6), bs, ts, "Unlocked");
+        _ := UI.button(btn_rect.inset(6), bs, ts, "Unlocked");
     }
 }
 
@@ -625,13 +625,13 @@ draw_managers_modal :: proc(player: Player) {
     UI.quad(screen, core_globals.white_sprite, {0, 0, 0, 0.65});
 
     // Window (similar sizing to Sell Shop)
-    window := screen->inset(100);
+    window := screen.inset(100);
     UI.quad(window, core_globals.white_sprite, {0.12, 0.12, 0.12, 0.95});
 
     // Header with lane selection
-    header := window->cut_top(150)->inset(20);
-    title_rect := header->cut_top(60);
-    lane_rect := header->cut_top(70);
+    header := window.cut_top(150).inset(20);
+    title_rect := header.cut_top(60);
+    lane_rect := header.cut_top(70);
 
     ts_title := UI.default_text_settings();
     ts_title.size = 52;
@@ -646,10 +646,10 @@ draw_managers_modal :: proc(player: Player) {
     draw_lane_header_buttons(player, lane_rect);
 
     // Content area (below header)
-    content := window->inset(30);
+    content := window.inset(30);
 
     // Footer close button (red)
-    footer := content->cut_bottom(95);
+    footer := content.cut_bottom(95);
     {
         bs_close := UI.default_button_settings();
         ts_close := UI.default_text_settings();
@@ -660,7 +660,7 @@ draw_managers_modal :: proc(player: Player) {
         bs_close.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_3.png"); // Red
         bs_close.press_scaling = 0.45;
 
-        close_btn := footer->inset(10);
+        close_btn := footer.inset(10);
         if UI.button(close_btn, bs_close, ts_close, "Close").clicked {
             if Game.is_server() {
                 player.managers_open = false;
@@ -669,7 +669,7 @@ draw_managers_modal :: proc(player: Player) {
         }
     }
 
-    body := content->inset(10);
+    body := content.inset(10);
 
     lane := player.managers_selected_lane;
     if lane < 0 || lane >= MANAGERS_LANE_COUNT {
@@ -678,7 +678,7 @@ draw_managers_modal :: proc(player: Player) {
 
     // If this lane is locked, show the lane unlock purchase UI instead of manager cards.
     if !lanes_is_unlocked(player, lane) {
-        prompt_rect := body->center_rect()->grow(160, 360, 160, 360);
+        prompt_rect := body.center_rect().grow(160, 360, 160, 360);
         draw_managers_unlock_lane_prompt(player, prompt_rect, lane);
         return;
     }
@@ -696,14 +696,14 @@ draw_managers_modal :: proc(player: Player) {
         y1 := (i < 2) ? 0.5 : 0.0;
         y2 := y1 + 0.5;
 
-        card := cards_area->subrect(x1, y1, x2, y2)->inset(12);
+        card := cards_area.subrect(x1, y1, x2, y2).inset(12);
         draw_manager_card(player, card, lane, kind);
     }
 }
 
 draw_managers_ui :: proc(player: Player) {
     if player == null return;
-    if !player->is_local_or_server() return;
+    if !player.is_local_or_server() return;
 
     // Always draw the toggle button (unless another modal should disable it later)
     draw_managers_button(player);

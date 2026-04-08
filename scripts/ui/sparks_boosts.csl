@@ -23,7 +23,7 @@ sparks_find_player_by_user_id :: proc(user_id: string) -> Player {
     if user_id.count == 0 return null;
     foreach p: component_iterator(Player) {
         if p == null continue;
-        if p->get_user_id() == user_id {
+        if p.get_user_id() == user_id {
             return p;
         }
     }
@@ -65,7 +65,7 @@ draw_rotated_ui_quad :: proc(rect: Rect, tex: Texture_Asset, rotation_degrees: f
     if tex == null return;
 
     // Rotate around rect center via UI matrix.
-    c := rect->center();
+    c := rect.center();
     UI.push_matrix(Matrix4.translate(v3{c.x, c.y, 0}));
     defer UI.pop_matrix();
     UI.push_matrix(Matrix4.rotate(rotation_degrees, v3{0, 0, 1}));
@@ -100,7 +100,7 @@ server_grant_sparks_boost_2x_machine_speed :: proc(player: Player) -> bool {
     // Re-apply station derived tuning immediately so processing timers update.
     gm := get_game_manager();
     if gm != null {
-        gm->server_apply_station_upgrade_levels_for_player(player);
+        gm.server_apply_station_upgrade_levels_for_player(player);
     }
 
     // Cosmetic: purchase FX + SFX on the owning client.
@@ -177,7 +177,7 @@ draw_sparks_boost_button :: proc(
 
     draw_rect := rect;
     if icon != null {
-        draw_rect = rect->fit_aspect(icon->get_aspect());
+        draw_rect = rect.fit_aspect(icon.get_aspect());
     }
 
     bs := UI.default_button_settings();
@@ -199,16 +199,16 @@ draw_sparks_boost_button :: proc(
     }
 
     // Backdrop + ray burst behind the button.
-    w := draw_rect->width();
-    h := draw_rect->height();
+    w := draw_rect.width();
+    h := draw_rect.height();
     size := max(w, h) * 0.72 * 1.2; // ~20% bigger
 
-    base_rect := Rect{draw_rect->center(), draw_rect->center()}->grow_unscaled(size);
+    base_rect := Rect{draw_rect.center(), draw_rect.center()}.grow_unscaled(size);
 
     // Static backdrop: Cliffs boundary.
     #static boundary := get_asset(Texture_Asset, "Cliffs/Boundary.png");
     if boundary != null {
-        back_rect := base_rect->fit_aspect(boundary->get_aspect());
+        back_rect := base_rect.fit_aspect(boundary.get_aspect());
         back_alpha := owned ? 0.18 : 0.35;
         UI.quad(back_rect, boundary, {1, 1, 1, back_alpha});
     }
@@ -216,7 +216,7 @@ draw_sparks_boost_button :: proc(
     // Spinning golden ray burst.
     #static ray_burst := get_asset(Texture_Asset, "UI/ray_burst_2.png");
     if ray_burst != null {
-        ray_rect := base_rect->fit_aspect(ray_burst->get_aspect());
+        ray_rect := base_rect.fit_aspect(ray_burst.get_aspect());
 
         // Spin over time (degrees).
         rotation := get_time() * 90.0;
@@ -238,7 +238,7 @@ draw_sparks_boost_button :: proc(
 
     if result.clicked {
         if owned {
-            if player->is_local() {
+            if player.is_local() {
                 Notifier.notify("Already owned.");
             }
             return;
@@ -249,18 +249,18 @@ draw_sparks_boost_button :: proc(
 
 draw_sparks_boosts_ui :: proc(player: Player) {
     if player == null return;
-    if !player->is_local_or_server() return;
+    if !player.is_local_or_server() return;
 
     safe := UI.get_safe_screen_rect();
 
     // Left-side vertical strip (two buttons).
     SCALE :: 1.2; // ~20% bigger
-    panel := safe->left_center_rect()->grow(160.0 * SCALE, 140.0 * SCALE, 160.0 * SCALE, 0)->offset(24.0 * SCALE, 0);
-    inner := panel->inset(10.0 * SCALE);
+    panel := safe.left_center_rect().grow(160.0 * SCALE, 140.0 * SCALE, 160.0 * SCALE, 0).offset(24.0 * SCALE, 0);
+    inner := panel.inset(10.0 * SCALE);
 
-    btn1 := inner->cut_top(140.0 * SCALE);
-    _ := inner->cut_top(16.0 * SCALE);
-    btn2 := inner->cut_top(140.0 * SCALE);
+    btn1 := inner.cut_top(140.0 * SCALE);
+    _ := inner.cut_top(16.0 * SCALE);
+    btn2 := inner.cut_top(140.0 * SCALE);
 
     #static icon_mgr := get_asset(Texture_Asset, "Buttons/2xspeed.png");
     #static icon_mch := get_asset(Texture_Asset, "Buttons/2xmachine.png");

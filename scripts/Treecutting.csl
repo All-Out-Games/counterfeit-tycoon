@@ -46,7 +46,7 @@ Treecutting_Tree :: class : Interactable {
     hit_shake_was_active: bool;
 
     ao_start :: method() {
-        this->set_listener(this);
+        this.set_listener(this);
 
         // Default tuning (only if not set in editor)
         if min_wood_drops <= 0 {
@@ -72,8 +72,8 @@ Treecutting_Tree :: class : Interactable {
         }
 
         // Prompt text
-        this->set_text("Chop tree");
-        this->set_hold_text("Chopping...");
+        this.set_text("Chop tree");
+        this.set_hold_text("Chopping...");
 
         // Cache rest pose so we can do hit shake without drifting.
         rest_local_rotation = entity.local_rotation;
@@ -169,8 +169,8 @@ Treecutting_Tree :: class : Interactable {
                 s := sin(phase * 1.35) * p * S_MAG;
                 scale := v2{rest_local_scale.x * (1.0 + s), rest_local_scale.y * (1.0 - s)};
 
-                entity->set_local_rotation(rest_local_rotation + rot_offset);
-                entity->set_local_scale(scale);
+                entity.set_local_rotation(rest_local_rotation + rot_offset);
+                entity.set_local_scale(scale);
             }
 
             hit_shake_was_active = active;
@@ -181,12 +181,12 @@ Treecutting_Tree :: class : Interactable {
         t := Ease.out_quart(Ease.T(elapsed, fall_duration));
         rot := lerp(start_rotation, target_rotation, t);
 
-        entity->set_local_rotation(rot);
+        entity.set_local_rotation(rot);
 
         // Optional pivot correction to make rotation appear to hinge at trunk base.
         if pivot_local.x != 0 || pivot_local.y != 0 {
             pos := pivot_anchor_local - rotate_v2(pivot_local, deg_to_rad(rot));
-            entity->set_local_position(pos);
+            entity.set_local_position(pos);
         }
 
         // Poof VFX slightly BEFORE the fall finishes (server authoritative).
@@ -209,7 +209,7 @@ Treecutting_Tree :: class : Interactable {
                 if treefall_sfx != null {
                     desc := SFX.default_sfx_desc();
                     desc.volume = 0.4;
-                    desc->set_position(entity.world_position);
+                    desc.set_position(entity.world_position);
                     SFX.play(treefall_sfx, desc);
                 }
             }
@@ -226,15 +226,15 @@ Treecutting_Tree :: class : Interactable {
             spawn_wood_drops();
             // Despawn slightly AFTER the fall finishes, so VFX timing feels immediate
             // (and avoids "poof shows up only after tree disappears" on some peers).
-            entity->queue_for_destruction(0.05);
+            entity.queue_for_destruction(0.05);
         }
     }
 
     restore_rest_pose :: method() {
         // Clear any residual hit-shake and return to the "rest" transform.
         hit_shake_was_active = false;
-        entity->set_local_rotation(rest_local_rotation);
-        entity->set_local_scale(rest_local_scale);
+        entity.set_local_rotation(rest_local_rotation);
+        entity.set_local_scale(rest_local_scale);
     }
 
     spawn_tree_poof :: method() {
@@ -248,8 +248,8 @@ Treecutting_Tree :: class : Interactable {
             return;
         }
 
-        fx->set_local_position(entity.world_position + v2{1.25, 0});
-        fx->queue_for_destruction(1.5);
+        fx.set_local_position(entity.world_position + v2{1.25, 0});
+        fx.queue_for_destruction(1.5);
     }
 
     spawn_tree_hit_fx :: method() {
@@ -264,14 +264,14 @@ Treecutting_Tree :: class : Interactable {
         }
 
         pos := entity.world_position + v2{0, 0.5};
-        fx->set_local_position(pos);
-        fx->queue_for_destruction(0.3);
+        fx.set_local_position(pos);
+        fx.queue_for_destruction(0.3);
 
         // SFX: play chop sound at the hit position.
         #static chop_sfx := get_asset(SFX_Asset, "SFX/chop.wav");
         if chop_sfx != null {
             desc := SFX.default_sfx_desc();
-            desc->set_position(pos);
+            desc.set_position(pos);
             SFX.play(chop_sfx, desc);
         }
     }
@@ -283,7 +283,7 @@ Treecutting_Tree :: class : Interactable {
             return;
         }
 
-        rng := rng_seed_time();
+        rng := make_frame_rng(entity.id + 201);
         count := rng_range_int(ref rng, min_wood_drops, max_wood_drops);
 
         // Compute a midpoint along the fallen trunk in world space.

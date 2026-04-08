@@ -34,18 +34,18 @@ server_drop_resources_on_death :: proc(player: Player) {
     }
 
     origin := player.entity.world_position;
-    rng := rng_seed_time();
+    rng := make_frame_rng(player.entity.id + 351);
 
     // Drop 25% of each held resource type, as INDIVIDUAL world drops (no clumping).
     for slot: 0..inv.capacity-1 {
-        item := inv->get_item(slot);
+        item := inv.get_item(slot);
         if item == null continue;
         if item.self == null continue;
 
-        defn := item->get_definition();
+        defn := item.get_definition();
         if defn == null continue;
 
-        id := defn->get_id();
+        id := defn.get_id();
         if !death_is_droppable_resource_id(id) continue;
 
         qty := item.quantity;
@@ -61,11 +61,11 @@ server_drop_resources_on_death :: proc(player: Player) {
 
         for i: 0..drop_count-1 {
             // Re-fetch from the slot because destroying may swap/clear stacks.
-            cur := inv->get_item(slot);
+            cur := inv.get_item(slot);
             if cur == null break;
             if cur.self == null break;
 
-            cur_defn := cur->get_definition();
+            cur_defn := cur.get_definition();
             if cur_defn == null break;
             if cur_defn != defn break;
 
@@ -77,7 +77,7 @@ server_drop_resources_on_death :: proc(player: Player) {
             drop_pos := ItemDrops.random_point_on_circle_edge(origin, radius, ref rng);
             dropped := ItemDrops.spawn_from_definition(drop_pos, defn, 1);
             if dropped != null {
-                dropped.blocked_player_user_id = player->get_user_id();
+                dropped.blocked_player_user_id = player.get_user_id();
             }
         }
     }
@@ -93,7 +93,7 @@ server_respawn_player_at_owned_base :: proc(player: Player) {
     spawn_pos := v2{};
     ok := false;
     if gm != null {
-        tmp_pos, tmp_ok := gm->get_spawn_position(player.base_spawn_index);
+        tmp_pos, tmp_ok := gm.get_spawn_position(player.base_spawn_index);
         spawn_pos = tmp_pos;
         ok = tmp_ok;
     }
@@ -116,7 +116,7 @@ server_respawn_player_at_owned_base :: proc(player: Player) {
         }
     }
 
-    player.entity->set_local_position(spawn_pos + offset);
+    player.entity.set_local_position(spawn_pos + offset);
 
     // Restore health.
     if player.MaxHealth <= 0 {
@@ -126,8 +126,8 @@ server_respawn_player_at_owned_base :: proc(player: Player) {
 
     // Clear KO animation and play spawn-in.
     if player.animator != null && player.animator.instance != null && player.animator.instance.state_machine != null {
-        player.animator.instance.state_machine->set_trigger("cancel_all");
-        player.animator.instance.state_machine->set_trigger("Spawn");
+        player.animator.instance.state_machine.set_trigger("cancel_all");
+        player.animator.instance.state_machine.set_trigger("Spawn");
     }
 }
 
@@ -151,7 +151,7 @@ Death_Effect :: class : Effect_Base {
 
             // Play KO animation (replicates via synced animator/state machine).
             if player.animator != null && player.animator.instance != null && player.animator.instance.state_machine != null {
-                player.animator.instance.state_machine->set_trigger("Death_No_HP");
+                player.animator.instance.state_machine.set_trigger("Death_No_HP");
             }
         }
     }
@@ -178,7 +178,7 @@ Death_Effect :: class : Effect_Base {
         if player == null return;
 
         // Fade is purely local UI.
-        if !player->is_local() {
+        if !player.is_local() {
             return;
         }
 

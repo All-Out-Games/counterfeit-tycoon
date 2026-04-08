@@ -1,7 +1,7 @@
 import "core:ao"
 
 // Draw the engine hotbar for a player's default inventory.
-// - Must be called from Player.ao_late_update inside `player->is_local_or_server()`
+// - Must be called from Player.ao_late_update inside `player.is_local_or_server()`
 // - Server handles authoritative effects (use/drop) based on the returned result.
 draw_player_hotbar :: proc(player: Player) {
     if player == null return;
@@ -32,10 +32,10 @@ draw_player_hotbar :: proc(player: Player) {
     //
     // IMPORTANT:
     // `result.selected_item` can be non-null but still be an invalid/dangling instance (engine-owned),
-    // which will crash when calling `item->get_definition()`.
+    // which will crash when calling `item.get_definition()`.
     // Re-fetch from the authoritative inventory slot by index instead.
     if result.selected_item_index >= 0 && result.selected_item_index < inv.capacity {
-        selected := inv->get_item(result.selected_item_index);
+        selected := inv.get_item(result.selected_item_index);
         if selected != null {
             ItemManager.TryUseItem(player, selected);
         }

@@ -32,7 +32,7 @@ woodchipper_find_paper_mill_for_base_and_lane :: proc(base: PlayerBase, lane_ind
     foreach m: component_iterator(Paper_Mill) {
         if m == null continue;
         if m.entity == null || m.entity.self == null continue;
-        if !m.entity->get_world_enabled() continue;
+        if !m.entity.get_world_enabled() continue;
         if m.lane_index != lane_index continue;
 
         pb := get_parent_player_base(m.entity);
@@ -56,7 +56,7 @@ woodchipper_choose_best_paper_mill_lane :: proc(base: PlayerBase) -> s64 {
     foreach m: component_iterator(Paper_Mill) {
         if m == null continue;
         if m.entity == null || m.entity.self == null continue;
-        if !m.entity->get_world_enabled() continue;
+        if !m.entity.get_world_enabled() continue;
 
         pb := get_parent_player_base(m.entity);
         if pb != base continue;
@@ -108,7 +108,7 @@ woodchipper_choose_next_paper_mill_lane_after_deposit :: proc(base: PlayerBase, 
     foreach m: component_iterator(Paper_Mill) {
         if m == null continue;
         if m.entity == null || m.entity.self == null continue;
-        if !m.entity->get_world_enabled() continue;
+        if !m.entity.get_world_enabled() continue;
 
         pb := get_parent_player_base(m.entity);
         if pb != base continue;
@@ -232,7 +232,7 @@ Woodchipper :: class : Component {
             target_mill_lane_index = 0;
         }
 
-        agent = entity->get_component(Movement_Agent);
+        agent = entity.get_component(Movement_Agent);
         if agent == null {
             log_warning("Woodchipper: missing Movement_Agent on Woodchipper entity", {});
         }
@@ -335,7 +335,7 @@ Woodchipper :: class : Component {
             return;
         }
 
-        rng := rng_seed_time();
+        rng := make_frame_rng(entity.id + 281);
         choice := rng_range_int(ref rng, 1, 2);
 
         break_variant = choice;
@@ -362,15 +362,15 @@ Woodchipper :: class : Component {
             }
         }
         else if spine_entity != null && spine_entity.self != null {
-            spine = spine_entity->get_component(Spine_Animator);
+            spine = spine_entity.get_component(Spine_Animator);
             target_entity = spine_entity;
         }
         else if target_entity != null && target_entity.self != null {
-            spine = target_entity->get_component(Spine_Animator);
+            spine = target_entity.get_component(Spine_Animator);
         }
 
         if spine != null {
-            spine->awaken();
+            spine.awaken();
         }
 
         // Cache initial scale for flip logic.
@@ -395,65 +395,65 @@ Woodchipper :: class : Component {
 
         spine_sm = State_Machine.create();
 
-        mode_var := spine_sm->create_variable("anim_mode", .INT);
-        push_var := spine_sm->create_variable("push", .TRIGGER);
-        layer := spine_sm->create_layer("main", 0);
+        mode_var := spine_sm.create_variable("anim_mode", .INT);
+        push_var := spine_sm.create_variable("push", .TRIGGER);
+        layer := spine_sm.create_layer("main", 0);
 
         // anim_mode mapping:
         // 0 = Idle
         // 1 = Run
         // 2 = Idle_Break_1
         // 3 = Idle_Break_2
-        idle_state := layer->create_state("Idle", true);
-        run_state := layer->create_state("Run", true);
-        break1_state := layer->create_state("Idle_Break_1", true);
-        break2_state := layer->create_state("Idle_Break_2", true);
-        push_state := layer->create_state("Push", false);
-        layer->set_initial_state(idle_state);
+        idle_state := layer.create_state("Idle", true);
+        run_state := layer.create_state("Run", true);
+        break1_state := layer.create_state("Idle_Break_1", true);
+        break2_state := layer.create_state("Idle_Break_2", true);
+        push_state := layer.create_state("Push", false);
+        layer.set_initial_state(idle_state);
 
-        idle_to_run := layer->create_transition(idle_state, run_state, false);
-        idle_to_run->create_int_condition(mode_var, 1, .EQUAL);
+        idle_to_run := layer.create_transition(idle_state, run_state, false);
+        idle_to_run.create_int_condition(mode_var, 1, .EQUAL);
 
-        idle_to_b1 := layer->create_transition(idle_state, break1_state, false);
-        idle_to_b1->create_int_condition(mode_var, 2, .EQUAL);
+        idle_to_b1 := layer.create_transition(idle_state, break1_state, false);
+        idle_to_b1.create_int_condition(mode_var, 2, .EQUAL);
 
-        idle_to_b2 := layer->create_transition(idle_state, break2_state, false);
-        idle_to_b2->create_int_condition(mode_var, 3, .EQUAL);
+        idle_to_b2 := layer.create_transition(idle_state, break2_state, false);
+        idle_to_b2.create_int_condition(mode_var, 3, .EQUAL);
 
-        run_to_idle := layer->create_transition(run_state, idle_state, false);
-        run_to_idle->create_int_condition(mode_var, 0, .EQUAL);
+        run_to_idle := layer.create_transition(run_state, idle_state, false);
+        run_to_idle.create_int_condition(mode_var, 0, .EQUAL);
 
-        run_to_b1 := layer->create_transition(run_state, break1_state, false);
-        run_to_b1->create_int_condition(mode_var, 2, .EQUAL);
+        run_to_b1 := layer.create_transition(run_state, break1_state, false);
+        run_to_b1.create_int_condition(mode_var, 2, .EQUAL);
 
-        run_to_b2 := layer->create_transition(run_state, break2_state, false);
-        run_to_b2->create_int_condition(mode_var, 3, .EQUAL);
+        run_to_b2 := layer.create_transition(run_state, break2_state, false);
+        run_to_b2.create_int_condition(mode_var, 3, .EQUAL);
 
-        b1_to_idle := layer->create_transition(break1_state, idle_state, false);
-        b1_to_idle->create_int_condition(mode_var, 0, .EQUAL);
+        b1_to_idle := layer.create_transition(break1_state, idle_state, false);
+        b1_to_idle.create_int_condition(mode_var, 0, .EQUAL);
 
-        b1_to_run := layer->create_transition(break1_state, run_state, false);
-        b1_to_run->create_int_condition(mode_var, 1, .EQUAL);
+        b1_to_run := layer.create_transition(break1_state, run_state, false);
+        b1_to_run.create_int_condition(mode_var, 1, .EQUAL);
 
-        b1_to_b2 := layer->create_transition(break1_state, break2_state, false);
-        b1_to_b2->create_int_condition(mode_var, 3, .EQUAL);
+        b1_to_b2 := layer.create_transition(break1_state, break2_state, false);
+        b1_to_b2.create_int_condition(mode_var, 3, .EQUAL);
 
-        b2_to_idle := layer->create_transition(break2_state, idle_state, false);
-        b2_to_idle->create_int_condition(mode_var, 0, .EQUAL);
+        b2_to_idle := layer.create_transition(break2_state, idle_state, false);
+        b2_to_idle.create_int_condition(mode_var, 0, .EQUAL);
 
-        b2_to_run := layer->create_transition(break2_state, run_state, false);
-        b2_to_run->create_int_condition(mode_var, 1, .EQUAL);
+        b2_to_run := layer.create_transition(break2_state, run_state, false);
+        b2_to_run.create_int_condition(mode_var, 1, .EQUAL);
 
-        b2_to_b1 := layer->create_transition(break2_state, break1_state, false);
-        b2_to_b1->create_int_condition(mode_var, 2, .EQUAL);
+        b2_to_b1 := layer.create_transition(break2_state, break1_state, false);
+        b2_to_b1.create_int_condition(mode_var, 2, .EQUAL);
 
-        to_push := layer->create_global_transition(push_state, false);
-        to_push->create_trigger_condition(push_var);
+        to_push := layer.create_global_transition(push_state, false);
+        to_push.create_trigger_condition(push_var);
         _ := to_push;
-        push_to_idle := layer->create_transition(push_state, idle_state, true);
+        push_to_idle := layer.create_transition(push_state, idle_state, true);
         _ := push_to_idle;
 
-        spine.instance->set_state_machine(spine_sm, true); // transfer ownership
+        spine.instance.set_state_machine(spine_sm, true); // transfer ownership
     }
 
     try_play_push_when_placing_items :: method() {
@@ -487,7 +487,7 @@ Woodchipper :: class : Component {
 
         prev := seen[slot].seq;
         if deposit_seq > prev {
-            spine.instance.state_machine->set_trigger("push");
+            spine.instance.state_machine.set_trigger("push");
         }
         seen[slot].seq = deposit_seq;
     }
@@ -504,7 +504,7 @@ Woodchipper :: class : Component {
         else if should_play_bored_idle() {
             mode = (break_variant == 1) ? 2 : 3;
         }
-        spine.instance.state_machine->set_int("anim_mode", mode);
+        spine.instance.state_machine.set_int("anim_mode", mode);
     }
 
     update_visuals :: method() {
@@ -529,10 +529,10 @@ Woodchipper :: class : Component {
 
             if target_entity != null && target_entity.self != null {
                 if delta.x > 0.001 {
-                    target_entity->set_local_scale({abs(spine_base_scale.x), spine_base_scale.y});
+                    target_entity.set_local_scale({abs(spine_base_scale.x), spine_base_scale.y});
                 }
                 else if delta.x < -0.001 {
-                    target_entity->set_local_scale({-abs(spine_base_scale.x), spine_base_scale.y});
+                    target_entity.set_local_scale({-abs(spine_base_scale.x), spine_base_scale.y});
                 }
             }
         }
@@ -545,7 +545,7 @@ Woodchipper :: class : Component {
         if spine == null return;
         pb := get_parent_player_base(entity);
         if pb == null return;
-        owner := pb->get_owner();
+        owner := pb.get_owner();
         if owner == null return;
         if owner.self == null return;
         if owner.animator == null return;
@@ -575,7 +575,7 @@ Woodchipper :: class : Component {
             return true;
         }
 
-        owner := pb->get_owner();
+        owner := pb.get_owner();
         if owner == null {
             return true;
         }
@@ -603,10 +603,10 @@ Woodchipper :: class : Component {
         foreach d: component_iterator(Item_Drop_Magnet) {
             if d == null continue;
             if d.entity == null || d.entity.self == null continue;
-            if !d.entity->get_world_enabled() continue;
+            if !d.entity.get_world_enabled() continue;
             if d.defn == null continue;
             if d.count <= 0 continue;
-            if d.defn->get_id() != "wood" continue;
+            if d.defn.get_id() != "wood" continue;
 
             // Respect exclusivity: don't steal another player's exclusive drop.
             if d.exclusive_to_player.count > 0 && d.exclusive_to_player != owner_user_id {
@@ -631,7 +631,7 @@ Woodchipper :: class : Component {
             if d.count <= 0 {
                 d.claimed = true;
                 d.time_claimed = get_time();
-                d.entity->queue_for_destruction(1);
+                d.entity.queue_for_destruction(1);
             }
 
             if carried_wood >= effective_cap {
@@ -648,7 +648,7 @@ Woodchipper :: class : Component {
         try_play_push_when_placing_items();
 
         if agent == null {
-            agent = entity->get_component(Movement_Agent);
+            agent = entity.get_component(Movement_Agent);
         }
 
         pb := get_parent_player_base(entity);
@@ -662,12 +662,12 @@ Woodchipper :: class : Component {
             switch state {
                 case .TO_HARVESTER: {
                     if harvester != null {
-                        _ := agent->set_path_target(target_pos_for_waiting_on_harvester(harvester), spd);
+                        _ := agent.set_path_target(target_pos_for_waiting_on_harvester(harvester), spd);
                     }
                 }
                 case .TO_MILL: {
                     if mill != null {
-                        _ := agent->set_path_target(target_pos_for_mill(mill), spd);
+                        _ := agent.set_path_target(target_pos_for_mill(mill), spd);
                     }
                 }
             }
@@ -679,7 +679,7 @@ Woodchipper :: class : Component {
         }
 
         if server_should_despawn() {
-            entity->destroy();
+            entity.destroy();
             return;
         }
 
@@ -726,7 +726,7 @@ Woodchipper :: class : Component {
                 // This prevents "bored" idles from being associated with path pauses.
                 if carried_wood <= 0 && harvester.carried_wood <= 0 {
                     if break_variant == 0 {
-                        rng := rng_seed_time();
+                        rng := make_frame_rng(entity.id + 282);
                         break_variant = rng_range_int(ref rng, 1, 2);
                     }
                 }
@@ -739,7 +739,7 @@ Woodchipper :: class : Component {
 
                 // Always try to keep the Harvester working if it's idle+empty at home.
                 // (This is cheap after the first dispatch since the method will early-out while busy.)
-                dispatched := harvester->server_dispatch_for_manager(owner_user_id);
+                dispatched := harvester.server_dispatch_for_manager(owner_user_id);
                 if dispatched && !harvester_dispatch_origin_set {
                     harvester_dispatch_origin_world_pos = entity.world_position;
                     harvester_dispatch_origin_set = true;
@@ -749,7 +749,7 @@ Woodchipper :: class : Component {
                 if last_action_time <= 0 || get_time() - last_action_time >= collect_interval {
                     if carried_wood < effective_cap {
                         room := effective_cap - carried_wood;
-                        taken := harvester->server_collect_wood_for_manager(owner_user_id, room);
+                        taken := harvester.server_collect_wood_for_manager(owner_user_id, room);
                         if taken > 0 {
                             carried_wood += taken;
                         }
@@ -761,7 +761,7 @@ Woodchipper :: class : Component {
                 // - If we have any wood and either we're full, or the Harvester can't give us more right now.
                 if carried_wood > 0 {
                     // If the Harvester isn't currently home/idle, we can't top up more this moment.
-                    harvester_ready := harvester->server_is_ready_for_manager(owner_user_id);
+                    harvester_ready := harvester.server_is_ready_for_manager(owner_user_id);
                     if carried_wood >= effective_cap || !harvester_ready {
                         lane := woodchipper_choose_best_paper_mill_lane(pb);
                         if lane >= 0 {
@@ -809,7 +809,7 @@ Woodchipper :: class : Component {
                 }
 
                 if last_action_time <= 0 || get_time() - last_action_time >= deposit_interval {
-                    deposited := mill->server_deposit_wood_from_manager(owner_user_id, carried_wood);
+                    deposited := mill.server_deposit_wood_from_manager(owner_user_id, carried_wood);
                     if deposited > 0 {
                         carried_wood -= deposited;
                         if carried_wood < 0 carried_wood = 0;
@@ -880,13 +880,13 @@ Woodchipper :: class : Component {
 
         pos := entity.world_position + ui_offset;
 
-        rect := Rect{pos, pos}->grow(0.18, 0.55, 0.18, 0.55);
-        icon_rect := rect->cut_left(0.22)->inset(0.01);
+        rect := Rect{pos, pos}.grow(0.18, 0.55, 0.18, 0.55);
+        icon_rect := rect.cut_left(0.22).inset(0.01);
         text_rect := rect;
 
         #static wood_icon := get_asset(Texture_Asset, "Items/Wood.png");
         if wood_icon != null {
-            UI.quad(icon_rect->fit_aspect(wood_icon->get_aspect()), wood_icon);
+            UI.quad(icon_rect.fit_aspect(wood_icon.get_aspect()), wood_icon);
         }
 
         ts := UI.default_text_settings();

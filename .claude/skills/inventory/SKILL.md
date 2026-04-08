@@ -44,7 +44,7 @@ ao_before_scene_load :: proc() {
     );
     sword_defn.damage = 10;
     sword_defn.description = "A sturdy iron sword.";
-    all_weapon_definitions->append(sword_defn);
+    all_weapon_definitions.append(sword_defn);
 
     // stack_size = -1 for infinite stacking
     bullet_icon := get_asset(Texture_Asset, "icons/bullet.png");
@@ -76,6 +76,20 @@ item := Items.create_item_instance(sword_defn, Weapon_Item, 1);
 basic_item := Items.create_item_instance(basic_defn, 10);
 ```
 
+### Giving an Item to a Player
+
+Create an instance, then move it into their inventory with `Items.move_item_to_inventory`:
+
+```csl
+item := Items.create_item_instance(sword_defn, 1);
+will_destroy: bool;
+if Items.can_move_item_to_inventory(item, player.default_inventory, ref will_destroy) {
+    Items.move_item_to_inventory(item, player.default_inventory);
+}
+```
+
+To drop an item in the world instead, see the `inventory-droppable-placeable-items` skill (`Dropped_Item.spawn`).
+
 ### Adding Items to Inventory
 
 ```csl
@@ -102,10 +116,10 @@ Items.destroy_item_instance(item, 5);    // Destroy only 5 from stack
 
 ```csl
 for i: 0..player.default_inventory.capacity-1 {
-    item := player.default_inventory->get_item(i);
+    item := player.default_inventory.get_item(i);
     if item == null continue;
 
-    defn := item->get_definition();
+    defn := item.get_definition();
     weapon_defn := defn.(Weapon_Definition);
     if weapon_defn != null {
         log_info("Found weapon with % damage", {weapon_defn.damage});
@@ -153,21 +167,21 @@ Items :: struct {
 ### Item_Definition Methods
 
 ```csl
-defn->get_name() -> string;
-defn->get_id() -> string;
-defn->get_icon() -> Texture_Asset;
+defn.get_name() -> string;
+defn.get_id() -> string;
+defn.get_icon() -> Texture_Asset;
 ```
 
 ### Item_Instance Methods
 
 ```csl
-item->get_definition() -> Item_Definition;
+item.get_definition() -> Item_Definition;
 ```
 
 ### Inventory Methods
 
 ```csl
-inventory->get_item(index: s64) -> Item_Instance;  // May return null
+inventory.get_item(index: s64) -> Item_Instance;  // May return null
 inventory.capacity                                  // Read-only
 ```
 
@@ -176,7 +190,7 @@ inventory.capacity                                  // Read-only
 Use `#type` and cast to distinguish custom types:
 
 ```csl
-defn := item->get_definition();
+defn := item.get_definition();
 if defn.#type == Weapon_Definition {
     weapon_defn := defn.(Weapon_Definition);
 }
@@ -193,7 +207,7 @@ Draw in `ao_late_update` inside `is_local_or_server()`.
 
 ```csl
 ao_late_update :: method(dt: float) {
-    if this->is_local_or_server() {
+    if this.is_local_or_server() {
         options := Inventory_Draw_Options.default();
         options.hotbar_item_count = 5;
         options.enable_use_from_hotbar = true;
@@ -202,10 +216,10 @@ ao_late_update :: method(dt: float) {
 
         result := Items.draw_hotbar(this, default_inventory, options);
 
-        if result.selected_item != null {
+        if #alive(result.selected_item) {
             use_item(this, result.selected_item);
         }
-        if result.dropped_item != null {
+        if #alive(result.dropped_item) {
             drop_item(this, result.dropped_item);
         }
     }
@@ -215,7 +229,7 @@ ao_late_update :: method(dt: float) {
 ### Full Inventory Grid
 
 ```csl
-inventory_rect := UI.get_safe_screen_rect()->inset(100);
+inventory_rect := UI.get_safe_screen_rect().inset(100);
 options := Inventory_Draw_Options.default();
 options.title = "Inventory";
 options.show_exit_button = true;
@@ -253,11 +267,16 @@ Inventory_Draw_Options :: struct {
 
 ### Draw_Hotbar_Result
 
+> **Important:** `selected_item` and `dropped_item` may be non-null yet reference
+> items that were destroyed during the same frame (e.g. consumed on use, merged
+> into a stack). A `!= null` check alone is **not** sufficient — always guard with
+> `#alive()` before calling methods on them.
+
 ```csl
 Draw_Hotbar_Result :: struct {
-    selected_item: Item_Instance;       // null if none
+    selected_item: Item_Instance;       // null if none (use #alive() before access)
     selected_item_index: s64;
-    dropped_item: Item_Instance;        // null if none
+    dropped_item: Item_Instance;        // null if none (use #alive() before access)
     entire_rect: Rect;
     inventory_open: bool;
     inventory_open_t: float;            // Animation progress 0-1

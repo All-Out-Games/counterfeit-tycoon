@@ -119,7 +119,7 @@ server_grant_weapon_purchase :: proc(player: Player, wt: Weapon_Type, purchase_s
     if room < 1 {
         if player.entity != null && player.entity.self != null {
             ItemDrops.spawn_from_definition(player.entity.world_position, defn, 1);
-            Notifier.notify(player, "Inventory full — dropped % near you.", {defn->get_name()});
+            Notifier.notify(player, "Inventory full — dropped % near you.", {defn.get_name()});
             server_request_purchase_fx(player, get_weapon_config(wt).weapon_icon_path);
             quest_on_weapon_bought(player);
             return true;
@@ -137,7 +137,7 @@ server_grant_weapon_purchase :: proc(player: Player, wt: Weapon_Type, purchase_s
     will_destroy: bool;
     if Items.can_move_item_to_inventory(item, inv, ref will_destroy) {
         Items.move_item_to_inventory(item, inv);
-        Notifier.notify(player, "Purchased % (%).", {defn->get_name(), purchase_source});
+        Notifier.notify(player, "Purchased % (%).", {defn.get_name(), purchase_source});
 
         quest_on_weapon_bought(player);
         server_request_purchase_fx(player, get_weapon_config(wt).weapon_icon_path);
@@ -147,7 +147,7 @@ server_grant_weapon_purchase :: proc(player: Player, wt: Weapon_Type, purchase_s
     Items.destroy_item_instance(item);
     if player.entity != null && player.entity.self != null {
         ItemDrops.spawn_from_definition(player.entity.world_position, defn, 1);
-        Notifier.notify(player, "Inventory full — dropped % near you.", {defn->get_name()});
+        Notifier.notify(player, "Inventory full — dropped % near you.", {defn.get_name()});
         server_request_purchase_fx(player, get_weapon_config(wt).weapon_icon_path);
         quest_on_weapon_bought(player);
         return true;
@@ -163,7 +163,7 @@ server_try_prompt_sparks_weapon_purchase :: proc(player: Player, wt: Weapon_Type
 
     product_id := weapon_shop_sparks_product_id(wt);
     if product_id.count == 0 {
-        if player->is_local() {
+        if player.is_local() {
             Notifier.notify("Sparks purchase not available.");
         }
         return;
@@ -173,7 +173,7 @@ server_try_prompt_sparks_weapon_purchase :: proc(player: Player, wt: Weapon_Type
 
     defn := get_weapon_item_def(wt);
     if defn == null {
-        if player->is_local() {
+        if player.is_local() {
             Notifier.notify("Weapon not available.");
         }
         return;
@@ -181,7 +181,7 @@ server_try_prompt_sparks_weapon_purchase :: proc(player: Player, wt: Weapon_Type
 
     inv := player.default_inventory;
     if inv == null || inv.self == null {
-        if player->is_local() {
+        if player.is_local() {
             Notifier.notify("No inventory available.");
         }
         return;
@@ -189,7 +189,7 @@ server_try_prompt_sparks_weapon_purchase :: proc(player: Player, wt: Weapon_Type
 
     room := Items.calculate_room_in_inventory_for_item(defn, inv);
     if room < 1 {
-        if player->is_local() {
+        if player.is_local() {
             Notifier.notify("Inventory full!");
         }
         return;
@@ -289,10 +289,10 @@ server_try_buy_item_by_definition :: proc(player: Player, defn: Item_Definition,
     if Items.can_move_item_to_inventory(item, inv, ref will_destroy) {
         Items.move_item_to_inventory(item, inv);
         if cost > 0 {
-           // Notifier.notify(player, "Bought % for % Coins.", {defn->get_name(), format_int_with_commas(cost)});
+           // Notifier.notify(player, "Bought % for % Coins.", {defn.get_name(), format_int_with_commas(cost)});
         }
         else {
-           // Notifier.notify(player, "Claimed % (Free).", {defn->get_name()});
+           // Notifier.notify(player, "Claimed % (Free).", {defn.get_name()});
         }
 
         // Reuse existing purchase FX path with a generic icon key.
@@ -394,10 +394,10 @@ server_try_buy_weapon :: proc(player: Player, wt: Weapon_Type) {
     if Items.can_move_item_to_inventory(item, inv, ref will_destroy) {
         Items.move_item_to_inventory(item, inv);
         if cost > 0 {
-           // Notifier.notify(player, "Bought % for % Coins.", {defn->get_name(), format_int_with_commas(cost)});
+           // Notifier.notify(player, "Bought % for % Coins.", {defn.get_name(), format_int_with_commas(cost)});
         }
         else {
-           // Notifier.notify(player, "Claimed % (Free).", {defn->get_name()});
+           // Notifier.notify(player, "Claimed % (Free).", {defn.get_name()});
         }
 
         // Quest tracking: weapon bought.
@@ -596,10 +596,10 @@ server_try_buy_ammo :: proc(player: Player, ammo_type_index: s64) {
 
 draw_weapons_shop_button :: proc(player: Player) {
     if player == null return;
-    if !player->is_local_or_server() return;
+    if !player.is_local_or_server() return;
 
     safe := UI.get_safe_screen_rect();
-    btn_rect := safe->right_center_rect()->grow(60)->offset(-90, -120);
+    btn_rect := safe.right_center_rect().grow(60).offset(-90, -120);
 
     bs := UI.default_button_settings();
     ts := UI.default_text_settings();
@@ -609,7 +609,7 @@ draw_weapons_shop_button :: proc(player: Player) {
     if icon != null {
         bs.sprite = icon;
         bs.press_scaling = 0.8;
-        draw_rect := btn_rect->fit_aspect(icon->get_aspect());
+        draw_rect := btn_rect.fit_aspect(icon.get_aspect());
 
         if UI.button(draw_rect, bs, ts, "Arms").clicked {
             if Game.is_server() {
@@ -630,7 +630,7 @@ draw_weapons_shop_button :: proc(player: Player) {
     // Fallback: regular button if icon missing.
     bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_5.png"); // Blue
     bs.press_scaling = 0.4;
-    if UI.button(btn_rect->grow(0, 120, 0, 120), bs, ts, "Arms").clicked {
+    if UI.button(btn_rect.grow(0, 120, 0, 120), bs, ts, "Arms").clicked {
         if Game.is_server() {
             player.weapons_shop_open = !player.weapons_shop_open;
             if player.weapons_shop_open {
@@ -670,7 +670,7 @@ draw_weapons_shop_tabs :: proc(player: Player, rect: Rect) {
 
         x1 := i.(float) / 2.0;
         x2 := (i + 1).(float) / 2.0;
-        btn := rect->subrect(x1, 0, x2, 1)->inset(8);
+        btn := rect.subrect(x1, 0, x2, 1).inset(8);
 
         is_selected := player.weapons_shop_tab == i;
         bs := is_selected ? bs_selected : bs_normal;
@@ -696,8 +696,8 @@ draw_page_controls :: proc(player: Player, rect: Rect, page: ref s64, page_count
         page = page_count - 1;
     }
 
-    left := rect->cut_left_unscaled(rect->width() * 0.33);
-    mid  := rect->cut_left_unscaled(rect->width() * 0.34);
+    left := rect.cut_left_unscaled(rect.width() * 0.33);
+    mid  := rect.cut_left_unscaled(rect.width() * 0.34);
     right := rect;
 
     bs := UI.default_button_settings();
@@ -713,7 +713,7 @@ draw_page_controls :: proc(player: Player, rect: Rect, page: ref s64, page_count
     ts.outline_color = {0, 0, 0, 1};
 
     UI.push_id("page_prev", {}); defer UI.pop_id();
-    if UI.button(left->inset(6), bs, ts, "Prev").clicked {
+    if UI.button(left.inset(6), bs, ts, "Prev").clicked {
         if Game.is_server() {
             if page > 0 page -= 1;
         }
@@ -722,7 +722,7 @@ draw_page_controls :: proc(player: Player, rect: Rect, page: ref s64, page_count
     UI.text(mid, ts, "Page % / %", {page + 1, page_count});
 
     UI.push_id("page_next", {}); defer UI.pop_id();
-    if UI.button(right->inset(6), bs, ts, "Next").clicked {
+    if UI.button(right.inset(6), bs, ts, "Next").clicked {
         if Game.is_server() {
             if page < page_count - 1 page += 1;
         }
@@ -745,8 +745,8 @@ draw_weapon_shop_item_card :: proc(player: Player, rect: Rect, wt: Weapon_Type) 
     has_sparks := sparks_product_id.count != 0 && sparks_price > 0;
     if has_sparks {
         // Bottom button + small gap.
-        sparks_rect = main_rect->cut_bottom(56)->inset(4);
-        _ := main_rect->cut_bottom(4);
+        sparks_rect = main_rect.cut_bottom(56).inset(4);
+        _ := main_rect.cut_bottom(4);
     }
 
     bs := UI.default_button_settings();
@@ -770,12 +770,12 @@ draw_weapon_shop_item_card :: proc(player: Player, rect: Rect, wt: Weapon_Type) 
     result := UI.begin_button(main_rect, bs, ts, ""); {
         defer UI.end_button();
 
-        inner := result.rect->inset(12);
-        top := inner->cut_top_unscaled(inner->height() * 0.62);
-        _ := inner->cut_top(6);
+        inner := result.rect.inset(12);
+        top := inner.cut_top_unscaled(inner.height() * 0.62);
+        _ := inner.cut_top(6);
 
         if icon != null {
-            UI.quad(top->fit_aspect(icon->get_aspect()), icon);
+            UI.quad(top.fit_aspect(icon.get_aspect()), icon);
         }
         else {
             UI.quad(top, core_globals.white_sprite, {0.2, 0.2, 0.2, 1});
@@ -821,13 +821,13 @@ draw_weapon_shop_item_card :: proc(player: Player, rect: Rect, wt: Weapon_Type) 
         result_sparks := UI.begin_button(sparks_rect, bs_sparks, ts_draw, ""); {
             defer UI.end_button();
 
-            inner := result_sparks.rect->inset(10);
+            inner := result_sparks.rect.inset(10);
 
             // Left-anchored icon, padded in from button edge.
             if sparks_icon != null {
-                icon_center := v2{inner.min.x + ICON_LEFT_PADDING_PX + ICON_SIZE_PX * 0.5, inner->center().y};
-                icon_rect := Rect{icon_center, icon_center}->grow_unscaled(ICON_SIZE_PX * 0.5, ICON_SIZE_PX * 0.5, ICON_SIZE_PX * 0.5, ICON_SIZE_PX * 0.5);
-                UI.quad(icon_rect->fit_aspect(sparks_icon->get_aspect()), sparks_icon);
+                icon_center := v2{inner.min.x + ICON_LEFT_PADDING_PX + ICON_SIZE_PX * 0.5, inner.center().y};
+                icon_rect := Rect{icon_center, icon_center}.grow_unscaled(ICON_SIZE_PX * 0.5, ICON_SIZE_PX * 0.5, ICON_SIZE_PX * 0.5, ICON_SIZE_PX * 0.5);
+                UI.quad(icon_rect.fit_aspect(sparks_icon.get_aspect()), sparks_icon);
             }
 
             // Give the label the remaining width to avoid crowding/wrapping.
@@ -836,7 +836,7 @@ draw_weapon_shop_item_card :: proc(player: Player, rect: Rect, wt: Weapon_Type) 
             if sparks_icon == null {
                 cut = 0;
             }
-            _ := label_rect->cut_left_unscaled(cut);
+            _ := label_rect.cut_left_unscaled(cut);
             UI.text(label_rect, ts_draw, label);
         }
 
@@ -853,7 +853,7 @@ draw_turret_shop_item_card :: proc(player: Player, rect: Rect, item_id: string) 
     defn := ItemManager.TryFindItem(item_id);
     if defn == null return;
 
-    icon := defn->get_icon();
+    icon := defn.get_icon();
     cost := turret_shop_price_by_item_id(item_id);
     can_afford := cost > 0 && Economy.can_withdraw_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost);
 
@@ -876,18 +876,18 @@ draw_turret_shop_item_card :: proc(player: Player, rect: Rect, item_id: string) 
     result := UI.begin_button(rect, bs, ts, ""); {
         defer UI.end_button();
 
-        inner := result.rect->inset(12);
-        top := inner->cut_top_unscaled(inner->height() * 0.62);
-        _ := inner->cut_top(6);
+        inner := result.rect.inset(12);
+        top := inner.cut_top_unscaled(inner.height() * 0.62);
+        _ := inner.cut_top(6);
 
         if icon != null {
-            UI.quad(top->fit_aspect(icon->get_aspect()), icon);
+            UI.quad(top.fit_aspect(icon.get_aspect()), icon);
         }
         else {
             UI.quad(top, core_globals.white_sprite, {0.2, 0.2, 0.2, 1});
         }
 
-        UI.text(inner, ts, "%\n$%", {defn->get_name(), format_int_with_commas(cost)});
+        UI.text(inner, ts, "%\n$%", {defn.get_name(), format_int_with_commas(cost)});
     }
 
     if result.clicked {
@@ -922,12 +922,12 @@ draw_ammo_shop_item_card :: proc(player: Player, rect: Rect, ammo_type_index: s6
     result := UI.begin_button(rect, bs, ts, ""); {
         defer UI.end_button();
 
-        inner := result.rect->inset(12);
-        top := inner->cut_top_unscaled(inner->height() * 0.62);
-        _ := inner->cut_top(6);
+        inner := result.rect.inset(12);
+        top := inner.cut_top_unscaled(inner.height() * 0.62);
+        _ := inner.cut_top(6);
 
         if icon != null {
-            UI.quad(top->fit_aspect(icon->get_aspect()), icon);
+            UI.quad(top.fit_aspect(icon.get_aspect()), icon);
         }
         else {
             UI.quad(top, core_globals.white_sprite, {0.2, 0.2, 0.2, 1});
@@ -954,13 +954,13 @@ draw_weapons_shop_modal :: proc(player: Player) {
     UI.quad(screen, core_globals.white_sprite, {0, 0, 0, 0.65});
 
     // Window
-    window := screen->inset(100);
+    window := screen.inset(100);
     UI.quad(window, core_globals.white_sprite, {0.12, 0.12, 0.12, 0.95});
 
     // Header: title + tabs + balance
-    header := window->cut_top(170)->inset(20);
-    title_rect := header->cut_top(60);
-    tabs_rect := header->cut_top(70);
+    header := window.cut_top(170).inset(20);
+    title_rect := header.cut_top(60);
+    tabs_rect := header.cut_top(70);
     balance_rect := header;
 
     ts_title := UI.default_text_settings();
@@ -987,10 +987,10 @@ draw_weapons_shop_modal :: proc(player: Player) {
     UI.text(balance_rect, ts_bal, "Coins: %", {format_int_with_commas(coins)});
 
     // Content
-    content := window->inset(30);
+    content := window.inset(30);
 
     // Footer close button
-    footer := content->cut_bottom(95);
+    footer := content.cut_bottom(95);
     {
         bs_close := UI.default_button_settings();
         ts_close := UI.default_text_settings();
@@ -1001,7 +1001,7 @@ draw_weapons_shop_modal :: proc(player: Player) {
         bs_close.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_3.png"); // Red
         bs_close.press_scaling = 0.45;
 
-        close_btn := footer->inset(10);
+        close_btn := footer.inset(10);
         if UI.button(close_btn, bs_close, ts_close, "Close").clicked {
             if Game.is_server() {
                 player.weapons_shop_open = false;
@@ -1010,10 +1010,10 @@ draw_weapons_shop_modal :: proc(player: Player) {
         }
     }
 
-    body := content->inset(10);
+    body := content.inset(10);
 
     // Page controls
-    page_controls := body->cut_top(64);
+    page_controls := body.cut_top(64);
 
     // Pagination + grid layout
     ITEMS_PER_PAGE :: 6;
@@ -1028,7 +1028,7 @@ draw_weapons_shop_modal :: proc(player: Player) {
         draw_page_controls(player, page_controls, ref player.weapons_shop_weapon_page, page_count);
 
         // Grid area below
-        grid := body->inset(6);
+        grid := body.inset(6);
 
         start := player.weapons_shop_weapon_page * ITEMS_PER_PAGE;
         end := start + ITEMS_PER_PAGE;
@@ -1049,7 +1049,7 @@ draw_weapons_shop_modal :: proc(player: Player) {
             y1 := 1.0 - (row + 1).(float) / GRID_ROWS.(float);
             y2 := 1.0 - row.(float) / GRID_ROWS.(float);
 
-            card := grid->subrect(x1, y1, x2, y2)->inset(10);
+            card := grid.subrect(x1, y1, x2, y2).inset(10);
             if idx < WEAPONS_SHOP_WEAPON_COUNT {
                 wt := types[idx];
                 UI.push_id("weapon_%", {wt.(s64)});
@@ -1074,7 +1074,7 @@ draw_weapons_shop_modal :: proc(player: Player) {
         page_count := (item_count + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE;
         draw_page_controls(player, page_controls, ref player.weapons_shop_ammo_page, page_count);
 
-        grid := body->inset(6);
+        grid := body.inset(6);
 
         start := player.weapons_shop_ammo_page * ITEMS_PER_PAGE;
         end := start + ITEMS_PER_PAGE;
@@ -1094,7 +1094,7 @@ draw_weapons_shop_modal :: proc(player: Player) {
             y1 := 1.0 - (row + 1).(float) / GRID_ROWS.(float);
             y2 := 1.0 - row.(float) / GRID_ROWS.(float);
 
-            card := grid->subrect(x1, y1, x2, y2)->inset(10);
+            card := grid.subrect(x1, y1, x2, y2).inset(10);
 
             ammo_type_index := ammo_types[idx];
 
@@ -1107,7 +1107,7 @@ draw_weapons_shop_modal :: proc(player: Player) {
 
 draw_weapons_shop_ui :: proc(player: Player) {
     if player == null return;
-    if !player->is_local_or_server() return;
+    if !player.is_local_or_server() return;
 
     // Always draw the toggle button.
     draw_weapons_shop_button(player);

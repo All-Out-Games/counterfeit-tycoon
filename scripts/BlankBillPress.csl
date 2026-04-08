@@ -65,7 +65,7 @@ Blank_Bill_Press :: class : Interactable {
     last_save_time: float;
 
     ao_start :: method() {
-        this->set_listener(this);
+        this.set_listener(this);
 
         // Defaults (only if not set in editor)
         if seconds_per_blank_bill <= 0 {
@@ -102,8 +102,8 @@ Blank_Bill_Press :: class : Interactable {
         }
 
         // Interaction prompt
-        this->set_text("Deposit paper");
-        this->set_hold_text("Depositing...");
+        this.set_text("Deposit paper");
+        this.set_hold_text("Depositing...");
 
         // Interactable defaults if not set
         if radius <= 0 {
@@ -269,14 +269,14 @@ Blank_Bill_Press :: class : Interactable {
             spine = spine_animator;
         }
         else if spine_entity != null && spine_entity.self != null {
-            spine = spine_entity->get_component(Spine_Animator);
+            spine = spine_entity.get_component(Spine_Animator);
         }
         else {
-            spine = entity->get_component(Spine_Animator);
+            spine = entity.get_component(Spine_Animator);
         }
 
         if spine != null {
-            spine->awaken();
+            spine.awaken();
         }
     }
 
@@ -287,22 +287,22 @@ Blank_Bill_Press :: class : Interactable {
 
         spine_sm = State_Machine.create();
 
-        has_input_var := spine_sm->create_variable("has_input", .BOOL);
+        has_input_var := spine_sm.create_variable("has_input", .BOOL);
         _ := has_input_var;
-        layer := spine_sm->create_layer("main", 0);
+        layer := spine_sm.create_layer("main", 0);
 
         // Note: state names must match animation names in the Spine rig.
-        idle_state := layer->create_state("idle", true);
-        crush_state := layer->create_state("crush_paper", true);
-        layer->set_initial_state(idle_state);
+        idle_state := layer.create_state("idle", true);
+        crush_state := layer.create_state("crush_paper", true);
+        layer.set_initial_state(idle_state);
 
-        idle_to_crush := layer->create_transition(idle_state, crush_state, false);
-        idle_to_crush->create_bool_condition(has_input_var, true);
+        idle_to_crush := layer.create_transition(idle_state, crush_state, false);
+        idle_to_crush.create_bool_condition(has_input_var, true);
 
-        crush_to_idle := layer->create_transition(crush_state, idle_state, false);
-        crush_to_idle->create_bool_condition(has_input_var, false);
+        crush_to_idle := layer.create_transition(crush_state, idle_state, false);
+        crush_to_idle.create_bool_condition(has_input_var, false);
 
-        spine.instance->set_state_machine(spine_sm, true); // transfer ownership to spine instance
+        spine.instance.set_state_machine(spine_sm, true); // transfer ownership to spine instance
     }
 
     update_spine_state :: method() {
@@ -320,7 +320,7 @@ Blank_Bill_Press :: class : Interactable {
         // - play "idle" when there is no paper in the press
         // - play "crush_paper" when the press has input paper
         has_input := stored_paper > 0 && !vault_owner_has_full_vault(entity);
-        spine.instance.state_machine->set_bool("has_input", has_input);
+        spine.instance.state_machine.set_bool("has_input", has_input);
     }
 
     // Client-only hook: called immediately after this component's state sync.
@@ -480,7 +480,7 @@ Blank_Bill_Press :: class : Interactable {
             if Game.is_server() {
                 pb := get_parent_player_base(entity);
                 if pb != null {
-                    owner := pb->get_owner();
+                    owner := pb.get_owner();
                     if owner != null {
                         quest_on_produce(owner, .PRODUCE_BLANK_BILLS, 1);
                     }
@@ -539,13 +539,13 @@ Blank_Bill_Press :: class : Interactable {
         }
 
         // Spawn a magnetized world drop and lock it to this player.
-        rng := rng_seed_time();
+        rng := make_frame_rng(player.entity.id + entity.id + 222);
         for i: 1..to_give {
             _ := i;
             spawn_pos := ItemDrops.random_point_on_circle_edge(player.entity.world_position, loot_spawn_radius, ref rng);
             drop := ItemDrops.spawn_from_definition(spawn_pos, bill_defn, 1);
             if drop != null {
-                drop->set_exclusive(player);
+                drop.set_exclusive(player);
             }
         }
         stored_blank_bills -= to_give;
@@ -568,7 +568,7 @@ Blank_Bill_Press :: class : Interactable {
             return;
         }
 
-        owner := pb->get_owner();
+        owner := pb.get_owner();
         if owner == null {
             return; // owner not connected yet
         }
@@ -618,7 +618,7 @@ Blank_Bill_Press :: class : Interactable {
         if pb == null {
             return;
         }
-        owner := pb->get_owner();
+        owner := pb.get_owner();
         if owner == null {
             return;
         }
@@ -674,7 +674,7 @@ Blank_Bill_Press :: class : Interactable {
         ts.color = {1, 1, 1, 1};
         dn.TextSettings = ts;
 
-        gm.damage_numbers->append(dn);
+        gm.damage_numbers.append(dn);
     }
 
     find_closest_player_in_collect_radius :: method() -> Player {
@@ -687,7 +687,7 @@ Blank_Bill_Press :: class : Interactable {
             if p == null continue;
             if p.entity == null continue;
             if p.entity.self == null continue;
-            if !p.entity->get_world_enabled() continue;
+            if !p.entity.get_world_enabled() continue;
 
             delta := p.entity.world_position - origin;
             d2 := length_squared(delta);
@@ -707,11 +707,11 @@ Blank_Bill_Press :: class : Interactable {
             return null;
         }
 
-        owner := pb->get_owner();
+        owner := pb.get_owner();
         if owner == null return null;
         if owner.entity == null return null;
         if owner.entity.self == null return null;
-        if !owner.entity->get_world_enabled() return null;
+        if !owner.entity.get_world_enabled() return null;
 
         origin := entity.world_position;
         delta := owner.entity.world_position - origin;
@@ -731,14 +731,14 @@ Blank_Bill_Press :: class : Interactable {
         if inv.capacity <= 0 return false;
 
         for i: 0..inv.capacity-1 {
-            item := inv->get_item(i);
+            item := inv.get_item(i);
             if item == null continue;
             if item.self == null continue;
 
-            defn := item->get_definition();
+            defn := item.get_definition();
             if defn == null continue;
 
-            if defn->get_id() == "paper" {
+            if defn.get_id() == "paper" {
                 // Remove exactly 1 paper from this stack (engine will destroy stack if it hits 0).
                 Items.destroy_item_instance(item, 1);
                 return true;
@@ -774,13 +774,13 @@ Blank_Bill_Press :: class : Interactable {
         PANEL_BG_HALF_W :: 1.037;       // reduced width
         PANEL_CONTENT_HALF_W :: 0.85;   // stable content width (reduced width)
 
-        panel_bg := Rect{pos, pos}->grow(PANEL_HALF_H, PANEL_BG_HALF_W, PANEL_HALF_H, PANEL_BG_HALF_W);
-        panel_content := Rect{pos, pos}->grow(PANEL_HALF_H, PANEL_CONTENT_HALF_W, PANEL_HALF_H, PANEL_CONTENT_HALF_W);
+        panel_bg := Rect{pos, pos}.grow(PANEL_HALF_H, PANEL_BG_HALF_W, PANEL_HALF_H, PANEL_BG_HALF_W);
+        panel_content := Rect{pos, pos}.grow(PANEL_HALF_H, PANEL_CONTENT_HALF_W, PANEL_HALF_H, PANEL_CONTENT_HALF_W);
 
         // "Slate" background (tinted quad).
         UI.quad(panel_bg, core_globals.white_sprite, {0.08, 0.09, 0.10, 0.468});
 
-        content := panel_content->inset(0.051);
+        content := panel_content.inset(0.051);
 
         gap :: 0.0595;
         into_timer_gap :: 0.0255;
@@ -791,15 +791,15 @@ Blank_Bill_Press :: class : Interactable {
         output_h :: 0.323;
         ICON_HALF :: 0.167;
 
-        header := content->cut_top(header_h);
-        _ := content->cut_top(gap);
-        input_row := content->cut_top(input_h);
-        _ := content->cut_top(gap);
-        into_row := content->cut_top(into_h);
-        _ := content->cut_top(into_timer_gap);
-        timer_row := content->cut_top(timer_h);
-        _ := content->cut_top(gap);
-        output_row := content->cut_top(output_h);
+        header := content.cut_top(header_h);
+        _ := content.cut_top(gap);
+        input_row := content.cut_top(input_h);
+        _ := content.cut_top(gap);
+        into_row := content.cut_top(into_h);
+        _ := content.cut_top(into_timer_gap);
+        timer_row := content.cut_top(timer_h);
+        _ := content.cut_top(gap);
+        output_row := content.cut_top(output_h);
 
         // Header background strip
         UI.quad(header, core_globals.white_sprite, {0.12, 0.13, 0.15, 0.552});
@@ -826,15 +826,15 @@ Blank_Bill_Press :: class : Interactable {
 
         // Input: Paper
         {
-            r := input_row->inset(0.017);
+            r := input_row.inset(0.017);
             icon_box_w := ICON_HALF * 2 + 0.085;
-            icon_box := r->cut_left(icon_box_w);
-            icon_rect := icon_box->center_rect()->grow(ICON_HALF);
+            icon_box := r.cut_left(icon_box_w);
+            icon_rect := icon_box.center_rect().grow(ICON_HALF);
             text_rect := r;
 
             #static paper_icon := get_asset(Texture_Asset, "Items/Paper.png");
             if paper_icon != null {
-                UI.quad(icon_rect->fit_aspect(paper_icon->get_aspect()), paper_icon);
+                UI.quad(icon_rect.fit_aspect(paper_icon.get_aspect()), paper_icon);
             }
 
             // Color the input count based on how full the queue is.
@@ -851,17 +851,17 @@ Blank_Bill_Press :: class : Interactable {
 
         // Into arrow
         {
-            r := into_row->inset(0.017);
+            r := into_row.inset(0.017);
             #static into_icon := get_asset(Texture_Asset, "UI/into.png");
             if into_icon != null {
-                icon_rect := r->center_rect()->grow(ICON_HALF);
-                UI.quad(icon_rect->fit_aspect(into_icon->get_aspect()), into_icon);
+                icon_rect := r.center_rect().grow(ICON_HALF);
+                UI.quad(icon_rect.fit_aspect(into_icon.get_aspect()), into_icon);
             }
         }
 
         // Timer bar (progress toward next blank bill)
         {
-            bar := timer_row->inset(0.0255);
+            bar := timer_row.inset(0.0255);
             UI.quad(bar, core_globals.white_sprite, {0, 0, 0, 0.65});
 
             timer_val := convert_timer;
@@ -886,21 +886,21 @@ Blank_Bill_Press :: class : Interactable {
             if !paused_due_to_vault_full && stored_paper > 0 && seconds_per_blank_bill > 0 {
                 progress = clamp(timer_val / seconds_per_blank_bill, 0.0, 1.0);
             }
-            fill := bar->subrect(0, 0, progress, 1);
+            fill := bar.subrect(0, 0, progress, 1);
             UI.quad(fill, core_globals.white_sprite, {0.2, 0.85, 0.25, 1});
         }
 
         // Output: Blank Bills
         {
-            r := output_row->inset(0.017);
+            r := output_row.inset(0.017);
             icon_box_w := ICON_HALF * 2 + 0.085;
-            icon_box := r->cut_left(icon_box_w);
-            icon_rect := icon_box->center_rect()->grow(ICON_HALF);
+            icon_box := r.cut_left(icon_box_w);
+            icon_rect := icon_box.center_rect().grow(ICON_HALF);
             text_rect := r;
 
             #static bills_icon := get_asset(Texture_Asset, "Items/BlankBills.png");
             if bills_icon != null {
-                UI.quad(icon_rect->fit_aspect(bills_icon->get_aspect()), bills_icon);
+                UI.quad(icon_rect.fit_aspect(bills_icon.get_aspect()), bills_icon);
             }
             UI.text(text_rect, ts_row, "%", {stored_blank_bills});
         }

@@ -6,7 +6,7 @@ Simple_VFX :: class : Component {
     ao_update :: method(dt: float) {
         elapsed += dt;
         if lifetime > 0 && elapsed >= lifetime {
-            entity->destroy();
+            entity.destroy();
         }
     }
 }
@@ -28,9 +28,9 @@ Looping_VFX :: class : Component {
 
             // Server should not do spine/state-machine work; clients can drive visuals deterministically.
             if !Game.is_server() && elapsed_prev < trigger_time && elapsed >= trigger_time {
-                spine := entity->get_component(Spine_Animator);
+                spine := entity.get_component(Spine_Animator);
                 if spine != null && spine.instance != null && spine.instance.state_machine != null {
-                    spine.instance.state_machine->set_trigger("outro");
+                    spine.instance.state_machine.set_trigger("outro");
                 }
             }
 
@@ -40,7 +40,7 @@ Looping_VFX :: class : Component {
         }
 
         if lifetime > 0 && elapsed >= lifetime {
-            entity->destroy();
+            entity.destroy();
         }
     }
 }
@@ -49,20 +49,20 @@ Looping_VFX :: class : Component {
 spawn_simple_vfx :: proc(prefab_path: string, pos: v2, scale: v2, anim_name: string, lifetime: float) -> Entity {
     prefab := get_asset(Prefab_Asset, prefab_path);
     vfx_entity := Scene.instantiate(prefab);
-    vfx_entity->set_local_position(pos);
-    vfx_entity->set_local_scale(scale);
+    vfx_entity.set_local_position(pos);
+    vfx_entity.set_local_scale(scale);
 
-    spine := vfx_entity->get_component(Spine_Animator);
+    spine := vfx_entity.get_component(Spine_Animator);
     if spine != null {
-        spine->awaken();
+        spine.awaken();
         sm := State_Machine.create();
-        layer := sm->create_layer("main", 0);
-        state := layer->create_state(anim_name, false);
-        layer->set_initial_state(state);
-        spine.instance->set_state_machine(sm, true);
+        layer := sm.create_layer("main", 0);
+        state := layer.create_state(anim_name, false);
+        layer.set_initial_state(state);
+        spine.instance.set_state_machine(sm, true);
     }
 
-    vfx := vfx_entity->add_component(Simple_VFX);
+    vfx := vfx_entity.add_component(Simple_VFX);
     vfx.lifetime = lifetime;
 
     return vfx_entity;
@@ -72,26 +72,26 @@ spawn_simple_vfx :: proc(prefab_path: string, pos: v2, scale: v2, anim_name: str
 spawn_looping_vfx :: proc(prefab_path: string, pos: v2, scale: v2, intro_anim: string, loop_anim: string, outro_anim: string, lifetime: float, outro_time: float) -> Entity {
     prefab := get_asset(Prefab_Asset, prefab_path);
     vfx_entity := Scene.instantiate(prefab);
-    vfx_entity->set_local_position(pos);
-    vfx_entity->set_local_scale(scale);
+    vfx_entity.set_local_position(pos);
+    vfx_entity.set_local_scale(scale);
 
-    spine := vfx_entity->get_component(Spine_Animator);
+    spine := vfx_entity.get_component(Spine_Animator);
     if spine != null {
-        spine->awaken();
+        spine.awaken();
         sm := State_Machine.create();
-        outro_var := sm->create_variable("outro", .TRIGGER);
-        layer := sm->create_layer("main", 0);
-        intro_state := layer->create_state(intro_anim, false);
-        loop_state := layer->create_state(loop_anim, true);
-        outro_state := layer->create_state(outro_anim, false);
-        layer->set_initial_state(intro_state);
-        layer->create_transition(intro_state, loop_state, true);
-        trans := layer->create_transition(loop_state, outro_state, false);
-        trans->create_trigger_condition(outro_var);
-        spine.instance->set_state_machine(sm, true);
+        outro_var := sm.create_variable("outro", .TRIGGER);
+        layer := sm.create_layer("main", 0);
+        intro_state := layer.create_state(intro_anim, false);
+        loop_state := layer.create_state(loop_anim, true);
+        outro_state := layer.create_state(outro_anim, false);
+        layer.set_initial_state(intro_state);
+        layer.create_transition(intro_state, loop_state, true);
+        trans := layer.create_transition(loop_state, outro_state, false);
+        trans.create_trigger_condition(outro_var);
+        spine.instance.set_state_machine(sm, true);
     }
 
-    vfx := vfx_entity->add_component(Looping_VFX);
+    vfx := vfx_entity.add_component(Looping_VFX);
     vfx.lifetime = lifetime;
     vfx.outro_time = outro_time;
 

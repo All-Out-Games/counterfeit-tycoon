@@ -10,9 +10,9 @@ Projectile_Bone_Debug :: class : Component {
     ao_start :: method() {
         bone_name = "PROJECTILE";
 
-        sprite = entity->get_component(Sprite_Renderer);
+        sprite = entity.get_component(Sprite_Renderer);
         if sprite == null {
-            sprite = entity->add_component(Sprite_Renderer);
+            sprite = entity.add_component(Sprite_Renderer);
         }
 
         // Use an obvious debug texture (fallback to bullet if desired).
@@ -20,17 +20,17 @@ Projectile_Bone_Debug :: class : Component {
         #static bullet_tex := get_asset(Texture_Asset, "reusable_weapons/sprites/reusable-weapons/projectiles/MachineGunBullet.png");
 
         if circle_tex != null {
-            sprite->set_texture(circle_tex);
+            sprite.set_texture(circle_tex);
         }
         else if bullet_tex != null {
-            sprite->set_texture(bullet_tex);
+            sprite.set_texture(bullet_tex);
         }
 
         sprite.color = {1, 0, 1, 1}; // magenta
         sprite.scale = {1, 1};
 
         // Big enough to spot immediately.
-        entity->set_local_scale({0.35, 0.35});
+        entity.set_local_scale({0.35, 0.35});
     }
 
     ao_late_update :: method(dt: float) {
@@ -43,7 +43,7 @@ Projectile_Bone_Debug :: class : Component {
         }
 
         // Ensure spine instance is available.
-        player.animator->awaken();
+        player.animator.awaken();
         if player.animator.instance == null return;
 
         // Make it sort exactly with the player rig so it can't end up behind.
@@ -53,17 +53,17 @@ Projectile_Bone_Debug :: class : Component {
         // Bone position is returned in the spine instance's local space.
         // Best: parent to the animator entity and set local position directly.
         if !parented_to_animator && player.animator.entity != null {
-            entity->set_parent(player.animator.entity, false);
+            entity.set_parent(player.animator.entity, false);
             parented_to_animator = true;
         }
 
-        bone_local := player.animator.instance->get_bone_local_position(bone_name);
+        bone_local := player.animator.instance.get_bone_local_position(bone_name);
         if parented_to_animator {
-            entity->set_local_position(bone_local);
+            entity.set_local_position(bone_local);
         }
         else {
             pos := player.animator.entity.world_position + bone_local;
-            entity->set_local_position(pos);
+            entity.set_local_position(pos);
         }
     }
 }

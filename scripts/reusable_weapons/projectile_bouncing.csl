@@ -18,23 +18,23 @@ Bouncing_Projectile :: class : Component {
             max_lifetime = 5.0;
         }
         if lifetime > max_lifetime {
-            entity->destroy();
+            entity.destroy();
             return;
         }
 
         move := v2{direction.x * speed * dt, direction.y * speed * dt};
-        entity->add_local_position(move);
+        entity.add_local_position(move);
 
         if Game.is_server() {
             pos := entity.world_position + v2{0, -0.5};
             hit_player, found := Scene.get_closest_component_in_range(pos, 0.8, Player);
             if found && hit_player != null {
                 if hit_player.entity.id != owner_id && hit_player.entity.id != last_hit_id {
-                    did_damage := hit_player->take_damage(damage, null, true);
+                    did_damage := hit_player.take_damage(damage, null, true);
                     if did_damage {
                         hit_sfx := get_asset(SFX_Asset, "reusable_weapons/sounds/reusable-weapons/buzzshot_projectile_ricochet.wav");
                         sfx_desc := SFX.default_sfx_desc();
-                        sfx_desc->set_position(pos);
+                        sfx_desc.set_position(pos);
                         sfx_desc.range_multiplier = 2.0;
                         SFX.play(hit_sfx, sfx_desc);
 
@@ -49,11 +49,11 @@ Bouncing_Projectile :: class : Component {
                         // Grow on bounce (MegaBlade)
                         if grow_per_bounce {
                             scale := entity.local_scale;
-                            entity->set_local_scale({scale.x * 1.1, scale.y * 1.1});
+                            entity.set_local_scale({scale.x * 1.1, scale.y * 1.1});
                         }
 
                         if bounce_count >= max_bounces {
-                            entity->destroy();
+                            entity.destroy();
                             return;
                         }
 
@@ -61,9 +61,9 @@ Bouncing_Projectile :: class : Component {
                         next_target := find_bounce_target(pos, owner_id, last_hit_id, bounce_target_radius);
                         if next_target != null {
                             to_target := v2{next_target.entity.world_position.x - pos.x, next_target.entity.world_position.y - pos.y};
-                            direction = normalize(to_target);
+                            direction = safe_normalize_v2(to_target, direction);
                             angle := atan2(direction.y, direction.x);
-                            entity->set_local_rotation(to_degrees(angle));
+                            entity.set_local_rotation(to_degrees(angle));
                         }
                     }
                 }
@@ -73,14 +73,14 @@ Bouncing_Projectile :: class : Component {
             // For bouncing shots we simply consume the projectile on a valid truck hit.
             hit_truck, found_truck := Scene.get_closest_component_in_range(pos, 1.25, Truck);
             if found_truck && hit_truck != null {
-                if hit_truck->server_register_weapon_hit(owner_id, damage) {
+                if hit_truck.server_register_weapon_hit(owner_id, damage) {
                     hit_sfx := get_asset(SFX_Asset, "reusable_weapons/sounds/reusable-weapons/buzzshot_projectile_ricochet.wav");
                     sfx_desc := SFX.default_sfx_desc();
-                    sfx_desc->set_position(pos);
+                    sfx_desc.set_position(pos);
                     sfx_desc.range_multiplier = 2.0;
                     SFX.play(hit_sfx, sfx_desc);
 
-                    entity->destroy();
+                    entity.destroy();
                     return;
                 }
             }
@@ -89,11 +89,11 @@ Bouncing_Projectile :: class : Component {
             if turret_try_register_weapon_hit_nearest(pos, 1.25, owner_id, damage) {
                 hit_sfx := get_asset(SFX_Asset, "reusable_weapons/sounds/reusable-weapons/buzzshot_projectile_ricochet.wav");
                 sfx_desc := SFX.default_sfx_desc();
-                sfx_desc->set_position(pos);
+                sfx_desc.set_position(pos);
                 sfx_desc.range_multiplier = 2.0;
                 SFX.play(hit_sfx, sfx_desc);
 
-                entity->destroy();
+                entity.destroy();
                 return;
             }
         }
@@ -131,27 +131,27 @@ spawn_bouncing_projectile :: proc(player: Player, direction: v2, wt: Weapon_Type
     spawn_pos := get_projectile_spawn_pos(player, direction);
 
     proj_entity := Scene.create_entity();
-    proj_entity->set_local_position(spawn_pos);
+    proj_entity.set_local_position(spawn_pos);
 
     angle := atan2(direction.y, direction.x);
-    proj_entity->set_local_rotation(to_degrees(angle));
+    proj_entity.set_local_rotation(to_degrees(angle));
 
     texture_path := "reusable_weapons/sprites/reusable-weapons/projectiles/buzzsaw.png";
     if wt == .MEGA_BLADE {
         texture_path = "reusable_weapons/sprites/reusable-weapons/projectiles/megablade.png";
     }
     proj_texture := get_asset(Texture_Asset, texture_path);
-    sprite := proj_entity->add_component(Sprite_Renderer);
-    sprite->set_texture(proj_texture);
+    sprite := proj_entity.add_component(Sprite_Renderer);
+    sprite.set_texture(proj_texture);
     if wt == .MEGA_BLADE {
-        proj_entity->set_local_scale({1.7, 1.7});
+        proj_entity.set_local_scale({1.7, 1.7});
     } else {
-        proj_entity->set_local_scale({2, 2});
+        proj_entity.set_local_scale({2, 2});
     }
 
-    proj := proj_entity->add_component(Bouncing_Projectile);
+    proj := proj_entity.add_component(Bouncing_Projectile);
     proj.damage = config.base_damage;
-    proj.direction = normalize(direction);
+    proj.direction = safe_normalize_v2(direction, v2{1, 0});
     proj.owner_id = player.entity.id;
     proj.speed = config.projectile_speed;
     proj.max_lifetime = 5.0;

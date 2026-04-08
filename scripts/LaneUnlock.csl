@@ -9,7 +9,7 @@ LaneUnlock :: class : Interactable {
     lane_index: s64;
 
     ao_start :: method() {
-        this->set_listener(this);
+        this.set_listener(this);
         refresh_prompt_text();
         update_visuals_visibility_for_local_player();
     }
@@ -31,7 +31,7 @@ LaneUnlock :: class : Interactable {
         // Interactable prompt text shown to nearby players.
         cost := lanes_unlock_cost(lane_index);
         lane_number := lane_index + 1;
-        this->set_text(format_string("Unlock Lane % for $% Coins?", {lane_number, format_int_with_commas(cost)}));
+        this.set_text(format_string("Unlock Lane % for $% Coins?", {lane_number, format_int_with_commas(cost)}));
     }
 
     can_use :: method(player: Player) -> bool {
@@ -63,7 +63,7 @@ LaneUnlock :: class : Interactable {
         // Already unlocked?
         if lanes_is_unlocked(player, lane_index) {
             if entity != null && entity.self != null {
-                entity->destroy();
+                entity.destroy();
             }
             return;
         }
@@ -87,13 +87,13 @@ LaneUnlock :: class : Interactable {
 
         // Despawn this prompt.
         if entity != null && entity.self != null {
-            entity->destroy();
+            entity.destroy();
         }
 
         // Immediately spawn the next prompt if needed (up to lane 4).
         gm := get_game_manager();
         if gm != null {
-            gm->server_reconcile_lane_unlock_prompt_for_player(player);
+            gm.server_reconcile_lane_unlock_prompt_for_player(player);
         }
     }
 
@@ -117,23 +117,23 @@ LaneUnlock :: class : Interactable {
         set_sprite_descendants_enabled :: proc(e: Entity, visible: bool) {
             if e == null return;
 
-            sr := e->get_component(Sprite_Renderer);
+            sr := e.get_component(Sprite_Renderer);
             if sr != null {
-                e->set_local_enabled(visible);
+                e.set_local_enabled(visible);
             }
 
-            current := e.first_child;
+            current := e.get_first_child();
             while current != null {
                 set_sprite_descendants_enabled(current, visible);
-                current = current.next_sibling;
+                current = current.get_next_sibling();
             }
         }
 
         // Disable only child entities that contain Sprite_Renderers.
-        child := entity.first_child;
+        child := entity.get_first_child();
         while child != null {
             set_sprite_descendants_enabled(child, visible);
-            child = child.next_sibling;
+            child = child.get_next_sibling();
         }
     }
 }

@@ -23,7 +23,7 @@ Special_Ability :: class : Ability_Base {
         self := ability.(Special_Ability);
         wt := p.equipped_weapon_type;
         if weapon_is_blocked_by_ui_modal(p) {
-            p->set_mouse_ik_enabled(false);
+            p.set_mouse_ik_enabled(false);
             if wt != .NONE && self.was_shooting {
                 weapon_stop_shoot_anim(p, wt);
                 self.was_shooting = false;
@@ -32,7 +32,7 @@ Special_Ability :: class : Ability_Base {
         }
         if wt == .NONE {
             // No weapon equipped: don't enable mouse IK / facing.
-            p->set_mouse_ik_enabled(false);
+            p.set_mouse_ik_enabled(false);
             return;
         }
         config := get_weapon_config(wt);
@@ -43,11 +43,11 @@ Special_Ability :: class : Ability_Base {
 
         if aiming.aim {
             p.last_aim_direction = aiming.aim_direction;
-            p->set_mouse_ik_enabled(true);
-            p->set_aim_target(p.entity.world_position + aiming.aim_direction * 5.0);
+            p.set_mouse_ik_enabled(true);
+            p.set_aim_target(p.entity.world_position + aiming.aim_direction * 5.0);
             draw_thin_aiming_line(p.entity.world_position, aiming.aim_direction, 1.0);
         } else {
-            p->set_mouse_ik_enabled(false);
+            p.set_mouse_ik_enabled(false);
         }
 
         should_fire := false;
@@ -90,7 +90,7 @@ Special_Ability :: class : Ability_Base {
         }
 
         if should_fire && !weapon_has_ammo(p, wt) {
-            if p->is_local() {
+            if p.is_local() {
                 Notifier.notify("Out of ammo!");
             }
         }

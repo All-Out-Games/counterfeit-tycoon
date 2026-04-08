@@ -361,7 +361,7 @@ find_weapon_or_ammo_item_def :: proc(item_id: string) -> Item_Definition {
     i := 0;
     while i < WEAPON_COUNT {
         defn := g_weapon_item_defs[i];
-        if defn != null && defn->get_id() == item_id {
+        if defn != null && defn.get_id() == item_id {
             return defn;
         }
         i += 1;
@@ -370,7 +370,7 @@ find_weapon_or_ammo_item_def :: proc(item_id: string) -> Item_Definition {
     i = 0;
     while i < AMMO_TYPE_COUNT {
         defn := g_ammo_item_defs[i];
-        if defn != null && defn->get_id() == item_id {
+        if defn != null && defn.get_id() == item_id {
             return defn;
         }
         i += 1;

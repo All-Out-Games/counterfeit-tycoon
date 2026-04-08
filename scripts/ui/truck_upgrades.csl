@@ -2,11 +2,11 @@ import "core:ao"
 
 draw_truck_upgrades_button :: proc(player: Player) {
     if player == null return;
-    if !player->is_local_or_server() return;
+    if !player.is_local_or_server() return;
 
     safe := UI.get_safe_screen_rect();
     // Place this where the Managers button used to be.
-    btn_rect := safe->right_center_rect()->grow(60)->offset(-90, 120);
+    btn_rect := safe.right_center_rect().grow(60).offset(-90, 120);
 
     bs := UI.default_button_settings();
     ts := UI.default_text_settings();
@@ -18,7 +18,7 @@ draw_truck_upgrades_button :: proc(player: Player) {
         bs.press_scaling = 0.8;
 
         // Fit the clickable button rect to the sprite aspect ratio so the image doesn't stretch.
-        draw_rect := btn_rect->fit_aspect(icon->get_aspect());
+        draw_rect := btn_rect.fit_aspect(icon.get_aspect());
 
         if UI.button(draw_rect, bs, ts, "Truck").clicked {
             if Game.is_server() {
@@ -39,7 +39,7 @@ draw_truck_upgrades_button :: proc(player: Player) {
     // Fallback: regular button if icon missing.
     bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_5.png"); // Blue
     bs.press_scaling = 0.4;
-    if UI.button(btn_rect->grow(0, 120, 0, 120), bs, ts, "Truck").clicked {
+    if UI.button(btn_rect.grow(0, 120, 0, 120), bs, ts, "Truck").clicked {
         if Game.is_server() {
             player.truck_upgrades_open = !player.truck_upgrades_open;
             if player.truck_upgrades_open {
@@ -79,7 +79,7 @@ draw_truck_upgrades_header_buttons :: proc(player: Player, rect: Rect) {
 
         x1 := i.(float) / 3.0;
         x2 := (i + 1).(float) / 3.0;
-        btn := rect->subrect(x1, 0, x2, 1)->inset(8);
+        btn := rect.subrect(x1, 0, x2, 1).inset(8);
 
         is_selected := player.truck_upgrades_selected_kind == i;
         bs := is_selected ? bs_selected : bs_normal;
@@ -96,10 +96,10 @@ draw_truck_upgrade_panel :: proc(player: Player, rect: Rect, kind: Truck_Upgrade
     if player == null return;
 
     UI.quad(rect, core_globals.white_sprite, {0.08, 0.08, 0.08, 0.95});
-    inner := rect->inset(18);
+    inner := rect.inset(18);
 
     // Title
-    title_rect := inner->cut_top(60);
+    title_rect := inner.cut_top(60);
     ts_title := UI.default_text_settings();
     ts_title.size = 40;
     ts_title.halign = .LEFT;
@@ -110,11 +110,11 @@ draw_truck_upgrade_panel :: proc(player: Player, rect: Rect, kind: Truck_Upgrade
     ts_title.outline_color = {0, 0, 0, 1};
     UI.text(title_rect, ts_title, "Truck %", {truck_upgrade_display_name(kind)});
 
-    _ := inner->cut_top(6);
+    _ := inner.cut_top(6);
 
     level := get_player_truck_level(player, kind);
 
-    info_rect := inner->cut_top_unscaled(inner->height() * 0.62)->inset(8);
+    info_rect := inner.cut_top_unscaled(inner.height() * 0.62).inset(8);
     ts_info := UI.default_text_settings();
     ts_info.size = 30;
     ts_info.halign = .LEFT;
@@ -155,8 +155,8 @@ draw_truck_upgrade_panel :: proc(player: Player, rect: Rect, kind: Truck_Upgrade
         }
     }
 
-    _ := inner->cut_top(10);
-    btn_rect := inner->cut_bottom(84);
+    _ := inner.cut_top(10);
+    btn_rect := inner.cut_bottom(84);
 
     ts_btn := UI.default_text_settings();
     ts_btn.size = 32;
@@ -173,7 +173,7 @@ draw_truck_upgrade_panel :: proc(player: Player, rect: Rect, kind: Truck_Upgrade
         bs_max.press_scaling = 0.0;
         UI.push_disabled(true);
         defer UI.pop_disabled();
-        _ := UI.button(btn_rect->inset(6), bs_max, ts_btn, "Max Level");
+        _ := UI.button(btn_rect.inset(6), bs_max, ts_btn, "Max Level");
         return;
     }
 
@@ -188,7 +188,7 @@ draw_truck_upgrade_panel :: proc(player: Player, rect: Rect, kind: Truck_Upgrade
     bs.press_scaling = 0.4;
 
     label := format_string("Upgrade ($%)", {format_int_with_commas(cost)});
-    if UI.button(btn_rect->inset(6), bs, ts_btn, label).clicked {
+    if UI.button(btn_rect.inset(6), bs, ts_btn, label).clicked {
         server_try_upgrade_truck(player, kind);
     }
 }
@@ -208,13 +208,13 @@ draw_truck_upgrades_modal :: proc(player: Player) {
     UI.quad(screen, core_globals.white_sprite, {0, 0, 0, 0.65});
 
     // Window
-    window := screen->inset(100);
+    window := screen.inset(100);
     UI.quad(window, core_globals.white_sprite, {0.12, 0.12, 0.12, 0.95});
 
     // Header with kind selection
-    header := window->cut_top(150)->inset(20);
-    title_rect := header->cut_top(60);
-    kind_rect := header->cut_top(70);
+    header := window.cut_top(150).inset(20);
+    title_rect := header.cut_top(60);
+    kind_rect := header.cut_top(70);
 
     ts_title := UI.default_text_settings();
     ts_title.size = 52;
@@ -229,10 +229,10 @@ draw_truck_upgrades_modal :: proc(player: Player) {
     draw_truck_upgrades_header_buttons(player, kind_rect);
 
     // Content area (below header)
-    content := window->inset(30);
+    content := window.inset(30);
 
     // Footer close button (red)
-    footer := content->cut_bottom(95);
+    footer := content.cut_bottom(95);
     {
         bs_close := UI.default_button_settings();
         ts_close := UI.default_text_settings();
@@ -243,7 +243,7 @@ draw_truck_upgrades_modal :: proc(player: Player) {
         bs_close.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_3.png"); // Red
         bs_close.press_scaling = 0.45;
 
-        close_btn := footer->inset(10);
+        close_btn := footer.inset(10);
         if UI.button(close_btn, bs_close, ts_close, "Close").clicked {
             if Game.is_server() {
                 player.truck_upgrades_open = false;
@@ -252,7 +252,7 @@ draw_truck_upgrades_modal :: proc(player: Player) {
         }
     }
 
-    body := content->inset(10);
+    body := content.inset(10);
 
     idx := player.truck_upgrades_selected_kind;
     if idx < 0 || idx > 2 {
@@ -260,13 +260,13 @@ draw_truck_upgrades_modal :: proc(player: Player) {
     }
     kind := truck_upgrade_kind_from_index(idx);
 
-    panel := body->center_rect()->grow(210, 460, 210, 460);
+    panel := body.center_rect().grow(210, 460, 210, 460);
     draw_truck_upgrade_panel(player, panel, kind);
 }
 
 draw_truck_upgrades_ui :: proc(player: Player) {
     if player == null return;
-    if !player->is_local_or_server() return;
+    if !player.is_local_or_server() return;
 
     draw_truck_upgrades_button(player);
 

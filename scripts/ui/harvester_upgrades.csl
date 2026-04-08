@@ -182,7 +182,7 @@ server_grant_harvester_manager_unlock :: proc(player: Player, purchase_source: s
 server_try_prompt_sparks_harvester_upgrade_purchase :: proc(player: Player, target_level: s64) {
     if player == null return;
     if target_level < 2 || target_level > HARVESTER_UPGRADES_MAX_LEVEL {
-        if player->is_local() {
+        if player.is_local() {
             Notifier.notify("Invalid upgrade.");
         }
         return;
@@ -191,7 +191,7 @@ server_try_prompt_sparks_harvester_upgrade_purchase :: proc(player: Player, targ
     cur := player.harvester_level;
     if cur < 1 cur = 1;
     if cur >= target_level {
-        if player->is_local() {
+        if player.is_local() {
             Notifier.notify("Harvester is already Level %.", {cur});
         }
         return;
@@ -199,7 +199,7 @@ server_try_prompt_sparks_harvester_upgrade_purchase :: proc(player: Player, targ
 
     product_id := harvester_upgrade_sparks_product_id_for_level(target_level);
     if product_id.count == 0 {
-        if player->is_local() {
+        if player.is_local() {
             Notifier.notify("Sparks purchase not available.");
         }
         return;
@@ -212,7 +212,7 @@ server_try_prompt_sparks_harvester_manager_unlock_purchase :: proc(player: Playe
     if player == null return;
 
     if player.harvester_manager_unlocked {
-        if player->is_local() {
+        if player.is_local() {
             Notifier.notify("Already unlocked.");
         }
         return;
@@ -220,7 +220,7 @@ server_try_prompt_sparks_harvester_manager_unlock_purchase :: proc(player: Playe
 
     product_id := HARVESTER_SPARKS_PRODUCT_MANAGER_UNLOCK;
     if product_id.count == 0 {
-        if player->is_local() {
+        if player.is_local() {
             Notifier.notify("Sparks purchase not available.");
         }
         return;
@@ -305,10 +305,10 @@ server_try_unlock_harvester_manager :: proc(player: Player) {
 
 draw_harvester_upgrades_button :: proc(player: Player) {
     if player == null return;
-    if !player->is_local_or_server() return;
+    if !player.is_local_or_server() return;
 
     safe := UI.get_safe_screen_rect();
-    btn_rect := safe->right_center_rect()->grow(60)->offset(-90, 0);
+    btn_rect := safe.right_center_rect().grow(60).offset(-90, 0);
 
     bs := UI.default_button_settings();
     ts := UI.default_text_settings();
@@ -319,7 +319,7 @@ draw_harvester_upgrades_button :: proc(player: Player) {
         bs.sprite = icon;
         bs.press_scaling = 0.8;
 
-        draw_rect := btn_rect->fit_aspect(icon->get_aspect());
+        draw_rect := btn_rect.fit_aspect(icon.get_aspect());
         if UI.button(draw_rect, bs, ts, "Harvester").clicked {
             if Game.is_server() {
                 player.harvester_upgrades_open = !player.harvester_upgrades_open;
@@ -339,7 +339,7 @@ draw_harvester_upgrades_button :: proc(player: Player) {
     // Fallback: if icon is missing, draw a normal button.
     bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_5.png"); // Blue
     bs.press_scaling = 0.4;
-    if UI.button(btn_rect->grow(0, 110, 0, 110), bs, ts, "Harvester").clicked {
+    if UI.button(btn_rect.grow(0, 110, 0, 110), bs, ts, "Harvester").clicked {
         if Game.is_server() {
             player.harvester_upgrades_open = !player.harvester_upgrades_open;
             if player.harvester_upgrades_open {
@@ -357,9 +357,9 @@ draw_upgrade_card :: proc(player: Player, rect: Rect) {
     if player == null return;
 
     UI.quad(rect, core_globals.white_sprite, {0.08, 0.08, 0.08, 0.95});
-    inner := rect->inset(18);
+    inner := rect.inset(18);
 
-    title_rect := inner->cut_top(54);
+    title_rect := inner.cut_top(54);
     ts_title := UI.default_text_settings();
     ts_title.size = 40;
     ts_title.halign = .LEFT;
@@ -370,13 +370,13 @@ draw_upgrade_card :: proc(player: Player, rect: Rect) {
     ts_title.outline_color = {0, 0, 0, 1};
     UI.text(title_rect, ts_title, "Harvester Level");
 
-    _ := inner->cut_top(6);
+    _ := inner.cut_top(6);
 
     level := player.harvester_level;
     if level < 1 level = 1;
     if level > HARVESTER_UPGRADES_MAX_LEVEL level = HARVESTER_UPGRADES_MAX_LEVEL;
 
-    info_rect := inner->cut_top(120)->inset(8);
+    info_rect := inner.cut_top(120).inset(8);
     ts_info := UI.default_text_settings();
     ts_info.size = 30;
     ts_info.halign = .LEFT;
@@ -419,12 +419,12 @@ draw_upgrade_card :: proc(player: Player, rect: Rect) {
     sparks_price := harvester_upgrade_sparks_price_for_level(target_level);
     has_sparks := sparks_product_id.count != 0 && sparks_price > 0;
 
-    btn_area := inner->cut_bottom(78);
+    btn_area := inner.cut_bottom(78);
     coins_btn_rect := btn_area;
     sparks_btn_rect: Rect;
     if has_sparks {
         // Place buttons side-by-side.
-        left := btn_area->cut_left_unscaled(btn_area->width() * 0.5);
+        left := btn_area.cut_left_unscaled(btn_area.width() * 0.5);
         coins_btn_rect = left;
         sparks_btn_rect = btn_area;
     }
@@ -442,7 +442,7 @@ draw_upgrade_card :: proc(player: Player, rect: Rect) {
         ts.outline_color = {0, 0, 0, 1};
         UI.push_disabled(true);
         defer UI.pop_disabled();
-        _ := UI.button(coins_btn_rect->inset(6), bs, ts, "Max Level");
+        _ := UI.button(coins_btn_rect.inset(6), bs, ts, "Max Level");
         return;
     }
 
@@ -468,7 +468,7 @@ draw_upgrade_card :: proc(player: Player, rect: Rect) {
     // Coins upgrade button
     UI.push_id("coins_btn", {}); defer UI.pop_id();
     label := format_string("Upgrade ($%)", {format_int_with_commas(cost)});
-    if UI.button(coins_btn_rect->inset(6), bs, ts, label).clicked {
+    if UI.button(coins_btn_rect.inset(6), bs, ts, label).clicked {
         server_try_upgrade_harvester_level(player);
     }
 
@@ -489,17 +489,17 @@ draw_upgrade_card :: proc(player: Player, rect: Rect) {
         ts_sparks.autofit_min_size = 18;
         ts_sparks.autofit_max_size = ts.size;
 
-        result_sparks := UI.begin_button(sparks_btn_rect->inset(6), bs_sparks, ts_sparks, ""); {
+        result_sparks := UI.begin_button(sparks_btn_rect.inset(6), bs_sparks, ts_sparks, ""); {
             defer UI.end_button();
 
-            inner_btn := result_sparks.rect->inset(10);
+            inner_btn := result_sparks.rect.inset(10);
             if sparks_icon != null {
-                icon_rect := inner_btn->left_center_rect()->grow_unscaled(18)->offset_unscaled(22, 0);
-                UI.quad(icon_rect->fit_aspect(sparks_icon->get_aspect()), sparks_icon);
+                icon_rect := inner_btn.left_center_rect().grow_unscaled(18).offset_unscaled(22, 0);
+                UI.quad(icon_rect.fit_aspect(sparks_icon.get_aspect()), sparks_icon);
             }
 
             label_rect := inner_btn;
-            _ := label_rect->cut_left_unscaled(46);
+            _ := label_rect.cut_left_unscaled(46);
             UI.text(label_rect, ts_sparks, sparks_label);
         }
 
@@ -513,9 +513,9 @@ draw_manager_unlock_card :: proc(player: Player, rect: Rect) {
     if player == null return;
 
     UI.quad(rect, core_globals.white_sprite, {0.08, 0.08, 0.08, 0.95});
-    inner := rect->inset(18);
+    inner := rect.inset(18);
 
-    title_rect := inner->cut_top(54);
+    title_rect := inner.cut_top(54);
     ts_title := UI.default_text_settings();
     ts_title.size = 40;
     ts_title.halign = .LEFT;
@@ -526,9 +526,9 @@ draw_manager_unlock_card :: proc(player: Player, rect: Rect) {
     ts_title.outline_color = {0, 0, 0, 1};
     UI.text(title_rect, ts_title, "Harvester Manager");
 
-    _ := inner->cut_top(6);
+    _ := inner.cut_top(6);
 
-    desc_rect := inner->cut_top(110)->inset(8);
+    desc_rect := inner.cut_top(110).inset(8);
     ts_desc := UI.default_text_settings();
     ts_desc.size = 30;
     ts_desc.halign = .LEFT;
@@ -539,7 +539,7 @@ draw_manager_unlock_card :: proc(player: Player, rect: Rect) {
     ts_desc.outline_color = {0, 0, 0, 1};
     UI.text(desc_rect, ts_desc, "One-time unlock. Applies to all lanes. Manages your Harvester for you.");
 
-    btn_area := inner->cut_bottom(78);
+    btn_area := inner.cut_bottom(78);
 
     if player.harvester_manager_unlocked {
         bs := UI.default_button_settings();
@@ -556,7 +556,7 @@ draw_manager_unlock_card :: proc(player: Player, rect: Rect) {
 
         UI.push_disabled(true);
         defer UI.pop_disabled();
-        _ := UI.button(btn_area->inset(6), bs, ts, "Unlocked");
+        _ := UI.button(btn_area.inset(6), bs, ts, "Unlocked");
         return;
     }
 
@@ -564,7 +564,7 @@ draw_manager_unlock_card :: proc(player: Player, rect: Rect) {
     coins_btn_rect := btn_area;
     sparks_btn_rect := btn_area;
     {
-        left := btn_area->cut_left_unscaled(btn_area->width() * 0.5);
+        left := btn_area.cut_left_unscaled(btn_area.width() * 0.5);
         coins_btn_rect = left;
         sparks_btn_rect = btn_area;
     }
@@ -583,7 +583,7 @@ draw_manager_unlock_card :: proc(player: Player, rect: Rect) {
 
     label := format_string("Unlock ($%)", {format_int_with_commas(HARVESTER_UPGRADES_MANAGER_UNLOCK_COST)});
     UI.push_id("mgr_coins_btn", {}); defer UI.pop_id();
-    if UI.button(coins_btn_rect->inset(6), bs, ts, label).clicked {
+    if UI.button(coins_btn_rect.inset(6), bs, ts, label).clicked {
         server_try_unlock_harvester_manager(player);
     }
 
@@ -604,17 +604,17 @@ draw_manager_unlock_card :: proc(player: Player, rect: Rect) {
         ts_sparks.autofit_min_size = 18;
         ts_sparks.autofit_max_size = ts.size;
 
-        result_sparks := UI.begin_button(sparks_btn_rect->inset(6), bs_sparks, ts_sparks, ""); {
+        result_sparks := UI.begin_button(sparks_btn_rect.inset(6), bs_sparks, ts_sparks, ""); {
             defer UI.end_button();
 
-            inner_btn := result_sparks.rect->inset(10);
+            inner_btn := result_sparks.rect.inset(10);
             if sparks_icon != null {
-                icon_rect := inner_btn->left_center_rect()->grow_unscaled(18)->offset_unscaled(22, 0);
-                UI.quad(icon_rect->fit_aspect(sparks_icon->get_aspect()), sparks_icon);
+                icon_rect := inner_btn.left_center_rect().grow_unscaled(18).offset_unscaled(22, 0);
+                UI.quad(icon_rect.fit_aspect(sparks_icon.get_aspect()), sparks_icon);
             }
 
             label_rect := inner_btn;
-            _ := label_rect->cut_left_unscaled(46);
+            _ := label_rect.cut_left_unscaled(46);
             UI.text(label_rect, ts_sparks, sparks_label);
         }
 
@@ -639,11 +639,11 @@ draw_harvester_upgrades_modal :: proc(player: Player) {
     UI.quad(screen, core_globals.white_sprite, {0, 0, 0, 0.65});
 
     // Window
-    window := screen->inset(100);
+    window := screen.inset(100);
     UI.quad(window, core_globals.white_sprite, {0.12, 0.12, 0.12, 0.95});
 
     // Header
-    header := window->cut_top(110)->inset(20);
+    header := window.cut_top(110).inset(20);
     ts_title := UI.default_text_settings();
     ts_title.size = 52;
     ts_title.halign = .LEFT;
@@ -658,10 +658,10 @@ draw_harvester_upgrades_modal :: proc(player: Player) {
     UI.text(header, ts_title, "Harvester Upgrades - Level %", {level});
 
     // Content area (below header)
-    content := window->inset(30);
+    content := window.inset(30);
 
     // Footer close button (red)
-    footer := content->cut_bottom(95);
+    footer := content.cut_bottom(95);
     {
         bs_close := UI.default_button_settings();
         ts_close := UI.default_text_settings();
@@ -672,7 +672,7 @@ draw_harvester_upgrades_modal :: proc(player: Player) {
         bs_close.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_3.png"); // Red
         bs_close.press_scaling = 0.45;
 
-        close_btn := footer->inset(10);
+        close_btn := footer.inset(10);
         if UI.button(close_btn, bs_close, ts_close, "Close").clicked {
             if Game.is_server() {
                 player.harvester_upgrades_open = false;
@@ -681,12 +681,12 @@ draw_harvester_upgrades_modal :: proc(player: Player) {
         }
     }
 
-    body := content->inset(10);
+    body := content.inset(10);
 
-    top := body->cut_top_unscaled(body->height() * 0.52)->inset(10);
+    top := body.cut_top_unscaled(body.height() * 0.52).inset(10);
     // Larger separation between the two categories (Level vs Manager).
-    _ := body->cut_top(26);
-    bottom := body->inset(10);
+    _ := body.cut_top(26);
+    bottom := body.inset(10);
 
     draw_upgrade_card(player, top);
     draw_manager_unlock_card(player, bottom);
@@ -694,7 +694,7 @@ draw_harvester_upgrades_modal :: proc(player: Player) {
 
 draw_harvester_upgrades_ui :: proc(player: Player) {
     if player == null return;
-    if !player->is_local_or_server() return;
+    if !player.is_local_or_server() return;
 
     // Always draw the toggle button.
     draw_harvester_upgrades_button(player);

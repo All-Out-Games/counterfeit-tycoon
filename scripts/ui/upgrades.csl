@@ -95,7 +95,7 @@ server_try_upgrade_vault :: proc(player: Player) {
     // Push new capacity into the actual vault component.
     gm := get_game_manager();
     if gm != null {
-        gm->server_apply_vault_level_for_player(player);
+        gm.server_apply_vault_level_for_player(player);
     }
 
     // Cosmetic purchase SFX (local-only for owning client) via purchase FX pipeline.
@@ -258,7 +258,7 @@ server_try_upgrade_station :: proc(player: Player, lane_index: s64, kind: Statio
     // Push new level into the actual station components.
     gm := get_game_manager();
     if gm != null {
-        gm->server_apply_station_upgrade_levels_for_player(player);
+        gm.server_apply_station_upgrade_levels_for_player(player);
     }
 
     // Cosmetic purchase SFX (local-only for owning client) via purchase FX pipeline.
@@ -455,14 +455,14 @@ server_try_prompt_sparks_station_upgrade_purchase :: proc(player: Player, lane_i
     if player == null return;
 
     if lane_index < 0 || lane_index >= UPGRADES_LANE_COUNT {
-        if player->is_local() {
+        if player.is_local() {
             Notifier.notify("Invalid lane.");
         }
         return;
     }
 
     if target_level < 2 || target_level > UPGRADES_MAX_LEVEL {
-        if player->is_local() {
+        if player.is_local() {
             Notifier.notify("Invalid upgrade.");
         }
         return;
@@ -471,7 +471,7 @@ server_try_prompt_sparks_station_upgrade_purchase :: proc(player: Player, lane_i
     cur := get_player_station_level(player, lane_index, kind);
     if cur < 1 cur = 1;
     if cur >= target_level {
-        if player->is_local() {
+        if player.is_local() {
             Notifier.notify("% is already Level %.", {station_display_name(kind), cur});
         }
         return;
@@ -479,7 +479,7 @@ server_try_prompt_sparks_station_upgrade_purchase :: proc(player: Player, lane_i
 
     product_id := station_upgrade_sparks_product_id_for_level(lane_index, kind, target_level);
     if product_id.count == 0 {
-        if player->is_local() {
+        if player.is_local() {
             Notifier.notify("Sparks purchase not available.");
         }
         return;
@@ -516,7 +516,7 @@ server_grant_station_upgrade_to_level :: proc(player: Player, lane_index: s64, k
     // Push new level into the actual station components.
     gm := get_game_manager();
     if gm != null {
-        gm->server_apply_station_upgrade_levels_for_player(player);
+        gm.server_apply_station_upgrade_levels_for_player(player);
     }
 
     // Cosmetic: purchase FX + SFX on the owning client.
@@ -587,11 +587,11 @@ draw_upgrades_unlock_lane_prompt :: proc(player: Player, rect: Rect, lane_index:
     if lane_index < 0 || lane_index >= UPGRADES_LANE_COUNT return;
 
     UI.quad(rect, core_globals.white_sprite, {0.08, 0.08, 0.08, 0.95});
-    inner := rect->inset(26);
+    inner := rect.inset(26);
 
-    title := inner->cut_top(90);
-    _ := inner->cut_top(10);
-    button_row := inner->cut_top(100);
+    title := inner.cut_top(90);
+    _ := inner.cut_top(10);
+    button_row := inner.cut_top(100);
 
     ts_title := UI.default_text_settings();
     ts_title.size = 44;
@@ -622,7 +622,7 @@ draw_upgrades_unlock_lane_prompt :: proc(player: Player, rect: Rect, lane_index:
         bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_8.png"); // Grey
         UI.push_disabled(true);
         defer UI.pop_disabled();
-        _ := UI.button(button_row->inset(10), bs, ts_btn, "Unlock previous lane first");
+        _ := UI.button(button_row.inset(10), bs, ts_btn, "Unlock previous lane first");
         return;
     }
 
@@ -632,17 +632,17 @@ draw_upgrades_unlock_lane_prompt :: proc(player: Player, rect: Rect, lane_index:
     }
 
     label := format_string("Unlock ($%)", {format_int_with_commas(cost)});
-    if UI.button(button_row->inset(10), bs, ts_btn, label).clicked {
+    if UI.button(button_row.inset(10), bs, ts_btn, label).clicked {
         server_try_unlock_lane(player, lane_index);
     }
 }
 
 draw_upgrades_button :: proc(player: Player) {
     if player == null return;
-    if !player->is_local_or_server() return;
+    if !player.is_local_or_server() return;
 
     safe := UI.get_safe_screen_rect();
-    btn_rect := safe->right_center_rect()->grow(60)->offset(-90, -240);
+    btn_rect := safe.right_center_rect().grow(60).offset(-90, -240);
 
     bs := UI.default_button_settings();
     ts := UI.default_text_settings();
@@ -655,7 +655,7 @@ draw_upgrades_button :: proc(player: Player) {
 
         // Fit the clickable button rect to the sprite aspect ratio so the image doesn't stretch.
         draw_rect := btn_rect;
-        draw_rect = btn_rect->fit_aspect(icon->get_aspect());
+        draw_rect = btn_rect.fit_aspect(icon.get_aspect());
 
         if UI.button(draw_rect, bs, ts, "Upgrades").clicked {
             // Keep this state server-authoritative so it replicates.
@@ -677,7 +677,7 @@ draw_upgrades_button :: proc(player: Player) {
     // Fallback: if icon is missing, draw a normal button.
     bs.sprite = get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_5.png"); // Blue
     bs.press_scaling = 0.4;
-    if UI.button(btn_rect->grow(0, 130, 0, 130), bs, ts, "Upgrades").clicked {
+    if UI.button(btn_rect.grow(0, 130, 0, 130), bs, ts, "Upgrades").clicked {
         if Game.is_server() {
             player.upgrades_open = !player.upgrades_open;
             if player.upgrades_open {
@@ -720,7 +720,7 @@ draw_upgrades_lane_header_buttons :: proc(player: Player, rect: Rect) {
 
         x1 := i.(float) / TAB_COUNT.(float);
         x2 := (i + 1).(float) / TAB_COUNT.(float);
-        btn := rect->subrect(x1, 0, x2, 1)->inset(8);
+        btn := rect.subrect(x1, 0, x2, 1).inset(8);
 
         label := "Piggy Bank";
         if i < UPGRADES_LANE_COUNT {
@@ -748,10 +748,10 @@ draw_station_upgrade_card :: proc(player: Player, rect: Rect, lane_index: s64, k
     #static sparks_icon := get_asset(Texture_Asset, "UI/Spark.png");
 
     UI.quad(rect, core_globals.white_sprite, {0.08, 0.08, 0.08, 0.95});
-    inner := rect->inset(18);
+    inner := rect.inset(18);
 
     // Title
-    title_rect := inner->cut_top(56);
+    title_rect := inner.cut_top(56);
     ts_title := UI.default_text_settings();
     ts_title.size = 34;
     ts_title.halign = .CENTER;
@@ -761,13 +761,13 @@ draw_station_upgrade_card :: proc(player: Player, rect: Rect, lane_index: s64, k
     ts_title.outline_color = {0, 0, 0, 1};
     UI.text(title_rect, ts_title, station_display_name(kind));
 
-    _ := inner->cut_top(8);
+    _ := inner.cut_top(8);
 
     level := get_player_station_level(player, lane_index, kind);
     lvl_f := (level - 1).(float);
     speed_mult := 1.0 + lvl_f * UPGRADES_SPEED_MULT_PER_LEVEL;
 
-    info_rect := inner->cut_top_unscaled(inner->height() * 0.78)->inset(8);
+    info_rect := inner.cut_top_unscaled(inner.height() * 0.78).inset(8);
     ts_info := UI.default_text_settings();
     ts_info.size = 30;
     ts_info.halign = .LEFT;
@@ -787,8 +787,8 @@ draw_station_upgrade_card :: proc(player: Player, rect: Rect, lane_index: s64, k
         UI.text(info_rect, ts_info, "Level: % / %\nSpeed Mult: %x -> %x\nQueue Cap: % -> %", {level, UPGRADES_MAX_LEVEL, format_float(speed_mult, decimals=2), format_float(next_mult, decimals=2), cur_cap, next_cap});
     }
 
-    _ := inner->cut_top(10);
-    btn_rect := inner->cut_bottom(78);
+    _ := inner.cut_top(10);
+    btn_rect := inner.cut_bottom(78);
 
     ts_btn := UI.default_text_settings();
     ts_btn.size = 30;
@@ -807,7 +807,7 @@ draw_station_upgrade_card :: proc(player: Player, rect: Rect, lane_index: s64, k
         bs_na.press_scaling = 0.0;
         UI.push_disabled(true);
         defer UI.pop_disabled();
-        _ := UI.button(btn_rect->inset(6), bs_na, ts_btn, "Lane Locked");
+        _ := UI.button(btn_rect.inset(6), bs_na, ts_btn, "Lane Locked");
         return;
     }
 
@@ -820,7 +820,7 @@ draw_station_upgrade_card :: proc(player: Player, rect: Rect, lane_index: s64, k
         bs_max.press_scaling = 0.0;
         UI.push_disabled(true);
         defer UI.pop_disabled();
-        _ := UI.button(btn_rect->inset(6), bs_max, ts_btn, "Max Level");
+        _ := UI.button(btn_rect.inset(6), bs_max, ts_btn, "Max Level");
         return;
     }
 
@@ -837,7 +837,7 @@ draw_station_upgrade_card :: proc(player: Player, rect: Rect, lane_index: s64, k
     coins_btn_rect := btn_rect;
     sparks_btn_rect := btn_rect;
     if has_sparks {
-        left := btn_rect->cut_left_unscaled(btn_rect->width() * 0.5);
+        left := btn_rect.cut_left_unscaled(btn_rect.width() * 0.5);
         coins_btn_rect = left;
         sparks_btn_rect = btn_rect;
     }
@@ -857,7 +857,7 @@ draw_station_upgrade_card :: proc(player: Player, rect: Rect, lane_index: s64, k
         bs.press_scaling = 0.4;
 
         label := format_string("Upgrade ($%)", {format_int_with_commas(cost)});
-        if UI.button(coins_btn_rect->inset(6), bs, ts_btn, label).clicked {
+        if UI.button(coins_btn_rect.inset(6), bs, ts_btn, label).clicked {
             server_try_upgrade_station(player, lane_index, kind);
         }
     }
@@ -879,17 +879,17 @@ draw_station_upgrade_card :: proc(player: Player, rect: Rect, lane_index: s64, k
             ts_sparks.autofit_min_size = 18;
             ts_sparks.autofit_max_size = ts_btn.size;
 
-            result_sparks := UI.begin_button(sparks_btn_rect->inset(6), bs_sparks, ts_sparks, ""); {
+            result_sparks := UI.begin_button(sparks_btn_rect.inset(6), bs_sparks, ts_sparks, ""); {
                 defer UI.end_button();
 
-                inner_btn := result_sparks.rect->inset(10);
+                inner_btn := result_sparks.rect.inset(10);
                 if sparks_icon != null {
-                    icon_rect := inner_btn->left_center_rect()->grow_unscaled(18)->offset_unscaled(22, 0);
-                    UI.quad(icon_rect->fit_aspect(sparks_icon->get_aspect()), sparks_icon);
+                    icon_rect := inner_btn.left_center_rect().grow_unscaled(18).offset_unscaled(22, 0);
+                    UI.quad(icon_rect.fit_aspect(sparks_icon.get_aspect()), sparks_icon);
                 }
 
                 label_rect := inner_btn;
-                _ := label_rect->cut_left_unscaled(46);
+                _ := label_rect.cut_left_unscaled(46);
                 UI.text(label_rect, ts_sparks, sparks_label);
             }
 
@@ -908,10 +908,10 @@ draw_vault_upgrade_card :: proc(player: Player, rect: Rect) {
     #static btn_grey  := get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_8.png"); // Grey
 
     UI.quad(rect, core_globals.white_sprite, {0.08, 0.08, 0.08, 0.95});
-    inner := rect->inset(26);
+    inner := rect.inset(26);
 
     // Title
-    title_rect := inner->cut_top(60);
+    title_rect := inner.cut_top(60);
     ts_title := UI.default_text_settings();
     ts_title.size = 44;
     ts_title.halign = .CENTER;
@@ -921,7 +921,7 @@ draw_vault_upgrade_card :: proc(player: Player, rect: Rect) {
     ts_title.outline_color = {0, 0, 0, 1};
     UI.text(title_rect, ts_title, "Piggy Bank");
 
-    _ := inner->cut_top(16);
+    _ := inner.cut_top(16);
 
     level := player.vault_level;
     if level < 1 level = 1;
@@ -929,7 +929,7 @@ draw_vault_upgrade_card :: proc(player: Player, rect: Rect) {
     cur_cap := vault_capacity_for_level(level);
 
     // Info
-    info_rect := inner->cut_top(120)->inset(8);
+    info_rect := inner.cut_top(120).inset(8);
     ts_info := UI.default_text_settings();
     ts_info.size = 34;
     ts_info.halign = .LEFT;
@@ -947,10 +947,10 @@ draw_vault_upgrade_card :: proc(player: Player, rect: Rect) {
         UI.text(info_rect, ts_info, "Level: % / %\nCapacity: % -> %", {level, VAULT_MAX_LEVEL, format_int_with_commas(cur_cap), format_int_with_commas(next_cap)});
     }
 
-    _ := inner->cut_top(16);
+    _ := inner.cut_top(16);
 
     // Button
-    btn_rect := inner->cut_top(90);
+    btn_rect := inner.cut_top(90);
 
     ts_btn := UI.default_text_settings();
     ts_btn.size = 34;
@@ -968,7 +968,7 @@ draw_vault_upgrade_card :: proc(player: Player, rect: Rect) {
         bs_max.press_scaling = 0.0;
         UI.push_disabled(true);
         defer UI.pop_disabled();
-        _ := UI.button(btn_rect->inset(6), bs_max, ts_btn, "Max Level");
+        _ := UI.button(btn_rect.inset(6), bs_max, ts_btn, "Max Level");
         return;
     }
 
@@ -987,7 +987,7 @@ draw_vault_upgrade_card :: proc(player: Player, rect: Rect) {
     bs.press_scaling = 0.4;
 
     label := format_string("Upgrade ($%)", {format_int_with_commas(cost)});
-    if UI.button(btn_rect->inset(6), bs, ts_btn, label).clicked {
+    if UI.button(btn_rect.inset(6), bs, ts_btn, label).clicked {
         server_try_upgrade_vault(player);
     }
 }
@@ -1007,13 +1007,13 @@ draw_upgrades_modal :: proc(player: Player) {
     UI.quad(screen, core_globals.white_sprite, {0, 0, 0, 0.65});
 
     // Window
-    window := screen->inset(100);
+    window := screen.inset(100);
     UI.quad(window, core_globals.white_sprite, {0.12, 0.12, 0.12, 0.95});
 
     // Header with lane selection
-    header := window->cut_top(150)->inset(20);
-    title_rect := header->cut_top(60);
-    lane_rect := header->cut_top(70);
+    header := window.cut_top(150).inset(20);
+    title_rect := header.cut_top(60);
+    lane_rect := header.cut_top(70);
 
     ts_title := UI.default_text_settings();
     ts_title.size = 52;
@@ -1028,10 +1028,10 @@ draw_upgrades_modal :: proc(player: Player) {
     draw_upgrades_lane_header_buttons(player, lane_rect);
 
     // Content area (below header)
-    content := window->inset(30);
+    content := window.inset(30);
 
     // Footer close button (red)
-    footer := content->cut_bottom(95);
+    footer := content.cut_bottom(95);
     {
         #static btn_red := get_asset(Texture_Asset, "$AO/new/modal/buttons_2/button_3.png"); // Red
         bs_close := UI.default_button_settings();
@@ -1045,7 +1045,7 @@ draw_upgrades_modal :: proc(player: Player) {
         }
         bs_close.press_scaling = 0.45;
 
-        close_btn := footer->inset(10);
+        close_btn := footer.inset(10);
         if UI.button(close_btn, bs_close, ts_close, "Close").clicked {
             if Game.is_server() {
                 player.upgrades_open = false;
@@ -1054,7 +1054,7 @@ draw_upgrades_modal :: proc(player: Player) {
         }
     }
 
-    body := content->inset(10);
+    body := content.inset(10);
 
     lane := player.upgrades_selected_lane;
 
@@ -1062,7 +1062,7 @@ draw_upgrades_modal :: proc(player: Player) {
     if lane == UPGRADES_TAB_VAULT {
         UI.push_id("up_vault", {});
         defer UI.pop_id();
-        draw_vault_upgrade_card(player, body->inset(12));
+        draw_vault_upgrade_card(player, body.inset(12));
         return;
     }
 
@@ -1073,7 +1073,7 @@ draw_upgrades_modal :: proc(player: Player) {
 
     // If this lane is locked, show the lane unlock purchase UI instead of station cards.
     if !lanes_is_unlocked(player, lane) {
-        prompt_rect := body->center_rect()->grow(160, 360, 160, 360);
+        prompt_rect := body.center_rect().grow(160, 360, 160, 360);
         draw_upgrades_unlock_lane_prompt(player, prompt_rect, lane);
         return;
     }
@@ -1091,14 +1091,14 @@ draw_upgrades_modal :: proc(player: Player) {
         y1 := (i < 2) ? 0.5 : 0.0;
         y2 := y1 + 0.5;
 
-        card := cards_area->subrect(x1, y1, x2, y2)->inset(12);
+        card := cards_area.subrect(x1, y1, x2, y2).inset(12);
         draw_station_upgrade_card(player, card, lane, kind);
     }
 }
 
 draw_upgrades_ui :: proc(player: Player) {
     if player == null return;
-    if !player->is_local_or_server() return;
+    if !player.is_local_or_server() return;
 
     draw_upgrades_button(player);
 

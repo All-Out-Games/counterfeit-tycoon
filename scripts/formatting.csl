@@ -22,12 +22,12 @@ format_int_with_commas :: proc(v: s64) -> string {
 
         if x == 0 {
             // Most-significant group: no leading zeroes.
-            groups->append(format_string("%", {group}));
+            groups.append(format_string("%", {group}));
             break;
         }
 
         // Middle groups: always 3 digits.
-        groups->append(format_string("%", {format_int(group.(int), leading_zeroes=3)}));
+        groups.append(format_string("%", {format_int(group.(int), leading_zeroes=3)}));
     }
 
     // Join in reverse (most-significant first).

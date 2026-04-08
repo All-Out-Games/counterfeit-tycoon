@@ -27,8 +27,8 @@ draw_health_bar_in_world_context :: proc(player: Player) {
 
     // World-space sizing (meters)
     // Tuned to be closer to the old scaled UI size.
-    health_rect := Rect{pos, pos}->grow(0.06, 0.60, 0.06, 0.60); // ~1.2m wide, ~0.12m tall
-    border_rect := health_rect->grow(0.02, 0.02, 0.02, 0.02);
+    health_rect := Rect{pos, pos}.grow(0.06, 0.60, 0.06, 0.60); // ~1.2m wide, ~0.12m tall
+    border_rect := health_rect.grow(0.02, 0.02, 0.02, 0.02);
 
     back := get_asset(Texture_Asset, "reusable_weapons/sprites/reusable-weapons/hud_elements/health_bar_green/healthbar_back.png");
     fill := get_asset(Texture_Asset, "reusable_weapons/sprites/reusable-weapons/hud_elements/health_bar_green/healthbar_fill.png");
@@ -44,7 +44,7 @@ draw_health_bar_in_world_context :: proc(player: Player) {
         if health_pct < 0 { health_pct = 0; }
         if health_pct > 1 { health_pct = 1; }
     }
-    fill_rect := health_rect->subrect(0, 0, health_pct, 1);
+    fill_rect := health_rect.subrect(0, 0, health_pct, 1);
     UI.quad(fill_rect, fill, {1, 1, 1, 1});
 
     // Pip markers
@@ -68,7 +68,7 @@ draw_health_bar_in_world_context :: proc(player: Player) {
             new_width := pip_width * shrink;
             new_x_min := x_min + (pip_width - new_width) / 2.0;
             new_x_max := new_x_min + new_width;
-            pip_rect := health_rect->subrect(new_x_min, 0, new_x_max, 1);
+            pip_rect := health_rect.subrect(new_x_min, 0, new_x_max, 1);
             UI.quad(pip_rect, pip, {1, 1, 1, 1});
         }
         i += 1;
@@ -104,14 +104,14 @@ draw_player_carried_bills_in_world_context :: proc(player: Player) {
 
     total: s64 = 0;
     for i: 0..inv.capacity-1 {
-        item := inv->get_item(i);
+        item := inv.get_item(i);
         if item == null continue;
         if item.self == null continue;
 
-        defn := item->get_definition();
+        defn := item.get_definition();
         if defn == null continue;
 
-        id := defn->get_id();
+        id := defn.get_id();
         if id == "finished_bills" || id == "FinishedBills" {
             total += item.quantity;
         }
@@ -125,13 +125,13 @@ draw_player_carried_bills_in_world_context :: proc(player: Player) {
     // Position above the health bar.
     pos := player.entity.world_position + v2{0, 2.0};
 
-    rect := Rect{pos, pos}->grow(0.18, 0.55, 0.18, 0.55);
-    icon_rect := rect->cut_left(0.22)->inset(0.01);
+    rect := Rect{pos, pos}.grow(0.18, 0.55, 0.18, 0.55);
+    icon_rect := rect.cut_left(0.22).inset(0.01);
     text_rect := rect;
 
     #static bills_icon := get_asset(Texture_Asset, "Items/FinishedBills.png");
     if bills_icon != null {
-        UI.quad(icon_rect->fit_aspect(bills_icon->get_aspect()), bills_icon);
+        UI.quad(icon_rect.fit_aspect(bills_icon.get_aspect()), bills_icon);
     }
 
     ts := UI.default_text_settings();

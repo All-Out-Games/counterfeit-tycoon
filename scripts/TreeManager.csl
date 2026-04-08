@@ -160,7 +160,7 @@ TreeManager :: class : Component {
                         if spawned_entity == null return;
                         if spawned_entity.self == null return;
 
-                        tag := spawned_entity->add_component(ManagedTree);
+                        tag := spawned_entity.add_component(ManagedTree);
                         if tag == null return;
                         tag.manager_entity_id = mgr.entity.id;
                     }

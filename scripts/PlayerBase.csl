@@ -32,7 +32,7 @@ PlayerBase :: class : Component {
     set_owner :: method(owner: Player) {
         owner_user_id = {};
         if owner != null {
-            owner_user_id = owner->get_user_id();
+            owner_user_id = owner.get_user_id();
         }
 
         // Best-effort: if the owner's spawn index is already assigned, reflect it to the plot sign.
@@ -58,7 +58,7 @@ PlayerBase :: class : Component {
             lp := e.local_position;
             if lp.y == target_y continue;
             lp.y = target_y;
-            e->set_local_position(lp);
+            e.set_local_position(lp);
         }
 
         // Move PlotSign entity using the same mirroring rule and keep its index in sync.
@@ -84,7 +84,7 @@ PlayerBase :: class : Component {
             lp := plot_sign_entity.local_position;
             if lp.y != desired_y {
                 lp.y = desired_y;
-                plot_sign_entity->set_local_position(lp);
+                plot_sign_entity.set_local_position(lp);
             }
         }
     }
@@ -132,7 +132,7 @@ PlayerBase :: class : Component {
 
         foreach p: component_iterator(Player) {
             if p == null continue;
-            if p->get_user_id() == owner_user_id {
+            if p.get_user_id() == owner_user_id {
                 return p;
             }
         }
@@ -143,17 +143,17 @@ PlayerBase :: class : Component {
     is_owner :: method(player: Player) -> bool {
         if player == null return false;
         if owner_user_id.count == 0 return false;
-        return player->get_user_id() == owner_user_id;
+        return player.get_user_id() == owner_user_id;
     }
 
     resolve_sprite_renderer :: method() {
         sprite_renderer = null;
 
         if sprite_entity != null && sprite_entity.self != null {
-            sprite_renderer = sprite_entity->get_component(Sprite_Renderer);
+            sprite_renderer = sprite_entity.get_component(Sprite_Renderer);
         }
         if sprite_renderer == null && entity != null && entity.self != null {
-            sprite_renderer = entity->get_component(Sprite_Renderer);
+            sprite_renderer = entity.get_component(Sprite_Renderer);
         }
     }
 
@@ -161,7 +161,7 @@ PlayerBase :: class : Component {
         plot_sign = null;
 
         if plot_sign_entity != null && plot_sign_entity.self != null {
-            plot_sign = plot_sign_entity->get_component(PlotSign);
+            plot_sign = plot_sign_entity.get_component(PlotSign);
 
             // Cache the prefab-authored local Y once so mirroring is idempotent.
             if !plot_sign_base_local_y_initialized {
@@ -172,7 +172,7 @@ PlayerBase :: class : Component {
 
         // Allow attaching PlotSign directly to the base entity as a fallback.
         if plot_sign == null && entity != null && entity.self != null {
-            plot_sign = entity->get_component(PlotSign);
+            plot_sign = entity.get_component(PlotSign);
         }
     }
 }
@@ -183,7 +183,7 @@ get_local_player :: proc() -> Player {
         if p == null continue;
 
         // On clients, only the local player returns true for is_local_or_server().
-        if p->is_local_or_server() {
+        if p.is_local_or_server() {
             return p;
         }
     }
@@ -198,17 +198,17 @@ get_parent_player_base :: proc(child_entity: Entity) -> PlayerBase {
     // NOTE: The "in-world Parent entity" is the entity transform parent.
     // Walk up the chain so prefabs can add intermediate grouping entities (e.g. Lane.prefab)
     // without breaking ownership checks or station upgrade application.
-    cur := child_entity.parent;
+    cur := child_entity.get_parent();
     for step: 0..31 {
         _ := step;
         if cur == null break;
         if cur.self == null break;
 
-        pb := cur->get_component(PlayerBase);
+        pb := cur.get_component(PlayerBase);
         if pb != null {
             return pb;
         }
-        cur = cur.parent;
+        cur = cur.get_parent();
     }
 
     return null;
@@ -218,7 +218,7 @@ get_parent_player_base :: proc(child_entity: Entity) -> PlayerBase {
 is_owner_of_parent_base :: proc(child_entity: Entity, player: Player) -> bool {
     pb := get_parent_player_base(child_entity);
     if pb == null return false;
-    return pb->is_owner(player);
+    return pb.is_owner(player);
 }
 
 // Convenience: check if `player` has at least one item with the given `item_id` in their inventory.
@@ -232,12 +232,12 @@ player_has_item_id :: proc(player: Player, item_id: string) -> bool {
     }
 
     for i: 0..inv.capacity-1 {
-        item := inv->get_item(i);
+        item := inv.get_item(i);
         if item == null continue;
         if item.self == null continue;
-        defn := item->get_definition();
+        defn := item.get_definition();
         if defn == null continue;
-        if defn->get_id() == item_id {
+        if defn.get_id() == item_id {
             return true;
         }
     }

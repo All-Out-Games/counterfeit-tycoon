@@ -16,12 +16,12 @@ Growing_Projectile :: class : Component {
             max_lifetime = 5.0;
         }
         if lifetime > max_lifetime {
-            entity->destroy();
+            entity.destroy();
             return;
         }
 
         move := v2{direction.x * speed * dt, direction.y * speed * dt};
-        entity->add_local_position(move);
+        entity.add_local_position(move);
 
         if Game.is_server() {
             // Scale hit radius with entity scale
@@ -49,7 +49,7 @@ Growing_Projectile :: class : Component {
                 }
                 if already_hit continue;
 
-                did_damage := hit_player->take_damage(damage, null, true);
+                did_damage := hit_player.take_damage(damage, null, true);
                 if did_damage {
                     // Record hit only if damage was accepted (spawn protection, death, etc. can block).
                     if hit_id_count < 32 {
@@ -61,11 +61,11 @@ Growing_Projectile :: class : Component {
                     hit_count += 1;
                     damage = damage * 1.25;
                     cur_scale := entity.local_scale;
-                    entity->set_local_scale({cur_scale.x * 1.5, cur_scale.y * 1.5});
+                    entity.set_local_scale({cur_scale.x * 1.5, cur_scale.y * 1.5});
 
                     sfx := get_asset(SFX_Asset, "reusable_weapons/sounds/reusable-weapons/plasma_burst_hit.wav");
                     sfx_desc := SFX.default_sfx_desc();
-                    sfx_desc->set_position(pos);
+                    sfx_desc.set_position(pos);
                     sfx_desc.range_multiplier = 2.0;
                     SFX.play(sfx, sfx_desc);
                 }
@@ -90,7 +90,7 @@ Growing_Projectile :: class : Component {
                 }
                 if already_hit continue;
 
-                if hit_truck->server_register_weapon_hit(owner_id, damage) {
+                if hit_truck.server_register_weapon_hit(owner_id, damage) {
                     // Record hit (only if the hit was accepted)
                     if hit_id_count < 32 {
                         hit_ids[hit_id_count] = hit_truck.entity.id;
@@ -101,11 +101,11 @@ Growing_Projectile :: class : Component {
                     hit_count += 1;
                     damage = damage * 1.25;
                     cur_scale := entity.local_scale;
-                    entity->set_local_scale({cur_scale.x * 1.5, cur_scale.y * 1.5});
+                    entity.set_local_scale({cur_scale.x * 1.5, cur_scale.y * 1.5});
 
                     sfx := get_asset(SFX_Asset, "reusable_weapons/sounds/reusable-weapons/plasma_burst_hit.wav");
                     sfx_desc := SFX.default_sfx_desc();
-                    sfx_desc->set_position(pos);
+                    sfx_desc.set_position(pos);
                     sfx_desc.range_multiplier = 2.0;
                     SFX.play(sfx, sfx_desc);
                 }
@@ -130,7 +130,7 @@ Growing_Projectile :: class : Component {
                 }
                 if already_hit continue;
 
-                if hit_turret->server_register_weapon_hit(owner_id, damage) {
+                if hit_turret.server_register_weapon_hit(owner_id, damage) {
                     // Record hit (only if the hit was accepted)
                     if hit_id_count < 32 {
                         hit_ids[hit_id_count] = hit_turret.entity.id;
@@ -141,11 +141,11 @@ Growing_Projectile :: class : Component {
                     hit_count += 1;
                     damage = damage * 1.25;
                     cur_scale := entity.local_scale;
-                    entity->set_local_scale({cur_scale.x * 1.5, cur_scale.y * 1.5});
+                    entity.set_local_scale({cur_scale.x * 1.5, cur_scale.y * 1.5});
 
                     sfx := get_asset(SFX_Asset, "reusable_weapons/sounds/reusable-weapons/plasma_burst_hit.wav");
                     sfx_desc := SFX.default_sfx_desc();
-                    sfx_desc->set_position(pos);
+                    sfx_desc.set_position(pos);
                     sfx_desc.range_multiplier = 2.0;
                     SFX.play(sfx, sfx_desc);
                 }
@@ -161,21 +161,21 @@ spawn_growing_projectile :: proc(player: Player, direction: v2, wt: Weapon_Type)
     spawn_pos := get_projectile_spawn_pos(player, direction);
 
     proj_entity := Scene.create_entity();
-    proj_entity->set_local_position(spawn_pos);
+    proj_entity.set_local_position(spawn_pos);
 
     angle := atan2(direction.y, direction.x);
-    proj_entity->set_local_rotation(to_degrees(angle));
+    proj_entity.set_local_rotation(to_degrees(angle));
 
     // Use the laser bolt texture for plasma
     proj_texture := get_asset(Texture_Asset, "reusable_weapons/sprites/reusable-weapons/projectiles/MachineGunBullet.png");
-    sprite := proj_entity->add_component(Sprite_Renderer);
-    sprite->set_texture(proj_texture);
+    sprite := proj_entity.add_component(Sprite_Renderer);
+    sprite.set_texture(proj_texture);
     sprite.color = {0.8, 0.2, 1.0, 1.0};
-    proj_entity->set_local_scale({2.8, 2.8});
+    proj_entity.set_local_scale({2.8, 2.8});
 
-    proj := proj_entity->add_component(Growing_Projectile);
+    proj := proj_entity.add_component(Growing_Projectile);
     proj.damage = config.base_damage;
-    proj.direction = normalize(direction);
+    proj.direction = safe_normalize_v2(direction, v2{1, 0});
     proj.owner_id = player.entity.id;
     proj.speed = config.projectile_speed;
     proj.max_lifetime = 5.0;

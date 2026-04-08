@@ -11,7 +11,7 @@ ManagerUnlock :: class : Interactable {
     kind: Manager_Kind;
 
     ao_start :: method() {
-        this->set_listener(this);
+        this.set_listener(this);
         refresh_prompt_text();
         apply_spine_skin_and_crewchsia();
         update_visuals_visibility_for_local_player();
@@ -38,15 +38,15 @@ ManagerUnlock :: class : Interactable {
         find_in_subtree :: proc(root: Entity) -> Spine_Animator {
             if root == null return null;
             if root.self == null return null;
-            current := root.first_child;
+            current := root.get_first_child();
             while current != null {
                 if current.self != null {
-                    sp := current->get_component(Spine_Animator);
+                    sp := current.get_component(Spine_Animator);
                     if sp != null return sp;
                     found := find_in_subtree(current);
                     if found != null return found;
                 }
-                current = current.next_sibling;
+                current = current.get_next_sibling();
             }
             return null;
         }
@@ -64,7 +64,7 @@ ManagerUnlock :: class : Interactable {
         if sp == null return;
 
         // Required before accessing sp.instance when both start together.
-        sp->awaken();
+        sp.awaken();
         if sp.instance == null return;
 
         skin_name: string;
@@ -95,18 +95,18 @@ ManagerUnlock :: class : Interactable {
 
         // "Add" the skin (don't wipe any base skins configured in editor).
         if skin_name.count > 0 {
-            sp.instance->enable_skin(skin_name);
-            sp.instance->refresh_skins();
+            sp.instance.enable_skin(skin_name);
+            sp.instance.refresh_skins();
         }
 
         // Apply the color replace ("Crewchsia") tint.
-        sp.instance->set_color_replace_color(crewchsia);
+        sp.instance.set_color_replace_color(crewchsia);
     }
 
     refresh_prompt_text :: method() {
         name := manager_display_name(kind);
         cost := manager_unlock_cost(kind);
-        this->set_text(format_string("Hire % for % Coins?", {name, format_int_with_commas(cost)}));
+        this.set_text(format_string("Hire % for % Coins?", {name, format_int_with_commas(cost)}));
     }
 
     can_use :: method(player: Player) -> bool {
@@ -151,7 +151,7 @@ ManagerUnlock :: class : Interactable {
         if kind == .WOODCHIPPER {
             if player.harvester_manager_unlocked {
                 if entity != null && entity.self != null {
-                    entity->destroy();
+                    entity.destroy();
                 }
                 return;
             }
@@ -169,11 +169,11 @@ ManagerUnlock :: class : Interactable {
             if player.harvester_manager_unlocked {
                 gm := get_game_manager();
                 if gm != null {
-                    gm->server_spawn_woodchipper_at(player, entity.world_position);
-                    gm->server_reconcile_woodchipper_unlock_prompts();
+                    gm.server_spawn_woodchipper_at(player, entity.world_position);
+                    gm.server_reconcile_woodchipper_unlock_prompts();
                 }
                 if entity != null && entity.self != null {
-                    entity->destroy();
+                    entity.destroy();
                 }
             }
             return;
@@ -188,7 +188,7 @@ ManagerUnlock :: class : Interactable {
         // Already unlocked?
         if is_manager_unlocked(player, lane_index, kind) {
             if entity != null && entity.self != null {
-                entity->destroy();
+                entity.destroy();
             }
             return;
         }
@@ -210,16 +210,16 @@ ManagerUnlock :: class : Interactable {
             if gm != null {
                 spawn_pos := entity.world_position;
                 if player.base_entity != null && player.base_entity.self != null {
-                    pb := player.base_entity->get_component(PlayerBase);
+                    pb := player.base_entity.get_component(PlayerBase);
                     if pb != null {
-                        spawn_pos = gm->manager_unlock_anchor_world_pos(pb, lane_index, kind);
+                        spawn_pos = gm.manager_unlock_anchor_world_pos(pb, lane_index, kind);
                     }
                 }
-                gm->server_spawn_manager_kind_at(player, lane_index, kind, spawn_pos);
-                gm->server_reconcile_manager_unlock_prompts_for_player(player);
+                gm.server_spawn_manager_kind_at(player, lane_index, kind, spawn_pos);
+                gm.server_reconcile_manager_unlock_prompts_for_player(player);
             }
             if entity != null && entity.self != null {
-                entity->destroy();
+                entity.destroy();
             }
         }
     }
@@ -240,17 +240,17 @@ ManagerUnlock :: class : Interactable {
         apply_visual_visibility_in_subtree :: proc(root: Entity, visible: bool) {
             if root == null return;
             if root.self == null return;
-            current := root.first_child;
+            current := root.get_first_child();
             while current != null {
                 if current.self != null {
-                    sr := current->get_component(Sprite_Renderer);
-                    sp := current->get_component(Spine_Animator);
+                    sr := current.get_component(Sprite_Renderer);
+                    sp := current.get_component(Spine_Animator);
                     if sr != null || sp != null {
-                        current->set_local_enabled(visible);
+                        current.set_local_enabled(visible);
                     }
                     apply_visual_visibility_in_subtree(current, visible);
                 }
-                current = current.next_sibling;
+                current = current.get_next_sibling();
             }
         }
 

@@ -8,10 +8,10 @@ import "core:ao"
 // - Tune `radius` and `prompt_offset` (inherited from Interactable) as needed.
 Bank :: class : Interactable {
     ao_start :: method() {
-        this->set_listener(this);
+        this.set_listener(this);
 
         // Prompt text
-        this->set_text("Open sell menu");
+        this.set_text("Open sell menu");
 
         // Interactable defaults (only if not set in editor)
         if radius <= 0 {

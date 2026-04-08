@@ -111,7 +111,7 @@ PlotSign :: class : Component {
         // --------------------------------------------------------------------
         {
             label_pos := base_pos + text_offset;
-            text_rect := Rect{label_pos, label_pos}->grow(0.35, 1.10, 0.35, 1.10);
+            text_rect := Rect{label_pos, label_pos}.grow(0.35, 1.10, 0.35, 1.10);
 
             ts := UI.default_text_settings();
             ts.size = 0.42;
@@ -123,7 +123,7 @@ PlotSign :: class : Component {
             ts.outline_color = {0, 0, 0, 1};
             ts.word_wrap = true;
 
-            name := owner->get_username();
+            name := owner.get_username();
             if name.count > 0 {
                 UI.text(text_rect, ts, "%", {name});
             }
