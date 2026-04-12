@@ -29,7 +29,7 @@ woodchipper_find_paper_mill_for_base_and_lane :: proc(base: PlayerBase, lane_ind
     if base == null return null;
     if base.entity == null || base.entity.self == null return null;
 
-    foreach m: component_iterator(Paper_Mill) {
+    for m: component_iterator(Paper_Mill) {
         if m == null continue;
         if m.entity == null || m.entity.self == null continue;
         if !m.entity.get_world_enabled() continue;
@@ -53,7 +53,7 @@ woodchipper_choose_best_paper_mill_lane :: proc(base: PlayerBase) -> s64 {
     best_wood: s64 = 0;
     found: bool = false;
 
-    foreach m: component_iterator(Paper_Mill) {
+    for m: component_iterator(Paper_Mill) {
         if m == null continue;
         if m.entity == null || m.entity.self == null continue;
         if !m.entity.get_world_enabled() continue;
@@ -105,7 +105,7 @@ woodchipper_choose_next_paper_mill_lane_after_deposit :: proc(base: PlayerBase, 
 
     current_has_room: bool = false;
 
-    foreach m: component_iterator(Paper_Mill) {
+    for m: component_iterator(Paper_Mill) {
         if m == null continue;
         if m.entity == null || m.entity.self == null continue;
         if !m.entity.get_world_enabled() continue;
@@ -600,7 +600,7 @@ Woodchipper :: class : Component {
         origin := entity.world_position;
         max_d2 := pickup_radius * pickup_radius;
 
-        foreach d: component_iterator(Item_Drop_Magnet) {
+        for d: component_iterator(Item_Drop_Magnet) {
             if d == null continue;
             if d.entity == null || d.entity.self == null continue;
             if !d.entity.get_world_enabled() continue;

@@ -676,7 +676,7 @@ Paper_Mill :: class : Interactable {
         best: Player;
         best_d2 := collect_radius * collect_radius;
 
-        foreach p: component_iterator(Player) {
+        for p: component_iterator(Player) {
             if p == null continue;
             if p.entity == null continue;
             if p.entity.self == null continue;

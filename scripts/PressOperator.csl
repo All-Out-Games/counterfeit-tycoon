@@ -25,7 +25,7 @@ press_operator_find_paper_mill_for_base_and_lane :: proc(base: PlayerBase, lane_
     if base == null return null;
     if base.entity == null || base.entity.self == null return null;
 
-    foreach m: component_iterator(Paper_Mill) {
+    for m: component_iterator(Paper_Mill) {
         if m == null continue;
         if m.entity == null || m.entity.self == null continue;
         if !m.entity.get_world_enabled() continue;
@@ -43,7 +43,7 @@ press_operator_find_blank_bill_press_for_base_and_lane :: proc(base: PlayerBase,
     if base == null return null;
     if base.entity == null || base.entity.self == null return null;
 
-    foreach p: component_iterator(Blank_Bill_Press) {
+    for p: component_iterator(Blank_Bill_Press) {
         if p == null continue;
         if p.entity == null || p.entity.self == null continue;
         if !p.entity.get_world_enabled() continue;

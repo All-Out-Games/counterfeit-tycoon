@@ -14,7 +14,7 @@ My_Effect :: class : Effect_Base {
 
     effect_start :: method() {
         player_specific.freeze_player = true;
-        player.animator.instance.state_machine.set_trigger("my_animation");
+        player.animator.state_machine.set_trigger("my_animation");
     }
 
     effect_update :: method(dt: float) {
@@ -29,7 +29,7 @@ My_Effect :: class : Effect_Base {
         if !interrupt {
             entity.set_local_position(target_position);
         }
-        player.animator.instance.state_machine.set_trigger("RESET");
+        player.animator.state_machine.set_trigger("RESET");
     }
 }
 ```
@@ -82,7 +82,7 @@ All optional. Implement only what you need.
 - `effect_start` -- Set freeze/movement flags, trigger animations, store initial state, call `set_duration`.
 - `effect_update(dt: float)` -- Per-frame logic: move entity, check completion.
 - `effect_late_update(dt: float)` -- Post-update: draw UI, camera effects. Use `player.is_local()` to gate local-only visuals.
-- `effect_end(interrupt: bool)` -- Restore saved state, reset animations with `player.animator.instance.state_machine.set_trigger("RESET")`.
+- `effect_end(interrupt: bool)` -- Restore saved state, reset animations with `player.animator.state_machine.set_trigger("RESET")`.
 
 ## Checking Effects
 
@@ -105,7 +105,7 @@ Roll_Effect :: class : Effect_Base {
         player_specific.disable_movement_inputs = true;
         original_friction = player.agent.friction;
         player.agent.friction = 0;
-        player.animator.instance.state_machine.set_trigger("dodge_roll");
+        player.animator.state_machine.set_trigger("dodge_roll");
         player.set_facing_right(direction.x > 0);
         set_duration(0.5);
     }
@@ -128,7 +128,7 @@ Same structure as Roll_Effect, but add an `already_hit_list` to avoid hitting th
 already_hit_list: [..]Player;
 
 effect_update :: method(dt: float) {
-    foreach other: component_iterator(Player) {
+    for other: component_iterator(Player) {
         if other.team == player.team continue;
         if !in_range(other.entity.world_position - player.entity.world_position, 0.75) continue;
         if already_hit_list.contains(other) continue;
@@ -150,7 +150,7 @@ Death_Effect :: class : Effect_Base {
     effect_start :: method() {
         player_specific.freeze_player = true;
         player.add_name_invisibility_reason("death");
-        player.animator.instance.state_machine.set_trigger("death");
+        player.animator.state_machine.set_trigger("death");
     }
 
     effect_update :: method(dt: float) {
@@ -171,7 +171,7 @@ Death_Effect :: class : Effect_Base {
         player.remove_name_invisibility_reason("death");
         respawn_player(player); // user-defined respawn proc
         player.health.reset(); // user-defined health field/object
-        player.animator.instance.state_machine.set_trigger("RESET");
+        player.animator.state_machine.set_trigger("RESET");
     }
 }
 ```

@@ -25,7 +25,7 @@ stamper_find_colored_bill_press_for_base_and_lane :: proc(base: PlayerBase, lane
     if base == null return null;
     if base.entity == null || base.entity.self == null return null;
 
-    foreach p: component_iterator(Colored_Bill_Press) {
+    for p: component_iterator(Colored_Bill_Press) {
         if p == null continue;
         if p.entity == null || p.entity.self == null continue;
         if !p.entity.get_world_enabled() continue;
@@ -43,7 +43,7 @@ stamper_find_finished_bill_press_for_base_and_lane :: proc(base: PlayerBase, lan
     if base == null return null;
     if base.entity == null || base.entity.self == null return null;
 
-    foreach p: component_iterator(Finished_Bill_Press) {
+    for p: component_iterator(Finished_Bill_Press) {
         if p == null continue;
         if p.entity == null || p.entity.self == null continue;
         if !p.entity.get_world_enabled() continue;

@@ -136,7 +136,7 @@ TreeManager :: class : Component {
 
     count_managed_trees :: method() -> s64 {
         count: s64;
-        foreach t: component_iterator(ManagedTree) {
+        for t: component_iterator(ManagedTree) {
             if t == null continue;
             if t.manager_entity_id != entity.id continue;
             count += 1;
@@ -190,7 +190,7 @@ TreeManager :: class : Component {
     is_position_clear :: method(pos: v2) -> bool {
         // Enforce: no other tree within min_spacing_radius of pos.
         r2 := min_spacing_radius * min_spacing_radius;
-        foreach t: component_iterator(ManagedTree) {
+        for t: component_iterator(ManagedTree) {
             if t == null continue;
             if t.manager_entity_id != entity.id continue;
 

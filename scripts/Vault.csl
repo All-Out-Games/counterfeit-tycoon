@@ -16,7 +16,7 @@ vault_is_full_for_base :: proc(base: PlayerBase) -> bool {
     if base == null return false;
     if base.entity == null || base.entity.self == null return false;
 
-    foreach v: component_iterator(Vault) {
+    for v: component_iterator(Vault) {
         if v == null continue;
         if v.entity == null || v.entity.self == null continue;
         if !v.entity.get_world_enabled() continue;
@@ -241,7 +241,7 @@ Vault :: class : Interactable {
         // Derive active steal state from the replicated thief hold tracking on Players.
         // This avoids relying on Vault-owned replicated fields (which may not update on clients).
         is_active := false;
-        foreach p: component_iterator(Player) {
+        for p: component_iterator(Player) {
             if p == null continue;
             if p.self == null continue;
             if p.vault_theft_target_entity_id == entity.id {

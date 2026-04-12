@@ -7,7 +7,7 @@ draw_all_players_health_bars_local :: proc() {
     UI.push_layer(5);
     defer UI.pop_layer();
 
-    foreach p: component_iterator(Player) {
+    for p: component_iterator(Player) {
         if p == null continue;
         if p.entity == null || p.entity.self == null continue;
         draw_health_bar_in_world_context(p);
@@ -85,7 +85,7 @@ draw_all_players_carried_bills_local :: proc() {
     UI.push_layer(5);
     defer UI.pop_layer();
 
-    foreach p: component_iterator(Player) {
+    for p: component_iterator(Player) {
         if p == null continue;
         if p.entity == null || p.entity.self == null continue;
         draw_player_carried_bills_in_world_context(p);

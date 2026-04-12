@@ -98,7 +98,7 @@ server_refresh_all_station_speed_mods :: proc() {
     gm := get_game_manager();
     if gm == null return;
 
-    foreach p: component_iterator(Player) {
+    for p: component_iterator(Player) {
         if p == null continue;
         gm.server_apply_station_upgrade_levels_for_player(p);
     }
@@ -464,7 +464,7 @@ draw_finished_bills_per_sec_hud :: proc(player: Player) {
 
     // Sum production rate across all Finished_Bill_Press instances owned by this player.
     total_rate := 0.0;
-    foreach press: component_iterator(Finished_Bill_Press) {
+    for press: component_iterator(Finished_Bill_Press) {
         if press == null continue;
         if press.entity == null || press.entity.self == null continue;
         if !press.entity.get_world_enabled() continue;
@@ -530,7 +530,7 @@ draw_lane_labels :: proc(player: Player) {
         if pb == null return 0.0, false;
 
         // Paper_Mill exists in every lane (including Lane 1 in the base prefab).
-        foreach m: component_iterator(Paper_Mill) {
+        for m: component_iterator(Paper_Mill) {
             if m == null continue;
             if m.entity == null || m.entity.self == null continue;
             if m.lane_index != lane_index continue;
@@ -539,21 +539,21 @@ draw_lane_labels :: proc(player: Player) {
         }
 
         // Fallbacks in case a lane is missing a mill for some reason.
-        foreach b: component_iterator(Blank_Bill_Press) {
+        for b: component_iterator(Blank_Bill_Press) {
             if b == null continue;
             if b.entity == null || b.entity.self == null continue;
             if b.lane_index != lane_index continue;
             if get_parent_player_base(b.entity) != pb continue;
             return b.entity.world_position.y, true;
         }
-        foreach c: component_iterator(Colored_Bill_Press) {
+        for c: component_iterator(Colored_Bill_Press) {
             if c == null continue;
             if c.entity == null || c.entity.self == null continue;
             if c.lane_index != lane_index continue;
             if get_parent_player_base(c.entity) != pb continue;
             return c.entity.world_position.y, true;
         }
-        foreach f: component_iterator(Finished_Bill_Press) {
+        for f: component_iterator(Finished_Bill_Press) {
             if f == null continue;
             if f.entity == null || f.entity.self == null continue;
             if f.lane_index != lane_index continue;
@@ -801,7 +801,7 @@ Player :: class : Player_Base {
         local_owns_vault_id :: proc(owner: Player, vault_entity_id: u64) -> bool {
             if owner == null return false;
             if vault_entity_id == 0 return false;
-            foreach v: component_iterator(Vault) {
+            for v: component_iterator(Vault) {
                 if v == null continue;
                 if v.entity == null || v.entity.self == null continue;
                 if v.entity.id != vault_entity_id continue;
@@ -813,7 +813,7 @@ Player :: class : Player_Base {
         now := get_time();
         THROTTLE_SECONDS :: 2.5;
 
-        foreach thief: component_iterator(Player) {
+        for thief: component_iterator(Player) {
             if thief == null continue;
             if thief == this continue;
             if thief.self == null continue;
@@ -1541,7 +1541,7 @@ Player :: class : Player_Base {
                     // If the owner was notified, a real theft attempt happened but failed.
                     // Credit the vault owner with a successful defense.
                     if vault_theft_owner_notified {
-                        foreach v: component_iterator(Vault) {
+                        for v: component_iterator(Vault) {
                             if v == null continue;
                             if v.entity == null || v.entity.self == null continue;
                             if v.entity.id != vault_theft_target_entity_id continue;
@@ -1725,7 +1725,7 @@ Player :: class : Player_Base {
     }
 
     tutorial_find_owned_paper_mill_lane0 :: method() -> Paper_Mill {
-        foreach m: component_iterator(Paper_Mill) {
+        for m: component_iterator(Paper_Mill) {
             if m == null continue;
             if m.entity == null || m.entity.self == null continue;
             if !m.entity.get_world_enabled() continue;
@@ -1738,7 +1738,7 @@ Player :: class : Player_Base {
     }
 
     tutorial_find_owned_blank_bill_press_lane0 :: method() -> Blank_Bill_Press {
-        foreach p: component_iterator(Blank_Bill_Press) {
+        for p: component_iterator(Blank_Bill_Press) {
             if p == null continue;
             if p.entity == null || p.entity.self == null continue;
             if !p.entity.get_world_enabled() continue;
@@ -1751,7 +1751,7 @@ Player :: class : Player_Base {
     }
 
     tutorial_find_owned_colored_bill_press_lane0 :: method() -> Colored_Bill_Press {
-        foreach p: component_iterator(Colored_Bill_Press) {
+        for p: component_iterator(Colored_Bill_Press) {
             if p == null continue;
             if p.entity == null || p.entity.self == null continue;
             if !p.entity.get_world_enabled() continue;
@@ -1764,7 +1764,7 @@ Player :: class : Player_Base {
     }
 
     tutorial_find_owned_finished_bill_press_lane0 :: method() -> Finished_Bill_Press {
-        foreach p: component_iterator(Finished_Bill_Press) {
+        for p: component_iterator(Finished_Bill_Press) {
             if p == null continue;
             if p.entity == null || p.entity.self == null continue;
             if !p.entity.get_world_enabled() continue;
@@ -1777,7 +1777,7 @@ Player :: class : Player_Base {
     }
 
     tutorial_find_owned_vault :: method() -> Vault {
-        foreach v: component_iterator(Vault) {
+        for v: component_iterator(Vault) {
             if v == null continue;
             if v.entity == null || v.entity.self == null continue;
             if !v.entity.get_world_enabled() continue;
@@ -1789,7 +1789,7 @@ Player :: class : Player_Base {
     }
 
     tutorial_find_owned_truck :: method() -> Truck {
-        foreach t: component_iterator(Truck) {
+        for t: component_iterator(Truck) {
             if t == null continue;
             if t.entity == null || t.entity.self == null continue;
             if !t.entity.get_world_enabled() continue;

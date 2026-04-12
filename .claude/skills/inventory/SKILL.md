@@ -1,6 +1,6 @@
 ---
 name: inventory
-description: "Inventory system documentation. Reference this only when working with items and inventories."
+description: Any item or inventory system in your game MUST use the API described in this skill. Do not create custom inventory/item systems. 
 ---
 # CSL Inventory System
 
@@ -10,6 +10,8 @@ description: "Inventory system documentation. Reference this only when working w
 2. **Item_Instance** - An actual item in the world/inventory (has a count, can be moved)
 3. **Inventory** - Container holding item instances in slots
 4. Every Player has `player.default_inventory` built in
+
+> **Persistence:** To automatically save player inventories across sessions, call `Scene.set_auto_save_player_inventory(true)` in `ao_before_scene_load`.
 
 ## Creating Custom Item Types
 
@@ -172,9 +174,12 @@ defn.get_id() -> string;
 defn.get_icon() -> Texture_Asset;
 ```
 
-### Item_Instance Methods
+### Item_Instance Fields & Methods
 
 ```csl
+item.quantity    // s64, read-only — stack count
+item.slot_index  // s64, read-only — slot in parent inventory
+item.inventory   // Inventory, read-only — parent inventory (null if not in one)
 item.get_definition() -> Item_Definition;
 ```
 
@@ -258,7 +263,6 @@ Inventory_Draw_Options :: struct {
     hide_bag_button: bool;
     enable_selection: bool;
     scroll_item_selection: bool;
-    keyboard_item_selection: bool;
     enable_use_from_hotbar: bool;
 
     default :: proc() -> Inventory_Draw_Options;

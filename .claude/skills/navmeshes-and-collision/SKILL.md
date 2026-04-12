@@ -60,8 +60,8 @@ agent.set_navmesh_to_lock_to(null);     // clear constraint
 ### Movement_Agent Properties
 
 ```csl
-agent.movement_speed = 5.0;
-agent.friction = 10.0;
+agent.movement_speed = 300.0; // 300 is the default player speed
+agent.friction = 0.5;
 current_velocity := agent.velocity;       // read-only
 input := agent.input_this_frame;          // read-only
 ```

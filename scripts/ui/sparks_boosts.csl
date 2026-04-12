@@ -21,7 +21,7 @@ SPARKS_BOOST_2X_MACHINE_SPEED_FX_ICON_PATH :: "Buttons/2xmachine.png";
 
 sparks_find_player_by_user_id :: proc(user_id: string) -> Player {
     if user_id.count == 0 return null;
-    foreach p: component_iterator(Player) {
+    for p: component_iterator(Player) {
         if p == null continue;
         if p.get_user_id() == user_id {
             return p;

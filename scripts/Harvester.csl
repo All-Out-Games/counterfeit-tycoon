@@ -76,7 +76,7 @@ find_closest_treecutting_tree_to_position :: proc(pos: v2) -> Treecutting_Tree {
     best_d2 := 0.0;
     found: bool = false;
 
-    foreach t: component_iterator(Treecutting_Tree) {
+    for t: component_iterator(Treecutting_Tree) {
         if t == null continue;
         if t.entity == null || t.entity.self == null continue;
         if !t.entity.get_world_enabled() continue;
@@ -95,7 +95,7 @@ find_closest_treecutting_tree_to_position :: proc(pos: v2) -> Treecutting_Tree {
 
 find_treecutting_tree_by_entity_id :: proc(id: u64) -> Treecutting_Tree {
     if id == 0 return null;
-    foreach t: component_iterator(Treecutting_Tree) {
+    for t: component_iterator(Treecutting_Tree) {
         if t == null continue;
         if t.entity == null || t.entity.self == null continue;
         if t.entity.id == id {
@@ -107,7 +107,7 @@ find_treecutting_tree_by_entity_id :: proc(id: u64) -> Treecutting_Tree {
 
 harvester_find_connected_player_by_user_id :: proc(user_id: string) -> Player {
     if user_id.count <= 0 return null;
-    foreach p: component_iterator(Player) {
+    for p: component_iterator(Player) {
         if p == null continue;
         if p.self == null continue;
         if p.get_user_id() == user_id {
@@ -793,7 +793,7 @@ Harvester :: class : Interactable {
         origin := entity.world_position;
         max_d2 := collect_radius * collect_radius;
 
-        foreach d: component_iterator(Item_Drop_Magnet) {
+        for d: component_iterator(Item_Drop_Magnet) {
             if d == null continue;
             if d.entity == null || d.entity.self == null continue;
             if !d.entity.get_world_enabled() continue;

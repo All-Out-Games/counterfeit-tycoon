@@ -25,7 +25,7 @@ courier_find_finished_bill_press_for_base_and_lane :: proc(base: PlayerBase, lan
     if base == null return null;
     if base.entity == null || base.entity.self == null return null;
 
-    foreach p: component_iterator(Finished_Bill_Press) {
+    for p: component_iterator(Finished_Bill_Press) {
         if p == null continue;
         if p.entity == null || p.entity.self == null continue;
         if !p.entity.get_world_enabled() continue;
@@ -43,7 +43,7 @@ courier_find_vault_for_base :: proc(base: PlayerBase) -> Vault {
     if base == null return null;
     if base.entity == null || base.entity.self == null return null;
 
-    foreach v: component_iterator(Vault) {
+    for v: component_iterator(Vault) {
         if v == null continue;
         if v.entity == null || v.entity.self == null continue;
         if !v.entity.get_world_enabled() continue;

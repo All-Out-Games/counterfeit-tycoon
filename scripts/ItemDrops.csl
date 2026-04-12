@@ -82,7 +82,7 @@ Item_Drop_Magnet :: class : Component {
             return null;
         }
 
-        foreach p: component_iterator(Player) {
+        for p: component_iterator(Player) {
             if p == null continue;
             if p.self == null continue;
             if p.get_user_id() == user_id {
@@ -102,7 +102,7 @@ Item_Drop_Magnet :: class : Component {
         best: Player;
         best_d2 := attract_radius * attract_radius;
 
-        foreach p: component_iterator(Player) {
+        for p: component_iterator(Player) {
             if p == null continue;
             if p.self == null continue;
             if !p.enabled continue;

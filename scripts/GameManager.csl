@@ -79,7 +79,7 @@ find_truck_for_base :: proc(base: PlayerBase) -> Truck {
     if base == null return null;
     if base.entity == null || base.entity.self == null return null;
 
-    foreach t: component_iterator(Truck) {
+    for t: component_iterator(Truck) {
         if t == null continue;
         if t.entity == null || t.entity.self == null continue;
         if !t.entity.get_world_enabled() continue;
@@ -96,7 +96,7 @@ find_harvester_for_base :: proc(base: PlayerBase) -> Harvester {
     if base == null return null;
     if base.entity == null || base.entity.self == null return null;
 
-    foreach h: component_iterator(Harvester) {
+    for h: component_iterator(Harvester) {
         if h == null continue;
         if h.entity == null || h.entity.self == null continue;
         if !h.entity.get_world_enabled() continue;
@@ -226,7 +226,7 @@ GameManager :: class : Component {
     update_navmesh_rebuild_if_base_set_changed :: method() {
         scratch_base_entity_ids.clear();
 
-        foreach pb: component_iterator(PlayerBase) {
+        for pb: component_iterator(PlayerBase) {
             if pb == null continue;
             if pb.entity == null || pb.entity.self == null continue;
             if !pb.entity.get_world_enabled() continue;
@@ -258,7 +258,7 @@ GameManager :: class : Component {
     update_navmesh_rebuild_if_lane_set_changed :: method() {
         scratch_lane_sigs.clear();
 
-        foreach p: component_iterator(Player) {
+        for p: component_iterator(Player) {
             if p == null continue;
 
             // Track spawned lane prefab roots (lanes 2-4). Lane 1 lives in the base prefab.
@@ -344,7 +344,7 @@ GameManager :: class : Component {
         STATION_UPGRADES_RECONCILE_INTERVAL :: 0.5;
         if get_time() - last_station_upgrades_reconcile_time >= STATION_UPGRADES_RECONCILE_INTERVAL {
             last_station_upgrades_reconcile_time = get_time();
-            foreach p: component_iterator(Player) {
+            for p: component_iterator(Player) {
                 if p == null continue;
                 this.server_apply_station_upgrade_levels_for_player(p);
                 this.server_apply_vault_level_for_player(p);
@@ -740,7 +740,7 @@ GameManager :: class : Component {
     server_reconcile_lane_unlock_prompts :: method() {
         if !Game.is_server() return;
 
-        foreach p: component_iterator(Player) {
+        for p: component_iterator(Player) {
             if p == null continue;
             if p.base_entity == null || p.base_entity.self == null continue;
             this.server_reconcile_lane_unlock_prompt_for_player(p);
@@ -1115,7 +1115,7 @@ GameManager :: class : Component {
 
     server_reconcile_manager_unlock_prompts :: method() {
         if !Game.is_server() return;
-        foreach p: component_iterator(Player) {
+        for p: component_iterator(Player) {
             if p == null continue;
             this.server_reconcile_manager_unlock_prompts_for_player(p);
         }
@@ -1313,7 +1313,7 @@ GameManager :: class : Component {
 
     server_reconcile_woodchipper_unlock_prompts :: method() {
         if !Game.is_server() return;
-        foreach p: component_iterator(Player) {
+        for p: component_iterator(Player) {
             if p == null continue;
             this.server_reconcile_woodchipper_unlock_prompt_for_player(p);
         }
@@ -1336,7 +1336,7 @@ GameManager :: class : Component {
     server_reconcile_lanes :: method() {
         if !Game.is_server() return;
 
-        foreach p: component_iterator(Player) {
+        for p: component_iterator(Player) {
             if p == null continue;
             if p.base_entity == null || p.base_entity.self == null continue;
 
@@ -1353,7 +1353,7 @@ GameManager :: class : Component {
     server_reconcile_turrets :: method() {
         if !Game.is_server() return;
 
-        foreach p: component_iterator(Player) {
+        for p: component_iterator(Player) {
             if p == null continue;
             if p.base_entity == null || p.base_entity.self == null continue;
             if p.turrets_loaded_from_save continue;
@@ -1407,7 +1407,7 @@ GameManager :: class : Component {
             return lvl;
         }
 
-        foreach m: component_iterator(Paper_Mill) {
+        for m: component_iterator(Paper_Mill) {
             if m == null continue;
             if m.entity == null || m.entity.self == null continue;
             if get_parent_player_base(m.entity) != pb continue;
@@ -1419,7 +1419,7 @@ GameManager :: class : Component {
                 m.apply_upgrade_level(lvl);
             }
         }
-        foreach b: component_iterator(Blank_Bill_Press) {
+        for b: component_iterator(Blank_Bill_Press) {
             if b == null continue;
             if b.entity == null || b.entity.self == null continue;
             if get_parent_player_base(b.entity) != pb continue;
@@ -1431,7 +1431,7 @@ GameManager :: class : Component {
                 b.apply_upgrade_level(lvl);
             }
         }
-        foreach c: component_iterator(Colored_Bill_Press) {
+        for c: component_iterator(Colored_Bill_Press) {
             if c == null continue;
             if c.entity == null || c.entity.self == null continue;
             if get_parent_player_base(c.entity) != pb continue;
@@ -1443,7 +1443,7 @@ GameManager :: class : Component {
                 c.apply_upgrade_level(lvl);
             }
         }
-        foreach f: component_iterator(Finished_Bill_Press) {
+        for f: component_iterator(Finished_Bill_Press) {
             if f == null continue;
             if f.entity == null || f.entity.self == null continue;
             if get_parent_player_base(f.entity) != pb continue;
@@ -1473,7 +1473,7 @@ GameManager :: class : Component {
         if lvl < 1 lvl = 1;
         if lvl > VAULT_MAX_LEVEL lvl = VAULT_MAX_LEVEL;
 
-        foreach v: component_iterator(Vault) {
+        for v: component_iterator(Vault) {
             if v == null continue;
             if v.entity == null || v.entity.self == null continue;
             if get_parent_player_base(v.entity) != pb continue;
@@ -1511,25 +1511,25 @@ GameManager :: class : Component {
                     coloreds: [..]Colored_Bill_Press;
                     finisheds: [..]Finished_Bill_Press;
 
-                    foreach m: component_iterator(Paper_Mill) {
+                    for m: component_iterator(Paper_Mill) {
                         if m == null continue;
                         if m.entity == null || m.entity.self == null continue;
                         if get_parent_player_base(m.entity) != pb continue;
                         mills.append(m);
                     }
-                    foreach b: component_iterator(Blank_Bill_Press) {
+                    for b: component_iterator(Blank_Bill_Press) {
                         if b == null continue;
                         if b.entity == null || b.entity.self == null continue;
                         if get_parent_player_base(b.entity) != pb continue;
                         blanks.append(b);
                     }
-                    foreach c: component_iterator(Colored_Bill_Press) {
+                    for c: component_iterator(Colored_Bill_Press) {
                         if c == null continue;
                         if c.entity == null || c.entity.self == null continue;
                         if get_parent_player_base(c.entity) != pb continue;
                         coloreds.append(c);
                     }
-                    foreach f: component_iterator(Finished_Bill_Press) {
+                    for f: component_iterator(Finished_Bill_Press) {
                         if f == null continue;
                         if f.entity == null || f.entity.self == null continue;
                         if get_parent_player_base(f.entity) != pb continue;
@@ -1823,7 +1823,7 @@ GameManager :: class : Component {
         if base == null return null;
         if base.entity == null || base.entity.self == null return null;
 
-        foreach op: component_iterator(PressOperator) {
+        for op: component_iterator(PressOperator) {
             if op == null continue;
             if op.entity == null || op.entity.self == null continue;
             if !op.entity.get_world_enabled() continue;
@@ -1889,7 +1889,7 @@ GameManager :: class : Component {
         // PressOperator is bit 1 (lowest bit) in the lane mask.
         PRESS_OPERATOR_BIT :: 1;
 
-        foreach p: component_iterator(Player) {
+        for p: component_iterator(Player) {
             if p == null continue;
             if p.base_entity == null || p.base_entity.self == null continue;
 
@@ -1929,7 +1929,7 @@ GameManager :: class : Component {
         if base == null return null;
         if base.entity == null || base.entity.self == null return null;
 
-        foreach c: component_iterator(Colorist) {
+        for c: component_iterator(Colorist) {
             if c == null continue;
             if c.entity == null || c.entity.self == null continue;
             if !c.entity.get_world_enabled() continue;
@@ -1995,7 +1995,7 @@ GameManager :: class : Component {
         // Colorist is bit 2 in the lane mask.
         COLORIST_BIT :: 2;
 
-        foreach p: component_iterator(Player) {
+        for p: component_iterator(Player) {
             if p == null continue;
             if p.base_entity == null || p.base_entity.self == null continue;
 
@@ -2034,7 +2034,7 @@ GameManager :: class : Component {
         if base == null return null;
         if base.entity == null || base.entity.self == null return null;
 
-        foreach s: component_iterator(Stamper) {
+        for s: component_iterator(Stamper) {
             if s == null continue;
             if s.entity == null || s.entity.self == null continue;
             if !s.entity.get_world_enabled() continue;
@@ -2100,7 +2100,7 @@ GameManager :: class : Component {
         // Stamper is bit 4 in the lane mask.
         STAMPER_BIT :: 4;
 
-        foreach p: component_iterator(Player) {
+        for p: component_iterator(Player) {
             if p == null continue;
             if p.base_entity == null || p.base_entity.self == null continue;
 
@@ -2139,7 +2139,7 @@ GameManager :: class : Component {
         if base == null return null;
         if base.entity == null || base.entity.self == null return null;
 
-        foreach c: component_iterator(Courier) {
+        for c: component_iterator(Courier) {
             if c == null continue;
             if c.entity == null || c.entity.self == null continue;
             if !c.entity.get_world_enabled() continue;
@@ -2205,7 +2205,7 @@ GameManager :: class : Component {
         // Courier is bit 8 in the lane mask.
         COURIER_BIT :: 8;
 
-        foreach p: component_iterator(Player) {
+        for p: component_iterator(Player) {
             if p == null continue;
             if p.base_entity == null || p.base_entity.self == null continue;
 
@@ -2244,7 +2244,7 @@ GameManager :: class : Component {
         if base == null return null;
         if base.entity == null || base.entity.self == null return null;
 
-        foreach w: component_iterator(Woodchipper) {
+        for w: component_iterator(Woodchipper) {
             if w == null continue;
             if w.entity == null || w.entity.self == null continue;
             if !w.entity.get_world_enabled() continue;
@@ -2305,7 +2305,7 @@ GameManager :: class : Component {
     server_reconcile_woodchippers :: method() {
         if !Game.is_server() return;
 
-        foreach p: component_iterator(Player) {
+        for p: component_iterator(Player) {
             if p == null continue;
             if p.base_entity == null || p.base_entity.self == null continue;
 
@@ -2349,7 +2349,7 @@ GameManager :: class : Component {
         used: [6]bool;
 
         // 1) Validate existing assignments and mark used slots.
-        foreach p: component_iterator(Player) {
+        for p: component_iterator(Player) {
             if p == null continue;
 
             // Clear invalid base refs so they can be reassigned.
@@ -2382,7 +2382,7 @@ GameManager :: class : Component {
         }
 
         // 2) Assign bases to players who don't have one yet, while slots are available.
-        foreach p: component_iterator(Player) {
+        for p: component_iterator(Player) {
             if p == null continue;
 
             if p.base_entity != null && p.base_entity.self != null {
@@ -2511,7 +2511,7 @@ GameManager :: class : Component {
 
 get_game_manager :: proc() -> GameManager {
     // Returns the first GameManager component found in the scene (or null if none exist)
-    foreach gm: component_iterator(GameManager) {
+    for gm: component_iterator(GameManager) {
         return gm;
     }
     return null;

@@ -130,7 +130,7 @@ PlayerBase :: class : Component {
             return null;
         }
 
-        foreach p: component_iterator(Player) {
+        for p: component_iterator(Player) {
             if p == null continue;
             if p.get_user_id() == owner_user_id {
                 return p;
@@ -179,7 +179,7 @@ PlayerBase :: class : Component {
 
 // Best-effort: find the local player's Player component on this client.
 get_local_player :: proc() -> Player {
-    foreach p: component_iterator(Player) {
+    for p: component_iterator(Player) {
         if p == null continue;
 
         // On clients, only the local player returns true for is_local_or_server().

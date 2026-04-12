@@ -192,7 +192,7 @@ Beam_Visual :: class : Component {
 
         // Find source player
         source: Player;
-        foreach p: component_iterator(Player) {
+        for p: component_iterator(Player) {
             if p.entity.id == owner_id {
                 source = p;
                 break;
@@ -211,7 +211,7 @@ Beam_Visual :: class : Component {
         if target_id != 0 {
             // Targeted beam (Octo Siphoner) - aim at specific player
             target: Player;
-            foreach p: component_iterator(Player) {
+            for p: component_iterator(Player) {
                 if p.entity.id == target_id {
                     target = p;
                     break;
@@ -252,7 +252,7 @@ spawn_beam_entity :: proc(owner_id: u64, target_id: u64, skin_name: string, anim
 }
 
 destroy_player_beams :: proc(owner_id: u64) {
-    foreach beam: component_iterator(Beam_Visual) {
+    for beam: component_iterator(Beam_Visual) {
         if beam.owner_id == owner_id {
             beam.entity.destroy();
         }

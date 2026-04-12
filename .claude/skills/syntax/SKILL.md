@@ -13,7 +13,7 @@ my_variable: int;        // Zero-initialized
 
 Integer literals coerce to float, but not the reverse.
 
-> **Struct/class fields cannot have inline defaults.** `health: int = 100;` inside a class is a compile error. Initialize fields in `ao_start` instead.
+> **Struct fields cannot have inline defaults.**
 
 ### Constants
 
@@ -105,7 +105,8 @@ dog.bark();
 ```csl
 fixed: [4]int = {1, 2, 3, 4};
 spawn_points: [3]v2 = {{0, 0}, {5, 0}, {0, 5}};
-view: []int = fixed;
+dyn: [..]int;
+view: []int = dyn;
 
 hit := Damage_Desc{amount=10, knockback={2, 1}};  // named fields use = (NOT :)
 ```
@@ -167,7 +168,9 @@ Do not write C-style fallthrough logic in CSL switch cases.
 
 `..` ranges are **inclusive**: `for i: 0..9 { }` iterates 0 through 9.
 
-`foreach` for custom iterators: `foreach player: component_iterator(My_Player) { }`
+`for` also handles custom iterators: `for player: component_iterator(My_Player) { }`
+
+Custom iterator-based `for` loops require a `next :: method() -> bool` and a `current` field.
 
 ### Enums, `defer`, and `#alive`
 
@@ -183,7 +186,7 @@ UI.push_screen_draw_context();
 defer UI.pop_draw_context();
 ```
 
-`#alive(expr)` checks whether a class reference is still valid.
+`#alive(expr)` checks whether a class reference is still valid and MUST be used before accessing to prevent crashes. 
 `defer` runs a statement when the current scope exits and is commonly used for UI push/pop cleanup.
 
 ## Type Casting
