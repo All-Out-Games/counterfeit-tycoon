@@ -11,9 +11,6 @@ description: Reference this when implementing pathfinding, movement constraints,
 - **Movement_Agent** -- Entity movement with navmesh pathfinding support. Handles velocity, friction, speed.
 
 ## Editor Setup
-
-> The user must do these steps manually in the editor.
-
 1. Create an entity with a `Navmesh` component
 2. Create child entities with `Navmesh_Loop` components to define walkable areas
 3. For each `Navmesh_Loop`: add points for the polygon shape; set `Flip Inside Outside` to true for obstacles/holes
@@ -28,7 +25,7 @@ description: Reference this when implementing pathfinding, movement constraints,
 ```csl
 point: v2 = {10, 10};
 result: v2;
-triangle_hint: s64;  // 0 = not set; reuse for repeated nearby queries for speed
+triangle_hint: s64; // 0 = not set; reuse for repeated nearby queries for speed
 
 if navmesh.try_find_closest_point_on_navmesh(point, ref result, ref triangle_hint) {
     spawn_entity.set_local_position(result);
@@ -53,8 +50,8 @@ if result.success {
 ### Locking Movement to a Navmesh
 
 ```csl
-agent.set_navmesh_to_lock_to(navmesh);  // constrains agent to navmesh each frame
-agent.set_navmesh_to_lock_to(null);     // clear constraint
+agent.set_navmesh_to_lock_to(navmesh); // constrains agent to navmesh each frame
+agent.set_navmesh_to_lock_to(null); // clear constraint
 ```
 
 ### Movement_Agent Properties
@@ -62,8 +59,8 @@ agent.set_navmesh_to_lock_to(null);     // clear constraint
 ```csl
 agent.movement_speed = 300.0; // 300 is the default player speed
 agent.friction = 0.5;
-current_velocity := agent.velocity;       // read-only
-input := agent.input_this_frame;          // read-only
+current_velocity := agent.velocity; // read-only
+input := agent.input_this_frame; // read-only
 ```
 
 ### Forcing Navmesh Rebuild
@@ -100,7 +97,7 @@ NPC :: class : Component {
     target: Entity;
 
     ao_update :: method(dt: float) {
-        if !#alive(target) return;  // #alive checks entity validity
+        if !#alive(target) return; // #alive checks entity validity
         result := agent.set_path_target(target.world_position, agent.movement_speed);
     }
 }

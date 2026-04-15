@@ -52,10 +52,9 @@ is_sellable_id :: proc(item_id: string) -> bool {
 }
 
 spawn_sale_coin_shower :: proc(player: Player, coins: s64) {
-    if player == null return;
+    if !#alive(player) return;
     if coins <= 0 return;
     if !Game.is_server() return;
-    if player.entity == null || player.entity.self == null return;
 
     // We spawn "coin" item drops. ItemDrops handles converting "coin" drops into currency on pickup.
     coin_defn := ItemManager.TryFindItem("coin");

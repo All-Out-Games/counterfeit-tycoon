@@ -84,9 +84,8 @@ server_drop_resources_on_death :: proc(player: Player) {
 }
 
 server_respawn_player_at_owned_base :: proc(player: Player) {
-    if player == null return;
+    if !#alive(player) return;
     if !Game.is_server() return;
-    if player.entity == null || player.entity.self == null return;
 
     // Resolve spawn position from the player's owned base slot.
     gm := get_game_manager();

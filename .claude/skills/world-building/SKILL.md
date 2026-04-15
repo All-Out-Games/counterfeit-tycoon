@@ -97,11 +97,13 @@ Available channels: `positionX`, `positionY`, `rotation`, `scaleX`, `scaleY`.
 
 ## `scene_camera`
 ```
-scene_camera (action: "get")                                                     // returns position, orthographicSize
-scene_camera (action: "moveTo", position: [5, 0], orthographicSize: 8)           // jump to location + zoom
-scene_camera (action: "focusEntity", entityName: "Tree_1")                       // frame an entity
-scene_camera (action: "focusArea", min: [-10, -5], max: [10, 5])                 // frame a rectangle
+scene_camera (action: "get")
+scene_camera (action: "moveTo", position: [5, 0], orthographicSize: 8)
+scene_camera (action: "focusEntity", entityName: "Tree_1")
+scene_camera (action: "focusArea", min: [-10, -5], max: [10, 5])
 ```
+
+If you are using Navmesh reference the navmesh skill. If you take screenshots and see big colored triangle overlays you probably need to disable navmesh debug on an entity.  
 
 ## Verify After Placement
 ```

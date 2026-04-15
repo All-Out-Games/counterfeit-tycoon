@@ -6,9 +6,9 @@ description: When writing new CSL code you must reference these docs to understa
 ## Declarations
 
 ```csl
-my_variable: int = 42;  // Explicit type
-my_variable := 42;       // Type inferred
-my_variable: int;        // Zero-initialized
+my_variable: int = 42; // Explicit type
+my_variable := 42; // Type inferred
+my_variable: int; // Zero-initialized
 ```
 
 Integer literals coerce to float, but not the reverse.
@@ -22,8 +22,8 @@ Integer literals coerce to float, but not the reverse.
 `PI` is already defined as a builtin — do not redefine it.
 
 ```csl
-PI :: 3.14159265359;     // DON'T — already exists
-MY_SPEED :: 5.0;         // DO — custom constants are fine
+PI :: 3.14159265359; // DON'T — already exists
+MY_SPEED :: 5.0; // DO — custom constants are fine
 ```
 
 ## Types
@@ -58,9 +58,9 @@ Foo :: class {
     position: v2;
 }
 
-foo := new(Foo);       // type inference
-foo: Foo = new();      // explicit type, inferred new
-foo: Foo = new(Foo);   // fully explicit
+foo := new(Foo); // type inference
+foo: Foo = new(); // explicit type, inferred new
+foo: Foo = new(Foo); // fully explicit
 ```
 
 ### Inheritance
@@ -88,7 +88,7 @@ Dog :: class {
     name: string;
 
     bark :: method() {
-        log_info("% says bark!", {name});  // implicit this.name
+        log_info("% says bark!", {name}); // implicit this.name
     }
 }
 
@@ -108,7 +108,7 @@ spawn_points: [3]v2 = {{0, 0}, {5, 0}, {0, 5}};
 dyn: [..]int;
 view: []int = dyn;
 
-hit := Damage_Desc{amount=10, knockback={2, 1}};  // named fields use = (NOT :)
+hit := Damage_Desc{amount=10, knockback={2, 1}}; // named fields use = (NOT :)
 ```
 
 ### Dynamic Arrays
@@ -224,7 +224,7 @@ min :: proc(a: $T, b: T) -> T {
     return b;
 }
 
-result := min(3, 5);  // T is deduced as int
+result := min(3, 5); // T is deduced as int
 ```
 
 > `T` is not a type. Never write `component_iterator(T)` or `[..]T` — always use the actual type name like `component_iterator(Enemy)` or `[..]Enemy`.
@@ -250,7 +250,7 @@ player.on_death = proc(player: Player, userdata: Object) {
 `using` lets you access fields without a selector:
 ```csl
 using position: v3;
-x = 123;  // Instead of position.x
+x = 123; // Instead of position.x
 ```
 
 ## Runtime Type Checking

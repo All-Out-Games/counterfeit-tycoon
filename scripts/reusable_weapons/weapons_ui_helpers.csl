@@ -8,15 +8,12 @@ draw_all_players_health_bars_local :: proc() {
     defer UI.pop_layer();
 
     for p: component_iterator(Player) {
-        if p == null continue;
-        if p.entity == null || p.entity.self == null continue;
         draw_health_bar_in_world_context(p);
     }
 }
 
 draw_health_bar_in_world_context :: proc(player: Player) {
-    if player == null return;
-    if player.entity == null || player.entity.self == null return;
+    if !#alive(player) return;
 
     // Anchor directly to player world position (do not depend on nameplate rects, which can be unstable).
     pos := player.entity.world_position + v2{0, 1.75};
@@ -86,15 +83,12 @@ draw_all_players_carried_bills_local :: proc() {
     defer UI.pop_layer();
 
     for p: component_iterator(Player) {
-        if p == null continue;
-        if p.entity == null || p.entity.self == null continue;
         draw_player_carried_bills_in_world_context(p);
     }
 }
 
 draw_player_carried_bills_in_world_context :: proc(player: Player) {
-    if player == null return;
-    if player.entity == null || player.entity.self == null return;
+    if !#alive(player) return;
 
     // Count finished bills across all inventory slots.
     inv := player.default_inventory;

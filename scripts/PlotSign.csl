@@ -42,7 +42,6 @@ PlotSign :: class : Component {
 
     find_plot_owner :: method() -> Player {
         for p: component_iterator(Player) {
-            if p == null continue;
             if p.base_spawn_index == plot_index {
                 return p;
             }
@@ -63,7 +62,7 @@ PlotSign :: class : Component {
         if local_player == null {
             return;
         }
-        if local_player.entity == null || local_player.entity.self == null {
+        if !#alive(local_player) {
             return;
         }
 

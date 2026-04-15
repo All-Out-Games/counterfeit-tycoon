@@ -432,7 +432,7 @@ Paper_Mill :: class : Interactable {
         if local_player == null {
             return;
         }
-        if local_player.entity == null || local_player.entity.self == null {
+        if !#alive(local_player) {
             return;
         }
 
@@ -638,9 +638,7 @@ Paper_Mill :: class : Interactable {
     }
 
     spawn_pickup_text :: method(player: Player, paper_count: s64) {
-        if player == null return;
-        if player.entity == null return;
-        if player.entity.self == null return;
+        if !#alive(player) return;
         if paper_count <= 0 return;
 
         gm := get_game_manager();
@@ -677,11 +675,6 @@ Paper_Mill :: class : Interactable {
         best_d2 := collect_radius * collect_radius;
 
         for p: component_iterator(Player) {
-            if p == null continue;
-            if p.entity == null continue;
-            if p.entity.self == null continue;
-            if !p.entity.get_world_enabled() continue;
-
             delta := p.entity.world_position - origin;
             d2 := length_squared(delta);
             if d2 > best_d2 continue;
@@ -701,10 +694,7 @@ Paper_Mill :: class : Interactable {
         }
 
         owner := pb.get_owner();
-        if owner == null return null;
-        if owner.entity == null return null;
-        if owner.entity.self == null return null;
-        if !owner.entity.get_world_enabled() return null;
+        if !#alive(owner) return null;
 
         origin := entity.world_position;
         delta := owner.entity.world_position - origin;

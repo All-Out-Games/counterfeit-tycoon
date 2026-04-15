@@ -82,8 +82,6 @@ find_connected_player_by_user_id :: proc(user_id: string) -> Player {
     if user_id.count <= 0 return null;
 
     for p: component_iterator(Player) {
-        if p == null continue;
-        if p.self == null continue;
         if p.get_user_id() == user_id {
             return p;
         }
@@ -93,8 +91,6 @@ find_connected_player_by_user_id :: proc(user_id: string) -> Player {
 
 find_local_player :: proc() -> Player {
     for p: component_iterator(Player) {
-        if p == null continue;
-        if p.self == null continue;
         if p.is_local() {
             return p;
         }
@@ -712,9 +708,6 @@ Truck :: class : Interactable {
 
         shooter: Player;
         for p: component_iterator(Player) {
-            if p == null continue;
-            if p.self == null continue;
-            if p.entity == null || p.entity.self == null continue;
             if p.entity.id == shooter_entity_id {
                 shooter = p;
                 break;

@@ -108,8 +108,6 @@ find_treecutting_tree_by_entity_id :: proc(id: u64) -> Treecutting_Tree {
 harvester_find_connected_player_by_user_id :: proc(user_id: string) -> Player {
     if user_id.count <= 0 return null;
     for p: component_iterator(Player) {
-        if p == null continue;
-        if p.self == null continue;
         if p.get_user_id() == user_id {
             return p;
         }
@@ -841,8 +839,7 @@ Harvester :: class : Interactable {
     }
 
     payout_wood_to_player :: method(player: Player) {
-        if player == null return;
-        if player.entity == null || player.entity.self == null return;
+        if !#alive(player) return;
         if carried_wood <= 0 return;
 
         wood_defn := ItemManager.TryFindItem("wood");

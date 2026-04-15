@@ -179,6 +179,10 @@ Woodchipper :: class : Component {
     deposit_seq: s64;
     target_mill_lane_index: s64; // 0-based
 
+    // Cached references (resolved once, #alive-checked per frame)
+    cached_pb: PlayerBase;
+    cached_harvester: Harvester;
+
     // Runtime
     agent: Movement_Agent;
     drive_start_time: float;
@@ -198,6 +202,15 @@ Woodchipper :: class : Component {
 
     last_world_pos: v2;
     last_world_pos_initialized: bool;
+
+    resolve_cached_refs :: method() {
+        if !#alive(cached_pb) {
+            cached_pb = get_parent_player_base(entity);
+        }
+        if !#alive(cached_harvester) {
+            cached_harvester = (cached_pb != null) ? find_harvester_for_base(cached_pb) : null;
+        }
+    }
 
     ao_start :: method() {
         // Defaults (only if not set in editor)
@@ -244,10 +257,10 @@ Woodchipper :: class : Component {
         setup_spine_state_machine();
         update_visuals(); // ensure correct initial anim + facing
 
-        // Best-effort default ownership if we were already parented under a PlayerBase.
-        pb := get_parent_player_base(entity);
-        if pb != null {
-            owner_user_id = pb.owner_user_id;
+        // Resolve and cache PlayerBase + Harvester references once.
+        resolve_cached_refs();
+        if cached_pb != null {
+            owner_user_id = cached_pb.owner_user_id;
         }
 
         // Start by heading to the Harvester.
@@ -280,6 +293,7 @@ Woodchipper :: class : Component {
         break_variant = 0;
         harvester_dispatch_origin_set = false;
         harvester_dispatch_origin_world_pos = entity.world_position;
+        resolve_cached_refs();
     }
 
     target_pos_for_harvester :: method(h: Harvester) -> v2 {
@@ -310,17 +324,10 @@ Woodchipper :: class : Component {
     }
 
     should_play_bored_idle :: method() -> bool {
-        // Only play bored idle when we're waiting at a station with no output to pick up.
-        // (Not when we're pausing between path legs.)
         if state != .WAIT_AT_HARVESTER return false;
         if carried_wood > 0 return false;
-
-        pb := get_parent_player_base(entity);
-        if pb == null return false;
-
-        harvester := find_harvester_for_base(pb);
-        if harvester == null return false;
-        return harvester.carried_wood <= 0;
+        if !#alive(cached_harvester) return false;
+        return cached_harvester.carried_wood <= 0;
     }
 
     server_begin_pause :: method(next_state: Woodchipper_State) {
@@ -543,9 +550,8 @@ Woodchipper :: class : Component {
 
     apply_depth_sort_from_owner :: method() {
         if spine == null return;
-        pb := get_parent_player_base(entity);
-        if pb == null return;
-        owner := pb.get_owner();
+        if !#alive(cached_pb) return;
+        owner := cached_pb.get_owner();
         if owner == null return;
         if owner.self == null return;
         if owner.animator == null return;
@@ -563,19 +569,17 @@ Woodchipper :: class : Component {
         if owner_user_id.count == 0 {
             return true;
         }
-
-        pb := get_parent_player_base(entity);
-        if pb == null {
+        if !#alive(cached_pb) {
             return true;
         }
-        if pb.owner_user_id.count == 0 {
+        if cached_pb.owner_user_id.count == 0 {
             return true;
         }
-        if pb.owner_user_id != owner_user_id {
+        if cached_pb.owner_user_id != owner_user_id {
             return true;
         }
 
-        owner := pb.get_owner();
+        owner := cached_pb.get_owner();
         if owner == null {
             return true;
         }
@@ -651,8 +655,13 @@ Woodchipper :: class : Component {
             agent = entity.get_component(Movement_Agent);
         }
 
-        pb := get_parent_player_base(entity);
-        harvester := (pb != null) ? find_harvester_for_base(pb) : null;
+        // Re-resolve cached refs only if they've been destroyed.
+        if !#alive(cached_pb) || !#alive(cached_harvester) {
+            resolve_cached_refs();
+        }
+
+        pb := cached_pb;
+        harvester := cached_harvester;
         mill := woodchipper_find_paper_mill_for_base_and_lane(pb, target_mill_lane_index);
 
         // Client+server: drive movement targets for smoother replicated motion.

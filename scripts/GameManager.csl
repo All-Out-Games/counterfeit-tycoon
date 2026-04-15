@@ -259,8 +259,6 @@ GameManager :: class : Component {
         scratch_lane_sigs.clear();
 
         for p: component_iterator(Player) {
-            if p == null continue;
-
             // Track spawned lane prefab roots (lanes 2-4). Lane 1 lives in the base prefab.
             for lane: 1..3 {
                 e := p.lane_entities[lane];
@@ -345,7 +343,6 @@ GameManager :: class : Component {
         if get_time() - last_station_upgrades_reconcile_time >= STATION_UPGRADES_RECONCILE_INTERVAL {
             last_station_upgrades_reconcile_time = get_time();
             for p: component_iterator(Player) {
-                if p == null continue;
                 this.server_apply_station_upgrade_levels_for_player(p);
                 this.server_apply_vault_level_for_player(p);
             }
@@ -741,7 +738,6 @@ GameManager :: class : Component {
         if !Game.is_server() return;
 
         for p: component_iterator(Player) {
-            if p == null continue;
             if p.base_entity == null || p.base_entity.self == null continue;
             this.server_reconcile_lane_unlock_prompt_for_player(p);
         }
@@ -1116,7 +1112,6 @@ GameManager :: class : Component {
     server_reconcile_manager_unlock_prompts :: method() {
         if !Game.is_server() return;
         for p: component_iterator(Player) {
-            if p == null continue;
             this.server_reconcile_manager_unlock_prompts_for_player(p);
         }
     }
@@ -1314,7 +1309,6 @@ GameManager :: class : Component {
     server_reconcile_woodchipper_unlock_prompts :: method() {
         if !Game.is_server() return;
         for p: component_iterator(Player) {
-            if p == null continue;
             this.server_reconcile_woodchipper_unlock_prompt_for_player(p);
         }
     }
@@ -1337,7 +1331,6 @@ GameManager :: class : Component {
         if !Game.is_server() return;
 
         for p: component_iterator(Player) {
-            if p == null continue;
             if p.base_entity == null || p.base_entity.self == null continue;
 
             // Spawn lanes 2-4 if unlocked.
@@ -1354,7 +1347,6 @@ GameManager :: class : Component {
         if !Game.is_server() return;
 
         for p: component_iterator(Player) {
-            if p == null continue;
             if p.base_entity == null || p.base_entity.self == null continue;
             if p.turrets_loaded_from_save continue;
 
@@ -1890,7 +1882,6 @@ GameManager :: class : Component {
         PRESS_OPERATOR_BIT :: 1;
 
         for p: component_iterator(Player) {
-            if p == null continue;
             if p.base_entity == null || p.base_entity.self == null continue;
 
             pb := p.base_entity.get_component(PlayerBase);
@@ -1996,7 +1987,6 @@ GameManager :: class : Component {
         COLORIST_BIT :: 2;
 
         for p: component_iterator(Player) {
-            if p == null continue;
             if p.base_entity == null || p.base_entity.self == null continue;
 
             pb := p.base_entity.get_component(PlayerBase);
@@ -2101,7 +2091,6 @@ GameManager :: class : Component {
         STAMPER_BIT :: 4;
 
         for p: component_iterator(Player) {
-            if p == null continue;
             if p.base_entity == null || p.base_entity.self == null continue;
 
             pb := p.base_entity.get_component(PlayerBase);
@@ -2206,7 +2195,6 @@ GameManager :: class : Component {
         COURIER_BIT :: 8;
 
         for p: component_iterator(Player) {
-            if p == null continue;
             if p.base_entity == null || p.base_entity.self == null continue;
 
             pb := p.base_entity.get_component(PlayerBase);
@@ -2306,7 +2294,6 @@ GameManager :: class : Component {
         if !Game.is_server() return;
 
         for p: component_iterator(Player) {
-            if p == null continue;
             if p.base_entity == null || p.base_entity.self == null continue;
 
             pb := p.base_entity.get_component(PlayerBase);
@@ -2350,8 +2337,6 @@ GameManager :: class : Component {
 
         // 1) Validate existing assignments and mark used slots.
         for p: component_iterator(Player) {
-            if p == null continue;
-
             // Clear invalid base refs so they can be reassigned.
             if p.base_spawn_index < 0 || p.base_spawn_index >= MAX_BASES {
                 p.base_spawn_index = -1;
@@ -2383,8 +2368,6 @@ GameManager :: class : Component {
 
         // 2) Assign bases to players who don't have one yet, while slots are available.
         for p: component_iterator(Player) {
-            if p == null continue;
-
             if p.base_entity != null && p.base_entity.self != null {
                 continue; // already has a base
             }

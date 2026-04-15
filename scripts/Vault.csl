@@ -242,8 +242,6 @@ Vault :: class : Interactable {
         // This avoids relying on Vault-owned replicated fields (which may not update on clients).
         is_active := false;
         for p: component_iterator(Player) {
-            if p == null continue;
-            if p.self == null continue;
             if p.vault_theft_target_entity_id == entity.id {
                 is_active = true;
                 break;
@@ -628,7 +626,7 @@ Vault :: class : Interactable {
         if local_player == null {
             return;
         }
-        if local_player.entity == null || local_player.entity.self == null {
+        if !#alive(local_player) {
             return;
         }
 

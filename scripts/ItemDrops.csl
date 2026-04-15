@@ -83,8 +83,6 @@ Item_Drop_Magnet :: class : Component {
         }
 
         for p: component_iterator(Player) {
-            if p == null continue;
-            if p.self == null continue;
             if p.get_user_id() == user_id {
                 return p;
             }
@@ -103,16 +101,6 @@ Item_Drop_Magnet :: class : Component {
         best_d2 := attract_radius * attract_radius;
 
         for p: component_iterator(Player) {
-            if p == null continue;
-            if p.self == null continue;
-            if !p.enabled continue;
-            if p.entity == null continue;
-            if p.entity.self == null continue;
-            if !p.entity.get_world_enabled() continue;
-            if p.default_inventory == null continue;
-            if p.default_inventory.self == null continue;
-            if p.default_inventory.capacity <= 0 continue;
-
             if exclusive_to_player.count > 0 {
                 if p.get_user_id() != exclusive_to_player {
                     continue;
@@ -147,11 +135,7 @@ Item_Drop_Magnet :: class : Component {
     try_claim :: method(player: Player) -> bool {
         if claimed return false;
         if defn == null return false;
-        if player == null return false;
-        if player.self == null return false;
-        if player.entity == null return false;
-        if player.entity.self == null return false;
-        if !player.entity.get_world_enabled() return false;
+        if !#alive(player) return false;
 
         if exclusive_to_player.count > 0 && player.get_user_id() != exclusive_to_player {
             return false;

@@ -99,7 +99,6 @@ server_refresh_all_station_speed_mods :: proc() {
     if gm == null return;
 
     for p: component_iterator(Player) {
-        if p == null continue;
         gm.server_apply_station_upgrade_levels_for_player(p);
     }
 }
@@ -653,8 +652,7 @@ BASE_SAFE_ZONE_REGEN_HP_PER_SEC :: 15.0;
 SPAWN_PROTECTION_SECONDS :: 10.0;
 
 player_is_in_own_base_safe_zone :: proc(player: Player) -> bool {
-    if player == null return false;
-    if player.entity == null || player.entity.self == null return false;
+    if !#alive(player) return false;
     if player.base_entity == null || player.base_entity.self == null return false;
 
     base_pos := player.base_entity.world_position;
@@ -814,9 +812,7 @@ Player :: class : Player_Base {
         THROTTLE_SECONDS :: 2.5;
 
         for thief: component_iterator(Player) {
-            if thief == null continue;
             if thief == this continue;
-            if thief.self == null continue;
 
             vault_id := thief.vault_theft_target_entity_id;
             if vault_id == 0 continue;

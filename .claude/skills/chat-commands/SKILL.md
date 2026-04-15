@@ -1,6 +1,6 @@
 ---
 name: chat-commands
-description: "For creating in-game chat commands that players can invoke."
+description: For creating in-game chat commands that admins can invoke to help make playtesting easier.
 ---
 # Chat Commands
 

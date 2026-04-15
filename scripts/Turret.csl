@@ -352,8 +352,6 @@ turret_get_local_place_block_reason :: proc(player: Player, dropped_item: Item_I
 turret_find_player_by_entity_id :: proc(entity_id: u64) -> Player {
     if entity_id == 0 return null;
     for p: component_iterator(Player) {
-        if p == null continue;
-        if p.entity == null || p.entity.self == null continue;
         if p.entity.id == entity_id {
             return p;
         }
@@ -364,7 +362,6 @@ turret_find_player_by_entity_id :: proc(entity_id: u64) -> Player {
 turret_find_player_by_user_id :: proc(user_id: string) -> Player {
     if user_id.count <= 0 return null;
     for p: component_iterator(Player) {
-        if p == null continue;
         if p.get_user_id() == user_id {
             return p;
         }
@@ -600,8 +597,6 @@ Turret :: class : Component {
         best_dist_sq := 99999999.0;
 
         for p: component_iterator(Player) {
-            if p == null continue;
-            if p.entity == null || p.entity.self == null continue;
             if p.get_user_id() == owner_user_id continue;
 
             p_pos := p.entity.world_position;

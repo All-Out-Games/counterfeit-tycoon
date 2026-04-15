@@ -638,7 +638,7 @@ Stamper :: class : Component {
         if local_player == null {
             return;
         }
-        if local_player.entity == null || local_player.entity.self == null {
+        if !#alive(local_player) {
             return;
         }
 
