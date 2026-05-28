@@ -34,7 +34,7 @@ PlotSign :: class : Component {
     }
 
     get_z_offset :: method() -> float {
-        if entity == null || entity.self == null {
+        if entity == null || !#alive(entity) {
             return 0.0;
         }
         return entity.world_position.y * entity.local_scale.y;
@@ -50,7 +50,7 @@ PlotSign :: class : Component {
     }
 
     draw_sign :: method() {
-        if entity == null || entity.self == null return;
+        if entity == null || !#alive(entity) return;
 
         // Cosmetic-only: draw locally on clients (mirrors other world-space UI helpers).
         if Game.is_server() {

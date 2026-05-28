@@ -41,7 +41,7 @@ turret_is_item_definition :: proc(defn: Item_Definition) -> bool {
 }
 
 turret_is_position_inside_base :: proc(base_entity: Entity, pos: v2) -> bool {
-    if base_entity == null || base_entity.self == null return false;
+    if base_entity == null || !#alive(base_entity) return false;
     base_pos := base_entity.world_position;
     dx := abs(pos.x - base_pos.x);
     dy := abs(pos.y - base_pos.y);
@@ -50,54 +50,54 @@ turret_is_position_inside_base :: proc(base_entity: Entity, pos: v2) -> bool {
 
 turret_is_position_inside_player_base :: proc(player: Player, pos: v2) -> bool {
     if player == null return false;
-    if player.base_entity == null || player.base_entity.self == null return false;
+    if player.base_entity == null || !#alive(player.base_entity) return false;
     return turret_is_position_inside_base(player.base_entity, pos);
 }
 
 turret_is_too_close_to_any_station_in_base :: proc(base: PlayerBase, pos: v2) -> bool {
     if base == null return false;
-    if base.entity == null || base.entity.self == null return false;
+    if base.entity == null || !#alive(base.entity) return false;
 
     // Build stations that physically occupy base space and should block turret placement.
     for m: component_iterator(Paper_Mill) {
         if m == null continue;
-        if m.entity == null || m.entity.self == null continue;
+        if m.entity == null || !#alive(m.entity) continue;
         if get_parent_player_base(m.entity) != base continue;
         if length(m.entity.world_position - pos) < TURRET_STATION_CLEARANCE_RADIUS return true;
     }
     for m: component_iterator(Blank_Bill_Press) {
         if m == null continue;
-        if m.entity == null || m.entity.self == null continue;
+        if m.entity == null || !#alive(m.entity) continue;
         if get_parent_player_base(m.entity) != base continue;
         if length(m.entity.world_position - pos) < TURRET_STATION_CLEARANCE_RADIUS return true;
     }
     for m: component_iterator(Colored_Bill_Press) {
         if m == null continue;
-        if m.entity == null || m.entity.self == null continue;
+        if m.entity == null || !#alive(m.entity) continue;
         if get_parent_player_base(m.entity) != base continue;
         if length(m.entity.world_position - pos) < TURRET_STATION_CLEARANCE_RADIUS return true;
     }
     for m: component_iterator(Finished_Bill_Press) {
         if m == null continue;
-        if m.entity == null || m.entity.self == null continue;
+        if m.entity == null || !#alive(m.entity) continue;
         if get_parent_player_base(m.entity) != base continue;
         if length(m.entity.world_position - pos) < TURRET_STATION_CLEARANCE_RADIUS return true;
     }
     for m: component_iterator(Vault) {
         if m == null continue;
-        if m.entity == null || m.entity.self == null continue;
+        if m.entity == null || !#alive(m.entity) continue;
         if get_parent_player_base(m.entity) != base continue;
         if length(m.entity.world_position - pos) < TURRET_STATION_CLEARANCE_RADIUS return true;
     }
     for m: component_iterator(Harvester) {
         if m == null continue;
-        if m.entity == null || m.entity.self == null continue;
+        if m.entity == null || !#alive(m.entity) continue;
         if get_parent_player_base(m.entity) != base continue;
         if length(m.entity.world_position - pos) < TURRET_STATION_CLEARANCE_RADIUS return true;
     }
     for m: component_iterator(Truck) {
         if m == null continue;
-        if m.entity == null || m.entity.self == null continue;
+        if m.entity == null || !#alive(m.entity) continue;
         if get_parent_player_base(m.entity) != base continue;
         if length(m.entity.world_position - pos) < TURRET_STATION_CLEARANCE_RADIUS return true;
     }
@@ -107,7 +107,7 @@ turret_is_too_close_to_any_station_in_base :: proc(base: PlayerBase, pos: v2) ->
 
 turret_is_too_close_to_player_station :: proc(player: Player, pos: v2) -> bool {
     if player == null return false;
-    if player.base_entity == null || player.base_entity.self == null return false;
+    if player.base_entity == null || !#alive(player.base_entity) return false;
     base := player.base_entity.get_component(PlayerBase);
     if base == null return false;
     return turret_is_too_close_to_any_station_in_base(base, pos);
@@ -115,7 +115,7 @@ turret_is_too_close_to_player_station :: proc(player: Player, pos: v2) -> bool {
 
 turret_get_drop_target_world_pos :: proc(player: Player) -> v2 {
     if player == null return v2{0, 0};
-    if player.entity == null || player.entity.self == null return v2{0, 0};
+    if player.entity == null || !#alive(player.entity) return v2{0, 0};
 
     // Hotbar drag/drop target: use the current pointer world position.
     // This works for cursor-based and touch-based world targeting.
@@ -136,12 +136,12 @@ turret_is_position_inside_box_centered_at :: proc(pos: v2, center: v2, half_size
 
 turret_count_for_base :: proc(base: PlayerBase) -> s64 {
     if base == null return 0;
-    if base.entity == null || base.entity.self == null return 0;
+    if base.entity == null || !#alive(base.entity) return 0;
 
     count: s64 = 0;
     for t: component_iterator(Turret) {
         if t == null continue;
-        if t.entity == null || t.entity.self == null continue;
+        if t.entity == null || !#alive(t.entity) continue;
         if !t.entity.get_world_enabled() continue;
         if get_parent_player_base(t.entity) != base continue;
         count += 1;
@@ -151,7 +151,7 @@ turret_count_for_base :: proc(base: PlayerBase) -> s64 {
 
 turret_count_for_player :: proc(player: Player) -> s64 {
     if player == null return 0;
-    if player.base_entity == null || player.base_entity.self == null return 0;
+    if player.base_entity == null || !#alive(player.base_entity) return 0;
     pb := player.base_entity.get_component(PlayerBase);
     if pb == null return 0;
     return turret_count_for_base(pb);
@@ -164,7 +164,7 @@ turret_save_player_data_excluding_entity_id :: proc(player: Player, excluded_ent
     save := new(Turret_Save_Data);
     save.version = TURRET_SAVE_VERSION;
 
-    if player.base_entity == null || player.base_entity.self == null {
+    if player.base_entity == null || !#alive(player.base_entity) {
         Save.set_json(player, TURRET_SAVE_KEY, ref save);
         return;
     }
@@ -177,7 +177,7 @@ turret_save_player_data_excluding_entity_id :: proc(player: Player, excluded_ent
 
     for t: component_iterator(Turret) {
         if t == null continue;
-        if t.entity == null || t.entity.self == null continue;
+        if t.entity == null || !#alive(t.entity) continue;
         if excluded_entity_id != 0 && t.entity.id == excluded_entity_id continue;
         if !t.entity.get_world_enabled() continue;
         if get_parent_player_base(t.entity) != pb continue;
@@ -216,20 +216,20 @@ turret_save_player_data :: proc(player: Player) {
 
 turret_clear_for_player_base :: proc(player: Player) {
     if player == null return;
-    if player.base_entity == null || player.base_entity.self == null return;
+    if player.base_entity == null || !#alive(player.base_entity) return;
     pb := player.base_entity.get_component(PlayerBase);
     if pb == null return;
 
     to_destroy: [..]Entity;
     for t: component_iterator(Turret) {
         if t == null continue;
-        if t.entity == null || t.entity.self == null continue;
+        if t.entity == null || !#alive(t.entity) continue;
         if get_parent_player_base(t.entity) != pb continue;
         to_destroy.append(t.entity);
     }
 
     for e: to_destroy {
-        if e != null && e.self != null {
+        if e != null && #alive(e) {
             e.destroy();
         }
     }
@@ -239,7 +239,7 @@ turret_load_player_data :: proc(player: Player, gm: GameManager) {
     if !Game.is_server() return;
     if player == null return;
     if gm == null return;
-    if player.base_entity == null || player.base_entity.self == null return;
+    if player.base_entity == null || !#alive(player.base_entity) return;
 
     turret_clear_for_player_base(player);
 
@@ -393,7 +393,7 @@ turret_rotate_v2 :: proc(v: v2, angle_rad: float) -> v2 {
 }
 
 turret_world_to_spine_local :: proc(spine_entity: Entity, world_pos: v2) -> v2 {
-    if spine_entity == null || spine_entity.self == null return world_pos;
+    if spine_entity == null || !#alive(spine_entity) return world_pos;
 
     delta := world_pos - spine_entity.world_position;
     inv_rot_rad := -spine_entity.world_rotation * (PI / 180.0);
@@ -445,7 +445,7 @@ Turret_Projectile :: class : Component {
         if !found || hit_player == null {
             return;
         }
-        if hit_player.entity == null || hit_player.entity.self == null {
+        if hit_player.entity == null || !#alive(hit_player.entity) {
             return;
         }
         if hit_player.get_user_id() == owner_user_id {
@@ -502,7 +502,7 @@ Turret :: class : Component {
     setup_spine_state_machine :: method() {
         if spine_state_machine != null return;
         if spine_animator == null return;
-        if spine_animator.entity == null || spine_animator.entity.self == null return;
+        if spine_animator.entity == null || !#alive(spine_animator.entity) return;
 
         spine_animator.awaken();
         if spine_animator.instance == null return;
@@ -528,7 +528,7 @@ Turret :: class : Component {
     update_spine_ik :: method() {
         if !has_target return;
         if spine_animator == null return;
-        if spine_animator.entity == null || spine_animator.entity.self == null return;
+        if spine_animator.entity == null || !#alive(spine_animator.entity) return;
 
         // Face the target by flipping spine X scale.
         // Right side => +1, left side => -1.
@@ -590,7 +590,7 @@ Turret :: class : Component {
 
     find_target_in_base :: method(pb: PlayerBase) -> Player {
         if pb == null return null;
-        if pb.entity == null || pb.entity.self == null return null;
+        if pb.entity == null || !#alive(pb.entity) return null;
 
         center := pb.entity.world_position;
         best: Player;
@@ -617,8 +617,8 @@ Turret :: class : Component {
 
     fire_at_target :: method(target: Player, pb: PlayerBase) {
         if target == null return;
-        if target.entity == null || target.entity.self == null return;
-        if pb == null || pb.entity == null || pb.entity.self == null return;
+        if target.entity == null || !#alive(target.entity) return;
+        if pb == null || pb.entity == null || !#alive(pb.entity) return;
 
         start := entity.world_position;
         to_target := target.entity.world_position - start;
@@ -654,7 +654,7 @@ Turret :: class : Component {
         if owner_user_id.count <= 0 return 0;
         owner := turret_find_player_by_user_id(owner_user_id);
         if owner == null return 0;
-        if owner.entity == null || owner.entity.self == null return 0;
+        if owner.entity == null || !#alive(owner.entity) return 0;
         return owner.entity.id;
     }
 
@@ -663,14 +663,14 @@ Turret :: class : Component {
         if shooter_entity_id == 0 return false;
 
         pb := get_parent_player_base(entity);
-        if pb == null || pb.entity == null || pb.entity.self == null return false;
+        if pb == null || pb.entity == null || !#alive(pb.entity) return false;
 
         shooter := turret_find_player_by_entity_id(shooter_entity_id);
         if shooter == null return false;
         if shooter.get_user_id() == owner_user_id return false;
 
         // Shooter must be inside this base to damage its turrets.
-        if shooter.entity == null || shooter.entity.self == null return false;
+        if shooter.entity == null || !#alive(shooter.entity) return false;
         if !turret_is_position_inside_base(pb.entity, shooter.entity.world_position) return false;
 
         // Turret should also be in bounds (defensive).
@@ -699,7 +699,7 @@ Turret :: class : Component {
         if !Game.is_server() return;
 
         death_pos := v2{0, 0};
-        if entity != null && entity.self != null {
+        if entity != null && #alive(entity) {
             death_pos = entity.world_position;
         }
 
@@ -724,13 +724,13 @@ Turret :: class : Component {
         explosion_prefab := get_asset(Prefab_Asset, "ExplosionVFX.prefab");
         if explosion_prefab != null {
             fx := Scene.instantiate(explosion_prefab);
-            if fx != null && fx.self != null {
+            if fx != null && #alive(fx) {
                 fx.set_local_position(death_pos);
                 fx.queue_for_destruction(1);
             }
         }
 
-        if entity != null && entity.self != null {
+        if entity != null && #alive(entity) {
             entity.destroy();
         }
     }
@@ -795,7 +795,7 @@ draw_all_turret_health_bars_local :: proc() {
 
     for t: component_iterator(Turret) {
         if t == null continue;
-        if t.entity == null || t.entity.self == null continue;
+        if t.entity == null || !#alive(t.entity) continue;
         if !t.entity.get_world_enabled() continue;
         draw_turret_health_bar_in_world_context(t);
     }
@@ -803,7 +803,7 @@ draw_all_turret_health_bars_local :: proc() {
 
 draw_turret_health_bar_in_world_context :: proc(turret: Turret) {
     if turret == null return;
-    if turret.entity == null || turret.entity.self == null return;
+    if turret.entity == null || !#alive(turret.entity) return;
     if turret.hp_max <= 0 return;
     if turret.hp <= 0 return;
 

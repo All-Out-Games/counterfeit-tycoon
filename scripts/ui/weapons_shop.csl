@@ -108,7 +108,7 @@ server_grant_weapon_purchase :: proc(player: Player, wt: Weapon_Type, purchase_s
     }
 
     inv := player.default_inventory;
-    if inv == null || inv.self == null {
+    if inv == null || !#alive(inv) {
         Notifier.notify(player, "No inventory available.");
         return false;
     }
@@ -117,7 +117,7 @@ server_grant_weapon_purchase :: proc(player: Player, wt: Weapon_Type, purchase_s
     // so they don't lose their purchase.
     room := Items.calculate_room_in_inventory_for_item(defn, inv);
     if room < 1 {
-        if player.entity != null && player.entity.self != null {
+        if player.entity != null && #alive(player.entity) {
             ItemDrops.spawn_from_definition(player.entity.world_position, defn, 1);
             Notifier.notify(player, "Inventory full — dropped % near you.", {defn.get_name()});
             server_request_purchase_fx(player, get_weapon_config(wt).weapon_icon_path);
@@ -129,7 +129,7 @@ server_grant_weapon_purchase :: proc(player: Player, wt: Weapon_Type, purchase_s
     }
 
     item := Items.create_item_instance(defn, 1);
-    if item == null || item.self == null {
+    if item == null || !#alive(item) {
         Notifier.notify(player, "Purchase failed.");
         return false;
     }
@@ -145,7 +145,7 @@ server_grant_weapon_purchase :: proc(player: Player, wt: Weapon_Type, purchase_s
     }
 
     Items.destroy_item_instance(item);
-    if player.entity != null && player.entity.self != null {
+    if player.entity != null && #alive(player.entity) {
         ItemDrops.spawn_from_definition(player.entity.world_position, defn, 1);
         Notifier.notify(player, "Inventory full — dropped % near you.", {defn.get_name()});
         server_request_purchase_fx(player, get_weapon_config(wt).weapon_icon_path);
@@ -180,7 +180,7 @@ server_try_prompt_sparks_weapon_purchase :: proc(player: Player, wt: Weapon_Type
     }
 
     inv := player.default_inventory;
-    if inv == null || inv.self == null {
+    if inv == null || !#alive(inv) {
         if player.is_local() {
             Notifier.notify("No inventory available.");
         }
@@ -252,7 +252,7 @@ server_try_buy_item_by_definition :: proc(player: Player, defn: Item_Definition,
     }
 
     inv := player.default_inventory;
-    if inv == null || inv.self == null {
+    if inv == null || !#alive(inv) {
         Notifier.notify(player, "No inventory available.");
         return;
     }
@@ -277,7 +277,7 @@ server_try_buy_item_by_definition :: proc(player: Player, defn: Item_Definition,
     }
 
     item := Items.create_item_instance(defn, 1);
-    if item == null || item.self == null {
+    if item == null || !#alive(item) {
         if cost > 0 {
             Economy.deposit_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost);
         }
@@ -353,7 +353,7 @@ server_try_buy_weapon :: proc(player: Player, wt: Weapon_Type) {
     }
 
     inv := player.default_inventory;
-    if inv == null || inv.self == null {
+    if inv == null || !#alive(inv) {
         Notifier.notify(player, "No inventory available.");
         return;
     }
@@ -381,7 +381,7 @@ server_try_buy_weapon :: proc(player: Player, wt: Weapon_Type) {
     }
 
     item := Items.create_item_instance(defn, 1);
-    if item == null || item.self == null {
+    if item == null || !#alive(item) {
         // Refund if creation failed.
         if cost > 0 {
             Economy.deposit_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost);
@@ -527,7 +527,7 @@ server_try_buy_ammo :: proc(player: Player, ammo_type_index: s64) {
     }
 
     inv := player.default_inventory;
-    if inv == null || inv.self == null {
+    if inv == null || !#alive(inv) {
         Notifier.notify(player, "No inventory available.");
         return;
     }
@@ -566,7 +566,7 @@ server_try_buy_ammo :: proc(player: Player, ammo_type_index: s64) {
         }
 
         item := Items.create_item_instance(defn, chunk);
-        if item == null || item.self == null {
+        if item == null || !#alive(item) {
             // Refund the remaining portion if something went wrong.
             // (Should be rare; keep it safe.)
             Economy.deposit_currency(player, WEAPONS_SHOP_COIN_CURRENCY, cost);

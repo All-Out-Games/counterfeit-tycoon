@@ -53,7 +53,7 @@ PlayerBase :: class : Component {
         for i: 0..layout_mirror_entities.count-1 {
             e := layout_mirror_entities[i];
             if e == null continue;
-            if e.self == null continue;
+            if !#alive(e) continue;
 
             lp := e.local_position;
             if lp.y == target_y continue;
@@ -67,7 +67,7 @@ PlayerBase :: class : Component {
             plot_sign.plot_index = spawn_index;
         }
 
-        if plot_sign_entity != null && plot_sign_entity.self != null {
+        if plot_sign_entity != null && #alive(plot_sign_entity) {
             // Mirror the sign the same way we do for Truck/Harvester:
             // - Players 1/2/3 (spawn 0/1/2): keep prefab-authored local Y
             // - Players 4/5/6 (spawn 3/4/5): force local Y to 10.0
@@ -148,10 +148,10 @@ PlayerBase :: class : Component {
     resolve_sprite_renderer :: method() {
         sprite_renderer = null;
 
-        if sprite_entity != null && sprite_entity.self != null {
+        if sprite_entity != null && #alive(sprite_entity) {
             sprite_renderer = sprite_entity.get_component(Sprite_Renderer);
         }
-        if sprite_renderer == null && entity != null && entity.self != null {
+        if sprite_renderer == null && entity != null && #alive(entity) {
             sprite_renderer = entity.get_component(Sprite_Renderer);
         }
     }
@@ -159,7 +159,7 @@ PlayerBase :: class : Component {
     resolve_plot_sign :: method() {
         plot_sign = null;
 
-        if plot_sign_entity != null && plot_sign_entity.self != null {
+        if plot_sign_entity != null && #alive(plot_sign_entity) {
             plot_sign = plot_sign_entity.get_component(PlotSign);
 
             // Cache the prefab-authored local Y once so mirroring is idempotent.
@@ -170,7 +170,7 @@ PlayerBase :: class : Component {
         }
 
         // Allow attaching PlotSign directly to the base entity as a fallback.
-        if plot_sign == null && entity != null && entity.self != null {
+        if plot_sign == null && entity != null && #alive(entity) {
             plot_sign = entity.get_component(PlotSign);
         }
     }
@@ -190,7 +190,7 @@ get_local_player :: proc() -> Player {
 // Returns the closest PlayerBase component in the parent chain (if any).
 get_parent_player_base :: proc(child_entity: Entity) -> PlayerBase {
     if child_entity == null return null;
-    if child_entity.self == null return null;
+    if !#alive(child_entity) return null;
 
     // NOTE: The "in-world Parent entity" is the entity transform parent.
     // Walk up the chain so prefabs can add intermediate grouping entities (e.g. Lane.prefab)
@@ -199,7 +199,7 @@ get_parent_player_base :: proc(child_entity: Entity) -> PlayerBase {
     for step: 0..31 {
         _ := step;
         if cur == null break;
-        if cur.self == null break;
+        if !#alive(cur) break;
 
         pb := cur.get_component(PlayerBase);
         if pb != null {
@@ -224,14 +224,14 @@ player_has_item_id :: proc(player: Player, item_id: string) -> bool {
     if item_id.count <= 0 return false;
 
     inv := player.default_inventory;
-    if inv == null || inv.self == null || inv.capacity <= 0 {
+    if inv == null || !#alive(inv) || inv.capacity <= 0 {
         return false;
     }
 
     for i: 0..inv.capacity-1 {
         item := inv.get_item(i);
         if item == null continue;
-        if item.self == null continue;
+        if !#alive(item) continue;
         defn := item.get_definition();
         if defn == null continue;
         if defn.get_id() == item_id {

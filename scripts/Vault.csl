@@ -14,11 +14,11 @@ VAULT_FINISHED_BILLS_STACK_MAX :: 64;
 // ---------------------------------------------------------------------------
 vault_is_full_for_base :: proc(base: PlayerBase) -> bool {
     if base == null return false;
-    if base.entity == null || base.entity.self == null return false;
+    if base.entity == null || !#alive(base.entity) return false;
 
     for v: component_iterator(Vault) {
         if v == null continue;
-        if v.entity == null || v.entity.self == null continue;
+        if v.entity == null || !#alive(v.entity) continue;
         if !v.entity.get_world_enabled() continue;
 
         pb := get_parent_player_base(v.entity);
@@ -463,7 +463,7 @@ Vault :: class : Interactable {
         }
 
         inv := player.default_inventory;
-        if inv == null || inv.self == null || inv.capacity <= 0 {
+        if inv == null || !#alive(inv) || inv.capacity <= 0 {
             return;
         }
 
@@ -490,7 +490,7 @@ Vault :: class : Interactable {
             }
 
             item := Items.create_item_instance(defn, chunk);
-            if item != null && item.self != null {
+            if item != null && #alive(item) {
                 Items.move_item_to_inventory(item, inv);
             }
             else if item != null {
@@ -527,7 +527,7 @@ Vault :: class : Interactable {
     }
 
     ensure_steal_interactable_exists :: method() {
-        if entity == null || entity.self == null return;
+        if entity == null || !#alive(entity) return;
 
         steal := entity.get_component(Vault_Steal_Interactable);
         if steal == null {
@@ -595,13 +595,13 @@ Vault :: class : Interactable {
 
         inv := player.default_inventory;
         if inv == null return false;
-        if inv.self == null return false;
+        if !#alive(inv) return false;
         if inv.capacity <= 0 return false;
 
         for i: 0..inv.capacity-1 {
             item := inv.get_item(i);
             if item == null continue;
-            if item.self == null continue;
+            if !#alive(item) continue;
 
             defn := item.get_definition();
             if defn == null continue;

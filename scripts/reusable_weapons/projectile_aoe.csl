@@ -15,7 +15,7 @@ apply_aoe_damage :: proc(pos: v2, owner_id: u64, radius: float, damage: float) {
     Scene.get_all_components_in_range(pos, radius, ref nearby_trucks);
     for t: nearby_trucks {
         if t == null continue;
-        if t.entity == null || t.entity.self == null continue;
+        if t.entity == null || !#alive(t.entity) continue;
         _ := t.server_register_weapon_hit(owner_id, damage);
     }
 

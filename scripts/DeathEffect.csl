@@ -21,12 +21,12 @@ server_drop_resources_on_death :: proc(player: Player) {
     if player == null return;
     if !Game.is_server() return;
 
-    if player.entity == null || player.entity.self == null {
+    if player.entity == null || !#alive(player.entity) {
         return;
     }
 
     inv := player.default_inventory;
-    if inv == null || inv.self == null {
+    if inv == null || !#alive(inv) {
         return;
     }
     if inv.capacity <= 0 {
@@ -40,7 +40,7 @@ server_drop_resources_on_death :: proc(player: Player) {
     for slot: 0..inv.capacity-1 {
         item := inv.get_item(slot);
         if item == null continue;
-        if item.self == null continue;
+        if !#alive(item) continue;
 
         defn := item.get_definition();
         if defn == null continue;
@@ -63,7 +63,7 @@ server_drop_resources_on_death :: proc(player: Player) {
             // Re-fetch from the slot because destroying may swap/clear stacks.
             cur := inv.get_item(slot);
             if cur == null break;
-            if cur.self == null break;
+            if !#alive(cur) break;
 
             cur_defn := cur.get_definition();
             if cur_defn == null break;
@@ -97,7 +97,7 @@ server_respawn_player_at_owned_base :: proc(player: Player) {
         ok = tmp_ok;
     }
     if !ok {
-        if player.base_entity != null && player.base_entity.self != null {
+        if player.base_entity != null && #alive(player.base_entity) {
             spawn_pos = player.base_entity.world_position;
             ok = true;
         }

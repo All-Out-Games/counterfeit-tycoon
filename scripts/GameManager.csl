@@ -77,11 +77,11 @@ Spawn_WoodchipperUnlock_Userdata :: class {
 
 find_truck_for_base :: proc(base: PlayerBase) -> Truck {
     if base == null return null;
-    if base.entity == null || base.entity.self == null return null;
+    if base.entity == null || !#alive(base.entity) return null;
 
     for t: component_iterator(Truck) {
         if t == null continue;
-        if t.entity == null || t.entity.self == null continue;
+        if t.entity == null || !#alive(t.entity) continue;
         if !t.entity.get_world_enabled() continue;
 
         pb := get_parent_player_base(t.entity);
@@ -94,11 +94,11 @@ find_truck_for_base :: proc(base: PlayerBase) -> Truck {
 
 find_harvester_for_base :: proc(base: PlayerBase) -> Harvester {
     if base == null return null;
-    if base.entity == null || base.entity.self == null return null;
+    if base.entity == null || !#alive(base.entity) return null;
 
     for h: component_iterator(Harvester) {
         if h == null continue;
-        if h.entity == null || h.entity.self == null continue;
+        if h.entity == null || !#alive(h.entity) continue;
         if !h.entity.get_world_enabled() continue;
 
         pb := get_parent_player_base(h.entity);
@@ -228,7 +228,7 @@ GameManager :: class : Component {
 
         for pb: component_iterator(PlayerBase) {
             if pb == null continue;
-            if pb.entity == null || pb.entity.self == null continue;
+            if pb.entity == null || !#alive(pb.entity) continue;
             if !pb.entity.get_world_enabled() continue;
             scratch_base_entity_ids.append(pb.entity.id);
         }
@@ -263,7 +263,7 @@ GameManager :: class : Component {
             for lane: 1..3 {
                 e := p.lane_entities[lane];
                 if e == null continue;
-                if e.self == null continue;
+                if !#alive(e) continue;
                 if !e.get_world_enabled() continue;
 
                 // Include local Y position in the signature so lane repositioning also triggers rebuilds.
@@ -434,7 +434,7 @@ GameManager :: class : Component {
         if !Game.is_server() return;
         if player == null return;
         if lane_index < 0 || lane_index > 3 return;
-        if player.base_entity == null || player.base_entity.self == null return;
+        if player.base_entity == null || !#alive(player.base_entity) return;
 
         // We only spawn additional lanes (Lane 2-4). Lane 1 is expected to exist in the base prefab already.
         if lane_index == 0 {
@@ -443,7 +443,7 @@ GameManager :: class : Component {
 
         // Already spawned and still alive? Ensure it's positioned correctly and return.
         existing := player.lane_entities[lane_index];
-        if existing != null && existing.self != null {
+        if existing != null && #alive(existing) {
             existing.set_local_position(v2{0, this.lane_local_y_for_player(player, lane_index)});
             return;
         }
@@ -473,10 +473,10 @@ GameManager :: class : Component {
                 ud := userdata.(Spawn_Lane_Userdata);
                 if ud == null return;
                 if spawned_entity == null return;
-                if spawned_entity.self == null return;
+                if !#alive(spawned_entity) return;
 
                 // Parent under the base so it is destroyed when the base is destroyed.
-                if ud.base_entity != null && ud.base_entity.self != null {
+                if ud.base_entity != null && #alive(ud.base_entity) {
                     spawned_entity.set_parent(ud.base_entity, true);
                 }
 
@@ -577,7 +577,7 @@ GameManager :: class : Component {
         if player == null return;
 
         e := player.lane_unlock_prompt_entity;
-        if e != null && e.self != null {
+        if e != null && #alive(e) {
             e.destroy();
         }
         player.lane_unlock_prompt_entity = null;
@@ -588,7 +588,7 @@ GameManager :: class : Component {
         if !Game.is_server() return;
         if player == null return;
         if lane_index < 1 || lane_index > 3 return;
-        if player.base_entity == null || player.base_entity.self == null return;
+        if player.base_entity == null || !#alive(player.base_entity) return;
 
         // Don't spawn if already unlocked (race safety).
         if lanes_is_unlocked(player, lane_index) {
@@ -614,10 +614,10 @@ GameManager :: class : Component {
                     ud := userdata.(Spawn_Lane_Userdata);
                     if ud == null return;
                     if spawned_entity == null return;
-                    if spawned_entity.self == null return;
+                    if !#alive(spawned_entity) return;
 
                     // Parent under the base so it is destroyed when the base is destroyed.
-                    if ud.base_entity != null && ud.base_entity.self != null {
+                    if ud.base_entity != null && #alive(ud.base_entity) {
                         spawned_entity.set_parent(ud.base_entity, true);
                     }
 
@@ -708,7 +708,7 @@ GameManager :: class : Component {
     server_reconcile_lane_unlock_prompt_for_player :: method(player: Player) {
         if !Game.is_server() return;
         if player == null return;
-        if player.base_entity == null || player.base_entity.self == null return;
+        if player.base_entity == null || !#alive(player.base_entity) return;
 
         next := this.get_next_locked_lane_index(player);
         if next < 0 {
@@ -718,7 +718,7 @@ GameManager :: class : Component {
 
         // If we already have the correct prompt alive, just ensure it's positioned correctly.
         e := player.lane_unlock_prompt_entity;
-        if e != null && e.self != null && player.lane_unlock_prompt_lane_index == next {
+        if e != null && #alive(e) && player.lane_unlock_prompt_lane_index == next {
             y := this.lane_local_y_for_player(player, next);
             e.set_local_position(v2{0, y});
 
@@ -738,7 +738,7 @@ GameManager :: class : Component {
         if !Game.is_server() return;
 
         for p: component_iterator(Player) {
-            if p.base_entity == null || p.base_entity.self == null continue;
+            if p.base_entity == null || !#alive(p.base_entity) continue;
             this.server_reconcile_lane_unlock_prompt_for_player(p);
         }
     }
@@ -760,12 +760,12 @@ GameManager :: class : Component {
 
     manager_unlock_lane_anchor_world_pos :: method(base: PlayerBase, lane_index: s64) -> v2 {
         if base == null return v2{0, 0};
-        if base.entity == null || base.entity.self == null return v2{0, 0};
+        if base.entity == null || !#alive(base.entity) return v2{0, 0};
 
         // Prompts live slightly left of the lane's Paper Mill.
         // (Even if the next manager is not the Press Operator.)
         mill := press_operator_find_paper_mill_for_base_and_lane(base, lane_index);
-        if mill != null && mill.entity != null && mill.entity.self != null {
+        if mill != null && mill.entity != null && #alive(mill.entity) {
             return mill.entity.world_position + v2{-3.5, 0.0};
         }
 
@@ -775,7 +775,7 @@ GameManager :: class : Component {
 
     manager_unlock_anchor_world_pos :: method(base: PlayerBase, lane_index: s64, kind: Manager_Kind) -> v2 {
         if base == null return v2{0, 0};
-        if base.entity == null || base.entity.self == null return v2{0, 0};
+        if base.entity == null || !#alive(base.entity) return v2{0, 0};
 
         offset := v2{-0.75, -1.2};
 
@@ -787,25 +787,25 @@ GameManager :: class : Component {
         switch kind {
             case .PRESS_OPERATOR: {
                 m := press_operator_find_paper_mill_for_base_and_lane(base, lane_index);
-                if m != null && m.entity != null && m.entity.self != null {
+                if m != null && m.entity != null && #alive(m.entity) {
                     return m.entity.world_position + offset;
                 }
             }
             case .COLORIST: {
                 p := colorist_find_blank_bill_press_for_base_and_lane(base, lane_index);
-                if p != null && p.entity != null && p.entity.self != null {
+                if p != null && p.entity != null && #alive(p.entity) {
                     return p.entity.world_position + offset;
                 }
             }
             case .STAMPER: {
                 p := stamper_find_colored_bill_press_for_base_and_lane(base, lane_index);
-                if p != null && p.entity != null && p.entity.self != null {
+                if p != null && p.entity != null && #alive(p.entity) {
                     return p.entity.world_position + offset;
                 }
             }
             case .COURIER: {
                 p := courier_find_finished_bill_press_for_base_and_lane(base, lane_index);
-                if p != null && p.entity != null && p.entity.self != null {
+                if p != null && p.entity != null && #alive(p.entity) {
                     return p.entity.world_position + offset;
                 }
             }
@@ -818,7 +818,7 @@ GameManager :: class : Component {
     server_spawn_manager_kind_at :: method(player: Player, lane_index: s64, kind: Manager_Kind, spawn_world_pos: v2) {
         if !Game.is_server() return;
         if player == null return;
-        if player.base_entity == null || player.base_entity.self == null return;
+        if player.base_entity == null || !#alive(player.base_entity) return;
         if lane_index < 0 || lane_index > 3 return;
 
         pb := player.base_entity.get_component(PlayerBase);
@@ -858,7 +858,7 @@ GameManager :: class : Component {
 
         for i: 0..15 {
             e := player.manager_unlock_prompt_entities[i];
-            if e != null && e.self != null {
+            if e != null && #alive(e) {
                 e.destroy();
             }
             player.manager_unlock_prompt_entities[i] = null;
@@ -868,7 +868,7 @@ GameManager :: class : Component {
     server_spawn_manager_unlock_prompt_for_player :: method(player: Player, lane_index: s64, manager_index: s64) {
         if !Game.is_server() return;
         if player == null return;
-        if player.base_entity == null || player.base_entity.self == null return;
+        if player.base_entity == null || !#alive(player.base_entity) return;
         if lane_index < 0 || lane_index > 3 return;
         if manager_index < 0 || manager_index > 3 return;
 
@@ -892,7 +892,7 @@ GameManager :: class : Component {
 
         // Already alive?
         existing := player.manager_unlock_prompt_entities[idx];
-        if existing != null && existing.self != null {
+        if existing != null && #alive(existing) {
             // Keep it configured and positioned.
             existing.set_parent(player.base_entity, true);
             anchor := this.manager_unlock_lane_anchor_world_pos(pb, lane_index);
@@ -941,10 +941,10 @@ GameManager :: class : Component {
                     ud := userdata.(Spawn_ManagerUnlock_Userdata);
                     if ud == null return;
                     if spawned_entity == null return;
-                    if spawned_entity.self == null return;
+                    if !#alive(spawned_entity) return;
 
                     // Parent under the base so it is destroyed when the base is destroyed.
-                    if ud.base_entity != null && ud.base_entity.self != null {
+                    if ud.base_entity != null && #alive(ud.base_entity) {
                         spawned_entity.set_parent(ud.base_entity, true);
                     }
 
@@ -1028,7 +1028,7 @@ GameManager :: class : Component {
         if !Game.is_server() return;
         if player == null return;
 
-        if player.base_entity == null || player.base_entity.self == null {
+        if player.base_entity == null || !#alive(player.base_entity) {
             this.server_destroy_manager_unlock_prompts_for_player(player);
             return;
         }
@@ -1047,7 +1047,7 @@ GameManager :: class : Component {
                     idx := lane * 4 + mi;
                     if idx < 0 || idx >= 16 continue;
                     e := player.manager_unlock_prompt_entities[idx];
-                    if e != null && e.self != null {
+                    if e != null && #alive(e) {
                         e.destroy();
                     }
                     player.manager_unlock_prompt_entities[idx] = null;
@@ -1062,7 +1062,7 @@ GameManager :: class : Component {
                     idx := lane * 4 + mi;
                     if idx < 0 || idx >= 16 continue;
                     e := player.manager_unlock_prompt_entities[idx];
-                    if e != null && e.self != null {
+                    if e != null && #alive(e) {
                         e.destroy();
                     }
                     player.manager_unlock_prompt_entities[idx] = null;
@@ -1080,14 +1080,14 @@ GameManager :: class : Component {
                 if idx == desired_idx continue;
 
                 e := player.manager_unlock_prompt_entities[idx];
-                if e != null && e.self != null {
+                if e != null && #alive(e) {
                     e.destroy();
                 }
                 player.manager_unlock_prompt_entities[idx] = null;
             }
 
             e := player.manager_unlock_prompt_entities[desired_idx];
-            if e == null || e.self == null {
+            if e == null || !#alive(e) {
                 this.server_spawn_manager_unlock_prompt_for_player(player, lane, next_mi);
                 continue;
             }
@@ -1118,10 +1118,10 @@ GameManager :: class : Component {
 
     woodchipper_unlock_anchor_world_pos :: method(base: PlayerBase) -> v2 {
         if base == null return v2{0, 0};
-        if base.entity == null || base.entity.self == null return v2{0, 0};
+        if base.entity == null || !#alive(base.entity) return v2{0, 0};
 
         harvester := find_harvester_for_base(base);
-        if harvester != null && harvester.entity != null && harvester.entity.self != null {
+        if harvester != null && harvester.entity != null && #alive(harvester.entity) {
             return harvester.entity.world_position + v2{-1.0, -0.5};
         }
         return base.entity.world_position;
@@ -1132,7 +1132,7 @@ GameManager :: class : Component {
         if player == null return;
 
         e := player.woodchipper_unlock_prompt_entity;
-        if e != null && e.self != null {
+        if e != null && #alive(e) {
             e.destroy();
         }
         player.woodchipper_unlock_prompt_entity = null;
@@ -1141,7 +1141,7 @@ GameManager :: class : Component {
     server_spawn_woodchipper_unlock_prompt_for_player :: method(player: Player) {
         if !Game.is_server() return;
         if player == null return;
-        if player.base_entity == null || player.base_entity.self == null return;
+        if player.base_entity == null || !#alive(player.base_entity) return;
 
         // Don't spawn if already unlocked.
         if player.harvester_manager_unlocked {
@@ -1153,13 +1153,13 @@ GameManager :: class : Component {
 
         // Only spawn if harvester exists (prompt location is relative to it).
         harvester := find_harvester_for_base(pb);
-        if harvester == null || harvester.entity == null || harvester.entity.self == null {
+        if harvester == null || harvester.entity == null || !#alive(harvester.entity) {
             return;
         }
 
         // Avoid duplicates.
         existing := player.woodchipper_unlock_prompt_entity;
-        if existing != null && existing.self != null {
+        if existing != null && #alive(existing) {
             return;
         }
 
@@ -1180,10 +1180,10 @@ GameManager :: class : Component {
                     ud := userdata.(Spawn_WoodchipperUnlock_Userdata);
                     if ud == null return;
                     if spawned_entity == null return;
-                    if spawned_entity.self == null return;
+                    if !#alive(spawned_entity) return;
 
                     // Parent under the base so it is destroyed when the base is destroyed.
-                    if ud.base_entity != null && ud.base_entity.self != null {
+                    if ud.base_entity != null && #alive(ud.base_entity) {
                         spawned_entity.set_parent(ud.base_entity, true);
                     }
 
@@ -1263,7 +1263,7 @@ GameManager :: class : Component {
         if !Game.is_server() return;
         if player == null return;
 
-        if player.base_entity == null || player.base_entity.self == null {
+        if player.base_entity == null || !#alive(player.base_entity) {
             this.server_destroy_woodchipper_unlock_prompt_for_player(player);
             return;
         }
@@ -1281,13 +1281,13 @@ GameManager :: class : Component {
         }
 
         harvester := find_harvester_for_base(pb);
-        if harvester == null || harvester.entity == null || harvester.entity.self == null {
+        if harvester == null || harvester.entity == null || !#alive(harvester.entity) {
             this.server_destroy_woodchipper_unlock_prompt_for_player(player);
             return;
         }
 
         e := player.woodchipper_unlock_prompt_entity;
-        if e == null || e.self == null {
+        if e == null || !#alive(e) {
             this.server_spawn_woodchipper_unlock_prompt_for_player(player);
             return;
         }
@@ -1316,7 +1316,7 @@ GameManager :: class : Component {
     server_spawn_woodchipper_at :: method(player: Player, spawn_world_pos: v2) {
         if !Game.is_server() return;
         if player == null return;
-        if player.base_entity == null || player.base_entity.self == null return;
+        if player.base_entity == null || !#alive(player.base_entity) return;
         pb := player.base_entity.get_component(PlayerBase);
         if pb == null return;
 
@@ -1331,7 +1331,7 @@ GameManager :: class : Component {
         if !Game.is_server() return;
 
         for p: component_iterator(Player) {
-            if p.base_entity == null || p.base_entity.self == null continue;
+            if p.base_entity == null || !#alive(p.base_entity) continue;
 
             // Spawn lanes 2-4 if unlocked.
             for lane: 1..3 {
@@ -1347,7 +1347,7 @@ GameManager :: class : Component {
         if !Game.is_server() return;
 
         for p: component_iterator(Player) {
-            if p.base_entity == null || p.base_entity.self == null continue;
+            if p.base_entity == null || !#alive(p.base_entity) continue;
             if p.turrets_loaded_from_save continue;
 
             turret_load_player_data(p, this);
@@ -1377,7 +1377,7 @@ GameManager :: class : Component {
     // - Client: updates local station fields so world UI shows correct level/speed immediately.
     apply_station_upgrade_levels_for_player :: method(player: Player) {
         if player == null return;
-        if player.base_entity == null || player.base_entity.self == null return;
+        if player.base_entity == null || !#alive(player.base_entity) return;
 
         pb := player.base_entity.get_component(PlayerBase);
         if pb == null return;
@@ -1401,7 +1401,7 @@ GameManager :: class : Component {
 
         for m: component_iterator(Paper_Mill) {
             if m == null continue;
-            if m.entity == null || m.entity.self == null continue;
+            if m.entity == null || !#alive(m.entity) continue;
             if get_parent_player_base(m.entity) != pb continue;
             lvl := get_level(player, m.lane_index, 0);
             if Game.is_server() {
@@ -1413,7 +1413,7 @@ GameManager :: class : Component {
         }
         for b: component_iterator(Blank_Bill_Press) {
             if b == null continue;
-            if b.entity == null || b.entity.self == null continue;
+            if b.entity == null || !#alive(b.entity) continue;
             if get_parent_player_base(b.entity) != pb continue;
             lvl := get_level(player, b.lane_index, 1);
             if Game.is_server() {
@@ -1425,7 +1425,7 @@ GameManager :: class : Component {
         }
         for c: component_iterator(Colored_Bill_Press) {
             if c == null continue;
-            if c.entity == null || c.entity.self == null continue;
+            if c.entity == null || !#alive(c.entity) continue;
             if get_parent_player_base(c.entity) != pb continue;
             lvl := get_level(player, c.lane_index, 2);
             if Game.is_server() {
@@ -1437,7 +1437,7 @@ GameManager :: class : Component {
         }
         for f: component_iterator(Finished_Bill_Press) {
             if f == null continue;
-            if f.entity == null || f.entity.self == null continue;
+            if f.entity == null || !#alive(f.entity) continue;
             if get_parent_player_base(f.entity) != pb continue;
             lvl := get_level(player, f.lane_index, 3);
             if Game.is_server() {
@@ -1456,7 +1456,7 @@ GameManager :: class : Component {
 
     apply_vault_level_for_player :: method(player: Player) {
         if player == null return;
-        if player.base_entity == null || player.base_entity.self == null return;
+        if player.base_entity == null || !#alive(player.base_entity) return;
 
         pb := player.base_entity.get_component(PlayerBase);
         if pb == null return;
@@ -1467,7 +1467,7 @@ GameManager :: class : Component {
 
         for v: component_iterator(Vault) {
             if v == null continue;
-            if v.entity == null || v.entity.self == null continue;
+            if v.entity == null || !#alive(v.entity) continue;
             if get_parent_player_base(v.entity) != pb continue;
             if Game.is_server() {
                 v.server_set_upgrade_level(lvl);
@@ -1483,7 +1483,7 @@ GameManager :: class : Component {
         if player == null return;
 
         // Persist player base state before cleanup.
-        if player.base_entity != null && player.base_entity.self != null {
+        if player.base_entity != null && #alive(player.base_entity) {
             pb := player.base_entity.get_component(PlayerBase);
             if pb != null {
                 vault := find_vault_for_base(pb);
@@ -1505,25 +1505,25 @@ GameManager :: class : Component {
 
                     for m: component_iterator(Paper_Mill) {
                         if m == null continue;
-                        if m.entity == null || m.entity.self == null continue;
+                        if m.entity == null || !#alive(m.entity) continue;
                         if get_parent_player_base(m.entity) != pb continue;
                         mills.append(m);
                     }
                     for b: component_iterator(Blank_Bill_Press) {
                         if b == null continue;
-                        if b.entity == null || b.entity.self == null continue;
+                        if b.entity == null || !#alive(b.entity) continue;
                         if get_parent_player_base(b.entity) != pb continue;
                         blanks.append(b);
                     }
                     for c: component_iterator(Colored_Bill_Press) {
                         if c == null continue;
-                        if c.entity == null || c.entity.self == null continue;
+                        if c.entity == null || !#alive(c.entity) continue;
                         if get_parent_player_base(c.entity) != pb continue;
                         coloreds.append(c);
                     }
                     for f: component_iterator(Finished_Bill_Press) {
                         if f == null continue;
-                        if f.entity == null || f.entity.self == null continue;
+                        if f.entity == null || !#alive(f.entity) continue;
                         if get_parent_player_base(f.entity) != pb continue;
                         finisheds.append(f);
                     }
@@ -1634,7 +1634,7 @@ GameManager :: class : Component {
         }
 
         // Best-effort cleanup: destroy the base they owned.
-        if player.base_entity != null && player.base_entity.self != null {
+        if player.base_entity != null && #alive(player.base_entity) {
             // Base despawn: rebuild navmesh ASAP on server.
             mark_navmesh_for_rebuild();
             player.base_entity.destroy();
@@ -1728,7 +1728,7 @@ GameManager :: class : Component {
     server_spawn_turret_for_player :: method(player: Player, tier: s64, spawn_pos: v2, save_after_spawn: bool = true, initial_hp: s64 = -1) -> bool {
         if !Game.is_server() return false;
         if player == null return false;
-        if player.base_entity == null || player.base_entity.self == null return false;
+        if player.base_entity == null || !#alive(player.base_entity) return false;
         if tier < 1 || tier > 3 return false;
         if !turret_is_position_inside_player_base(player, spawn_pos) return false;
         if turret_count_for_player(player) >= TURRET_MAX_PER_BASE return false;
@@ -1781,9 +1781,9 @@ GameManager :: class : Component {
             proc(spawned_entity: Entity, userdata: Object) {
                 ud := userdata.(Spawn_Turret_Userdata);
                 if ud == null return;
-                if spawned_entity == null || spawned_entity.self == null return;
+                if spawned_entity == null || !#alive(spawned_entity) return;
 
-                if ud.base_entity != null && ud.base_entity.self != null {
+                if ud.base_entity != null && #alive(ud.base_entity) {
                     spawned_entity.set_parent(ud.base_entity, true);
                 }
 
@@ -1801,7 +1801,7 @@ GameManager :: class : Component {
             }
         );
 
-        if spawned == null || spawned.self == null {
+        if spawned == null || !#alive(spawned) {
             return false;
         }
 
@@ -1813,11 +1813,11 @@ GameManager :: class : Component {
 
     find_press_operator_for_base :: method(base: PlayerBase, lane_index: s64) -> PressOperator {
         if base == null return null;
-        if base.entity == null || base.entity.self == null return null;
+        if base.entity == null || !#alive(base.entity) return null;
 
         for op: component_iterator(PressOperator) {
             if op == null continue;
-            if op.entity == null || op.entity.self == null continue;
+            if op.entity == null || !#alive(op.entity) continue;
             if !op.entity.get_world_enabled() continue;
             if op.lane_index != lane_index continue;
 
@@ -1832,7 +1832,7 @@ GameManager :: class : Component {
     server_spawn_press_operator :: method(base: PlayerBase, owner_user_id: string, lane_index: s64, spawn_pos: v2) {
         if !Game.is_server() return;
         if base == null return;
-        if base.entity == null || base.entity.self == null return;
+        if base.entity == null || !#alive(base.entity) return;
         if owner_user_id.count == 0 return;
 
         ensure_press_operator_prefab_loaded();
@@ -1857,10 +1857,10 @@ GameManager :: class : Component {
                 ud := userdata.(Spawn_PressOperator_Userdata);
                 if ud == null return;
                 if spawned_entity == null return;
-                if spawned_entity.self == null return;
+                if !#alive(spawned_entity) return;
 
                 // Parent under the base so it is destroyed when the base is destroyed.
-                if ud.base_entity != null && ud.base_entity.self != null {
+                if ud.base_entity != null && #alive(ud.base_entity) {
                     spawned_entity.set_parent(ud.base_entity, true);
                 }
 
@@ -1882,7 +1882,7 @@ GameManager :: class : Component {
         PRESS_OPERATOR_BIT :: 1;
 
         for p: component_iterator(Player) {
-            if p.base_entity == null || p.base_entity.self == null continue;
+            if p.base_entity == null || !#alive(p.base_entity) continue;
 
             pb := p.base_entity.get_component(PlayerBase);
             if pb == null continue;
@@ -1892,7 +1892,7 @@ GameManager :: class : Component {
 
                 // Don't run managers in locked lanes.
                 if !lanes_is_unlocked(p, lane) {
-                    if existing != null && existing.entity != null && existing.entity.self != null {
+                    if existing != null && existing.entity != null && #alive(existing.entity) {
                         existing.entity.destroy();
                     }
                     continue;
@@ -1908,7 +1908,7 @@ GameManager :: class : Component {
                     }
                 }
                 else {
-                    if existing != null && existing.entity != null && existing.entity.self != null {
+                    if existing != null && existing.entity != null && #alive(existing.entity) {
                         existing.entity.destroy();
                     }
                 }
@@ -1918,11 +1918,11 @@ GameManager :: class : Component {
 
     find_colorist_for_base :: method(base: PlayerBase, lane_index: s64) -> Colorist {
         if base == null return null;
-        if base.entity == null || base.entity.self == null return null;
+        if base.entity == null || !#alive(base.entity) return null;
 
         for c: component_iterator(Colorist) {
             if c == null continue;
-            if c.entity == null || c.entity.self == null continue;
+            if c.entity == null || !#alive(c.entity) continue;
             if !c.entity.get_world_enabled() continue;
             if c.lane_index != lane_index continue;
 
@@ -1937,7 +1937,7 @@ GameManager :: class : Component {
     server_spawn_colorist :: method(base: PlayerBase, owner_user_id: string, lane_index: s64, spawn_pos: v2) {
         if !Game.is_server() return;
         if base == null return;
-        if base.entity == null || base.entity.self == null return;
+        if base.entity == null || !#alive(base.entity) return;
         if owner_user_id.count == 0 return;
 
         ensure_colorist_prefab_loaded();
@@ -1962,10 +1962,10 @@ GameManager :: class : Component {
                 ud := userdata.(Spawn_Colorist_Userdata);
                 if ud == null return;
                 if spawned_entity == null return;
-                if spawned_entity.self == null return;
+                if !#alive(spawned_entity) return;
 
                 // Parent under the base so it is destroyed when the base is destroyed.
-                if ud.base_entity != null && ud.base_entity.self != null {
+                if ud.base_entity != null && #alive(ud.base_entity) {
                     spawned_entity.set_parent(ud.base_entity, true);
                 }
 
@@ -1987,7 +1987,7 @@ GameManager :: class : Component {
         COLORIST_BIT :: 2;
 
         for p: component_iterator(Player) {
-            if p.base_entity == null || p.base_entity.self == null continue;
+            if p.base_entity == null || !#alive(p.base_entity) continue;
 
             pb := p.base_entity.get_component(PlayerBase);
             if pb == null continue;
@@ -1996,7 +1996,7 @@ GameManager :: class : Component {
                 existing := find_colorist_for_base(pb, lane);
 
                 if !lanes_is_unlocked(p, lane) {
-                    if existing != null && existing.entity != null && existing.entity.self != null {
+                    if existing != null && existing.entity != null && #alive(existing.entity) {
                         existing.entity.destroy();
                     }
                     continue;
@@ -2012,7 +2012,7 @@ GameManager :: class : Component {
                     }
                 }
                 else {
-                    if existing != null && existing.entity != null && existing.entity.self != null {
+                    if existing != null && existing.entity != null && #alive(existing.entity) {
                         existing.entity.destroy();
                     }
                 }
@@ -2022,11 +2022,11 @@ GameManager :: class : Component {
 
     find_stamper_for_base :: method(base: PlayerBase, lane_index: s64) -> Stamper {
         if base == null return null;
-        if base.entity == null || base.entity.self == null return null;
+        if base.entity == null || !#alive(base.entity) return null;
 
         for s: component_iterator(Stamper) {
             if s == null continue;
-            if s.entity == null || s.entity.self == null continue;
+            if s.entity == null || !#alive(s.entity) continue;
             if !s.entity.get_world_enabled() continue;
             if s.lane_index != lane_index continue;
 
@@ -2041,7 +2041,7 @@ GameManager :: class : Component {
     server_spawn_stamper :: method(base: PlayerBase, owner_user_id: string, lane_index: s64, spawn_pos: v2) {
         if !Game.is_server() return;
         if base == null return;
-        if base.entity == null || base.entity.self == null return;
+        if base.entity == null || !#alive(base.entity) return;
         if owner_user_id.count == 0 return;
 
         ensure_stamper_prefab_loaded();
@@ -2066,10 +2066,10 @@ GameManager :: class : Component {
                 ud := userdata.(Spawn_Stamper_Userdata);
                 if ud == null return;
                 if spawned_entity == null return;
-                if spawned_entity.self == null return;
+                if !#alive(spawned_entity) return;
 
                 // Parent under the base so it is destroyed when the base is destroyed.
-                if ud.base_entity != null && ud.base_entity.self != null {
+                if ud.base_entity != null && #alive(ud.base_entity) {
                     spawned_entity.set_parent(ud.base_entity, true);
                 }
 
@@ -2091,7 +2091,7 @@ GameManager :: class : Component {
         STAMPER_BIT :: 4;
 
         for p: component_iterator(Player) {
-            if p.base_entity == null || p.base_entity.self == null continue;
+            if p.base_entity == null || !#alive(p.base_entity) continue;
 
             pb := p.base_entity.get_component(PlayerBase);
             if pb == null continue;
@@ -2100,7 +2100,7 @@ GameManager :: class : Component {
                 existing := find_stamper_for_base(pb, lane);
 
                 if !lanes_is_unlocked(p, lane) {
-                    if existing != null && existing.entity != null && existing.entity.self != null {
+                    if existing != null && existing.entity != null && #alive(existing.entity) {
                         existing.entity.destroy();
                     }
                     continue;
@@ -2116,7 +2116,7 @@ GameManager :: class : Component {
                     }
                 }
                 else {
-                    if existing != null && existing.entity != null && existing.entity.self != null {
+                    if existing != null && existing.entity != null && #alive(existing.entity) {
                         existing.entity.destroy();
                     }
                 }
@@ -2126,11 +2126,11 @@ GameManager :: class : Component {
 
     find_courier_for_base :: method(base: PlayerBase, lane_index: s64) -> Courier {
         if base == null return null;
-        if base.entity == null || base.entity.self == null return null;
+        if base.entity == null || !#alive(base.entity) return null;
 
         for c: component_iterator(Courier) {
             if c == null continue;
-            if c.entity == null || c.entity.self == null continue;
+            if c.entity == null || !#alive(c.entity) continue;
             if !c.entity.get_world_enabled() continue;
             if c.lane_index != lane_index continue;
 
@@ -2145,7 +2145,7 @@ GameManager :: class : Component {
     server_spawn_courier :: method(base: PlayerBase, owner_user_id: string, lane_index: s64, spawn_pos: v2) {
         if !Game.is_server() return;
         if base == null return;
-        if base.entity == null || base.entity.self == null return;
+        if base.entity == null || !#alive(base.entity) return;
         if owner_user_id.count == 0 return;
 
         ensure_courier_prefab_loaded();
@@ -2170,10 +2170,10 @@ GameManager :: class : Component {
                 ud := userdata.(Spawn_Courier_Userdata);
                 if ud == null return;
                 if spawned_entity == null return;
-                if spawned_entity.self == null return;
+                if !#alive(spawned_entity) return;
 
                 // Parent under the base so it is destroyed when the base is destroyed.
-                if ud.base_entity != null && ud.base_entity.self != null {
+                if ud.base_entity != null && #alive(ud.base_entity) {
                     spawned_entity.set_parent(ud.base_entity, true);
                 }
 
@@ -2195,7 +2195,7 @@ GameManager :: class : Component {
         COURIER_BIT :: 8;
 
         for p: component_iterator(Player) {
-            if p.base_entity == null || p.base_entity.self == null continue;
+            if p.base_entity == null || !#alive(p.base_entity) continue;
 
             pb := p.base_entity.get_component(PlayerBase);
             if pb == null continue;
@@ -2204,7 +2204,7 @@ GameManager :: class : Component {
                 existing := find_courier_for_base(pb, lane);
 
                 if !lanes_is_unlocked(p, lane) {
-                    if existing != null && existing.entity != null && existing.entity.self != null {
+                    if existing != null && existing.entity != null && #alive(existing.entity) {
                         existing.entity.destroy();
                     }
                     continue;
@@ -2220,7 +2220,7 @@ GameManager :: class : Component {
                     }
                 }
                 else {
-                    if existing != null && existing.entity != null && existing.entity.self != null {
+                    if existing != null && existing.entity != null && #alive(existing.entity) {
                         existing.entity.destroy();
                     }
                 }
@@ -2230,11 +2230,11 @@ GameManager :: class : Component {
 
     find_woodchipper_for_base :: method(base: PlayerBase) -> Woodchipper {
         if base == null return null;
-        if base.entity == null || base.entity.self == null return null;
+        if base.entity == null || !#alive(base.entity) return null;
 
         for w: component_iterator(Woodchipper) {
             if w == null continue;
-            if w.entity == null || w.entity.self == null continue;
+            if w.entity == null || !#alive(w.entity) continue;
             if !w.entity.get_world_enabled() continue;
 
             pb := get_parent_player_base(w.entity);
@@ -2248,7 +2248,7 @@ GameManager :: class : Component {
     server_spawn_woodchipper :: method(base: PlayerBase, owner_user_id: string, spawn_pos: v2) {
         if !Game.is_server() return;
         if base == null return;
-        if base.entity == null || base.entity.self == null return;
+        if base.entity == null || !#alive(base.entity) return;
         if owner_user_id.count == 0 return;
 
         ensure_woodchipper_prefab_loaded();
@@ -2272,10 +2272,10 @@ GameManager :: class : Component {
                 ud := userdata.(Spawn_Woodchipper_Userdata);
                 if ud == null return;
                 if spawned_entity == null return;
-                if spawned_entity.self == null return;
+                if !#alive(spawned_entity) return;
 
                 // Parent under the base so it is destroyed when the base is destroyed.
-                if ud.base_entity != null && ud.base_entity.self != null {
+                if ud.base_entity != null && #alive(ud.base_entity) {
                     spawned_entity.set_parent(ud.base_entity, true);
                 }
 
@@ -2294,7 +2294,7 @@ GameManager :: class : Component {
         if !Game.is_server() return;
 
         for p: component_iterator(Player) {
-            if p.base_entity == null || p.base_entity.self == null continue;
+            if p.base_entity == null || !#alive(p.base_entity) continue;
 
             pb := p.base_entity.get_component(PlayerBase);
             if pb == null continue;
@@ -2310,7 +2310,7 @@ GameManager :: class : Component {
                 }
             }
             else {
-                if existing != null && existing.entity != null && existing.entity.self != null {
+                if existing != null && existing.entity != null && #alive(existing.entity) {
                     existing.entity.destroy();
                 }
             }
@@ -2324,7 +2324,7 @@ GameManager :: class : Component {
 
         spawn_e := PlayerSpawns[spawn_index];
         if spawn_e == null return v2{}, false;
-        if spawn_e.self == null return v2{}, false;
+        if !#alive(spawn_e) return v2{}, false;
 
         return spawn_e.world_position, true;
     }
@@ -2345,7 +2345,7 @@ GameManager :: class : Component {
                 continue;
             }
 
-            if p.base_entity != null && p.base_entity.self != null {
+            if p.base_entity != null && #alive(p.base_entity) {
                 used[p.base_spawn_index] = true;
 
                 // Ensure base-specific mirrored layout entities are positioned correctly (e.g. after layout changes).
@@ -2368,7 +2368,7 @@ GameManager :: class : Component {
 
         // 2) Assign bases to players who don't have one yet, while slots are available.
         for p: component_iterator(Player) {
-            if p.base_entity != null && p.base_entity.self != null {
+            if p.base_entity != null && #alive(p.base_entity) {
                 continue; // already has a base
             }
 
@@ -2377,14 +2377,14 @@ GameManager :: class : Component {
             for i: 0..MAX_BASES-1 {
                 if used[i] continue;
                 if PlayerSpawns[i] == null continue;
-                if PlayerSpawns[i].self == null continue;
+                if !#alive(PlayerSpawns[i]) continue;
                 free_idx = i;
                 break;
             }
 
             if free_idx < 0 {
                 // No slots left. Warp to 0,0 as requested.
-                if p.entity != null && p.entity.self != null {
+                if p.entity != null && #alive(p.entity) {
                     p.entity.set_local_position(v2{0, 0});
                 }
                 p.base_spawn_index = -1;
@@ -2401,7 +2401,7 @@ GameManager :: class : Component {
             }
 
             // Teleport the player near their base (offset from the PlayerSpawn center).
-            if p.entity != null && p.entity.self != null {
+            if p.entity != null && #alive(p.entity) {
                 // Players 1-3 (spawn 0-2) spawn a bit LOWER; players 4-6 (spawn 3-5) spawn a bit HIGHER.
                 offset := v2{0, -2};
                 if free_idx >= 3 {
@@ -2443,7 +2443,7 @@ GameManager :: class : Component {
                     spawn_index := ud.spawn_index;
                     if player == null return;
                     if spawned_entity == null return;
-                    if spawned_entity.self == null return;
+                    if !#alive(spawned_entity) return;
 
                     pb := spawned_entity.get_component(PlayerBase);
                     if pb != null {
@@ -2454,7 +2454,7 @@ GameManager :: class : Component {
                         // - Player 4/5/6 (spawn 3/4/5): set local Y to 10.0.
                         if spawn_index >= 3 {
                             truck := find_truck_for_base(pb);
-                            if truck != null && truck.entity != null && truck.entity.self != null {
+                            if truck != null && truck.entity != null && #alive(truck.entity) {
                                 lp := truck.entity.local_position;
                                 lp.y = 10.0;
                                 truck.entity.set_local_position(lp);
@@ -2462,7 +2462,7 @@ GameManager :: class : Component {
 
                             // Same as Truck, but only alter Y: keep prefab X and set local Y to 10.0.
                             harvester := find_harvester_for_base(pb);
-                            if harvester != null && harvester.entity != null && harvester.entity.self != null {
+                            if harvester != null && harvester.entity != null && #alive(harvester.entity) {
                                 lp := harvester.entity.local_position;
                                 lp.y = 10.0;
                                 harvester.entity.set_local_position(lp);

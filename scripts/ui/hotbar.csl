@@ -6,11 +6,11 @@ import "core:ao"
 draw_player_hotbar :: proc(player: Player) {
     if player == null return;
     if player.entity == null return;
-    if player.entity.self == null return;
+    if !#alive(player.entity) return;
 
     inv := player.default_inventory;
     if inv == null return;
-    if inv.self == null return;
+    if !#alive(inv) return;
     if inv.capacity <= 0 return;
 
     options := Inventory_Draw_Options.default();

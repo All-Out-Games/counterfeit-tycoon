@@ -43,7 +43,7 @@ sparks_manager_boost_capacity_multiplier_for_owner_user_id :: proc(owner_user_id
 
 sparks_station_boost_speed_multiplier_for_entity :: proc(e: Entity) -> float {
     if e == null return 1.0;
-    if e.self == null return 1.0;
+    if !#alive(e) return 1.0;
     pb := get_parent_player_base(e);
     if pb == null return 1.0;
     owner := sparks_find_player_by_user_id(pb.owner_user_id);

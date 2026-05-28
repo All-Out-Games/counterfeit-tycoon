@@ -78,7 +78,7 @@ find_closest_treecutting_tree_to_position :: proc(pos: v2) -> Treecutting_Tree {
 
     for t: component_iterator(Treecutting_Tree) {
         if t == null continue;
-        if t.entity == null || t.entity.self == null continue;
+        if t.entity == null || !#alive(t.entity) continue;
         if !t.entity.get_world_enabled() continue;
         if t.is_falling continue;
 
@@ -97,7 +97,7 @@ find_treecutting_tree_by_entity_id :: proc(id: u64) -> Treecutting_Tree {
     if id == 0 return null;
     for t: component_iterator(Treecutting_Tree) {
         if t == null continue;
-        if t.entity == null || t.entity.self == null continue;
+        if t.entity == null || !#alive(t.entity) continue;
         if t.entity.id == id {
             return t;
         }
@@ -347,7 +347,7 @@ Harvester :: class : Interactable {
                     // retarget to a new closest tree.
                     cur_target := find_treecutting_tree_by_entity_id(target_tree_entity_id);
                     target_valid := false;
-                    if cur_target != null && cur_target.entity != null && cur_target.entity.self != null {
+                    if cur_target != null && cur_target.entity != null && #alive(cur_target.entity) {
                         if cur_target.entity.get_world_enabled() && !cur_target.is_falling {
                             target_valid = true;
                         }
@@ -473,11 +473,11 @@ Harvester :: class : Interactable {
         spine = null;
 
         target_entity := entity;
-        if spine_entity != null && spine_entity.self != null {
+        if spine_entity != null && #alive(spine_entity) {
             target_entity = spine_entity;
         }
 
-        if target_entity != null && target_entity.self != null {
+        if target_entity != null && #alive(target_entity) {
             spine = target_entity.get_component(Spine_Animator);
         }
 
@@ -487,7 +487,7 @@ Harvester :: class : Interactable {
 
         // Cache initial scale for flip logic.
         if !spine_scale_initialized {
-            if target_entity != null && target_entity.self != null {
+            if target_entity != null && #alive(target_entity) {
                 spine_base_scale = target_entity.local_scale;
                 if spine_base_scale.x == 0 {
                     spine_base_scale.x = 1;
@@ -554,11 +554,11 @@ Harvester :: class : Interactable {
         // Flip spine X scale based on horizontal travel.
         if spine_scale_initialized {
             target_entity := entity;
-            if spine_entity != null && spine_entity.self != null {
+            if spine_entity != null && #alive(spine_entity) {
                 target_entity = spine_entity;
             }
 
-            if target_entity != null && target_entity.self != null {
+            if target_entity != null && #alive(target_entity) {
                 if delta.x > 0.001 {
                     target_entity.set_local_scale({abs(spine_base_scale.x), spine_base_scale.y});
                 }
@@ -793,7 +793,7 @@ Harvester :: class : Interactable {
 
         for d: component_iterator(Item_Drop_Magnet) {
             if d == null continue;
-            if d.entity == null || d.entity.self == null continue;
+            if d.entity == null || !#alive(d.entity) continue;
             if !d.entity.get_world_enabled() continue;
             if d.defn == null continue;
             if d.count <= 0 continue;

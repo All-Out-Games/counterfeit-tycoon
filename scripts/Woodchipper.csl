@@ -27,11 +27,11 @@ Woodchipper_State :: enum {
 
 woodchipper_find_paper_mill_for_base_and_lane :: proc(base: PlayerBase, lane_index: s64) -> Paper_Mill {
     if base == null return null;
-    if base.entity == null || base.entity.self == null return null;
+    if base.entity == null || !#alive(base.entity) return null;
 
     for m: component_iterator(Paper_Mill) {
         if m == null continue;
-        if m.entity == null || m.entity.self == null continue;
+        if m.entity == null || !#alive(m.entity) continue;
         if !m.entity.get_world_enabled() continue;
         if m.lane_index != lane_index continue;
 
@@ -47,7 +47,7 @@ woodchipper_choose_best_paper_mill_lane :: proc(base: PlayerBase) -> s64 {
     // Returns the lane index of the "most empty" owned Paper_Mill that has room.
     // Returns -1 if no owned mills exist (or all are full/disabled).
     if base == null return -1;
-    if base.entity == null || base.entity.self == null return -1;
+    if base.entity == null || !#alive(base.entity) return -1;
 
     best_lane: s64 = -1;
     best_wood: s64 = 0;
@@ -55,7 +55,7 @@ woodchipper_choose_best_paper_mill_lane :: proc(base: PlayerBase) -> s64 {
 
     for m: component_iterator(Paper_Mill) {
         if m == null continue;
-        if m.entity == null || m.entity.self == null continue;
+        if m.entity == null || !#alive(m.entity) continue;
         if !m.entity.get_world_enabled() continue;
 
         pb := get_parent_player_base(m.entity);
@@ -97,7 +97,7 @@ woodchipper_choose_next_paper_mill_lane_after_deposit :: proc(base: PlayerBase, 
     // - If no other mill has room, allow staying on the current lane if it still has room.
     // - If nothing has room, return -1.
     if base == null return -1;
-    if base.entity == null || base.entity.self == null return -1;
+    if base.entity == null || !#alive(base.entity) return -1;
 
     best_other_lane: s64 = -1;
     best_other_wood: s64 = 0;
@@ -107,7 +107,7 @@ woodchipper_choose_next_paper_mill_lane_after_deposit :: proc(base: PlayerBase, 
 
     for m: component_iterator(Paper_Mill) {
         if m == null continue;
-        if m.entity == null || m.entity.self == null continue;
+        if m.entity == null || !#alive(m.entity) continue;
         if !m.entity.get_world_enabled() continue;
 
         pb := get_parent_player_base(m.entity);
@@ -311,7 +311,7 @@ Woodchipper :: class : Component {
 
     target_pos_for_mill :: method(m: Paper_Mill) -> v2 {
         if m == null return entity.world_position;
-        if m.entity == null || m.entity.self == null return entity.world_position;
+        if m.entity == null || !#alive(m.entity) return entity.world_position;
         return m.entity.world_position + v2{0, -1.0};
     }
 
@@ -364,15 +364,15 @@ Woodchipper :: class : Component {
 
         if spine_animator != null {
             spine = spine_animator;
-            if spine_animator.entity != null && spine_animator.entity.self != null {
+            if spine_animator.entity != null && #alive(spine_animator.entity) {
                 target_entity = spine_animator.entity;
             }
         }
-        else if spine_entity != null && spine_entity.self != null {
+        else if spine_entity != null && #alive(spine_entity) {
             spine = spine_entity.get_component(Spine_Animator);
             target_entity = spine_entity;
         }
-        else if target_entity != null && target_entity.self != null {
+        else if target_entity != null && #alive(target_entity) {
             spine = target_entity.get_component(Spine_Animator);
         }
 
@@ -382,7 +382,7 @@ Woodchipper :: class : Component {
 
         // Cache initial scale for flip logic.
         if !spine_scale_initialized {
-            if target_entity != null && target_entity.self != null {
+            if target_entity != null && #alive(target_entity) {
                 spine_base_scale = target_entity.local_scale;
                 if spine_base_scale.x == 0 {
                     spine_base_scale.x = 1;
@@ -530,11 +530,11 @@ Woodchipper :: class : Component {
 
         if spine_scale_initialized {
             target_entity := entity;
-            if spine_entity != null && spine_entity.self != null {
+            if spine_entity != null && #alive(spine_entity) {
                 target_entity = spine_entity;
             }
 
-            if target_entity != null && target_entity.self != null {
+            if target_entity != null && #alive(target_entity) {
                 if delta.x > 0.001 {
                     target_entity.set_local_scale({abs(spine_base_scale.x), spine_base_scale.y});
                 }
@@ -553,7 +553,7 @@ Woodchipper :: class : Component {
         if !#alive(cached_pb) return;
         owner := cached_pb.get_owner();
         if owner == null return;
-        if owner.self == null return;
+        if !#alive(owner) return;
         if owner.animator == null return;
 
         spine.layer = owner.animator.layer;
@@ -606,7 +606,7 @@ Woodchipper :: class : Component {
 
         for d: component_iterator(Item_Drop_Magnet) {
             if d == null continue;
-            if d.entity == null || d.entity.self == null continue;
+            if d.entity == null || !#alive(d.entity) continue;
             if !d.entity.get_world_enabled() continue;
             if d.defn == null continue;
             if d.count <= 0 continue;

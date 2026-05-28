@@ -37,10 +37,10 @@ ManagerUnlock :: class : Interactable {
         // (Prefab convention: Spine_Animator lives on a child entity.)
         find_in_subtree :: proc(root: Entity) -> Spine_Animator {
             if root == null return null;
-            if root.self == null return null;
+            if !#alive(root) return null;
             current := root.get_first_child();
             while current != null {
-                if current.self != null {
+                if #alive(current) {
                     sp := current.get_component(Spine_Animator);
                     if sp != null return sp;
                     found := find_in_subtree(current);
@@ -51,7 +51,7 @@ ManagerUnlock :: class : Interactable {
             return null;
         }
 
-        if entity == null || entity.self == null {
+        if entity == null || !#alive(entity) {
             return null;
         }
         return find_in_subtree(entity);
@@ -150,7 +150,7 @@ ManagerUnlock :: class : Interactable {
 
         if kind == .WOODCHIPPER {
             if player.harvester_manager_unlocked {
-                if entity != null && entity.self != null {
+                if entity != null && #alive(entity) {
                     entity.destroy();
                 }
                 return;
@@ -172,7 +172,7 @@ ManagerUnlock :: class : Interactable {
                     gm.server_spawn_woodchipper_at(player, entity.world_position);
                     gm.server_reconcile_woodchipper_unlock_prompts();
                 }
-                if entity != null && entity.self != null {
+                if entity != null && #alive(entity) {
                     entity.destroy();
                 }
             }
@@ -187,7 +187,7 @@ ManagerUnlock :: class : Interactable {
 
         // Already unlocked?
         if is_manager_unlocked(player, lane_index, kind) {
-            if entity != null && entity.self != null {
+            if entity != null && #alive(entity) {
                 entity.destroy();
             }
             return;
@@ -209,7 +209,7 @@ ManagerUnlock :: class : Interactable {
             gm := get_game_manager();
             if gm != null {
                 spawn_pos := entity.world_position;
-                if player.base_entity != null && player.base_entity.self != null {
+                if player.base_entity != null && #alive(player.base_entity) {
                     pb := player.base_entity.get_component(PlayerBase);
                     if pb != null {
                         spawn_pos = gm.manager_unlock_anchor_world_pos(pb, lane_index, kind);
@@ -218,7 +218,7 @@ ManagerUnlock :: class : Interactable {
                 gm.server_spawn_manager_kind_at(player, lane_index, kind, spawn_pos);
                 gm.server_reconcile_manager_unlock_prompts_for_player(player);
             }
-            if entity != null && entity.self != null {
+            if entity != null && #alive(entity) {
                 entity.destroy();
             }
         }
@@ -239,10 +239,10 @@ ManagerUnlock :: class : Interactable {
 
         apply_visual_visibility_in_subtree :: proc(root: Entity, visible: bool) {
             if root == null return;
-            if root.self == null return;
+            if !#alive(root) return;
             current := root.get_first_child();
             while current != null {
-                if current.self != null {
+                if #alive(current) {
                     sr := current.get_component(Sprite_Renderer);
                     sp := current.get_component(Spine_Animator);
                     if sr != null || sp != null {
@@ -254,7 +254,7 @@ ManagerUnlock :: class : Interactable {
             }
         }
 
-        if entity != null && entity.self != null {
+        if entity != null && #alive(entity) {
             apply_visual_visibility_in_subtree(entity, visible);
         }
     }
