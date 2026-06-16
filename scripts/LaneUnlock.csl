@@ -62,7 +62,7 @@ LaneUnlock :: class : Interactable {
 
         // Already unlocked?
         if lanes_is_unlocked(player, lane_index) {
-            if entity != null && entity.self != null {
+            if entity != null && #alive(entity) {
                 entity.destroy();
             }
             return;
@@ -86,7 +86,7 @@ LaneUnlock :: class : Interactable {
         server_try_unlock_lane(player, lane_index);
 
         // Despawn this prompt.
-        if entity != null && entity.self != null {
+        if entity != null && #alive(entity) {
             entity.destroy();
         }
 

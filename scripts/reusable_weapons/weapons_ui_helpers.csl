@@ -93,14 +93,14 @@ draw_player_carried_bills_in_world_context :: proc(player: Player) {
     // Count finished bills across all inventory slots.
     inv := player.default_inventory;
     if inv == null return;
-    if inv.self == null return;
+    if !#alive(inv) return;
     if inv.capacity <= 0 return;
 
     total: s64 = 0;
     for i: 0..inv.capacity-1 {
         item := inv.get_item(i);
         if item == null continue;
-        if item.self == null continue;
+        if !#alive(item) continue;
 
         defn := item.get_definition();
         if defn == null continue;

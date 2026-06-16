@@ -206,7 +206,7 @@ Item_Drop_Magnet :: class : Component {
 
         // Non-currency drops require inventory.
         if player.default_inventory == null return false;
-        if player.default_inventory.self == null return false;
+        if !#alive(player.default_inventory) return false;
         if player.default_inventory.capacity <= 0 return false;
 
         // Create a fresh instance at pickup time to avoid holding a potentially stale pointer.
@@ -234,7 +234,7 @@ Item_Drop_Magnet :: class : Component {
         if pickup_item == null {
             return false;
         }
-        if pickup_item.self == null {
+        if !#alive(pickup_item) {
             return false;
         }
 
@@ -491,7 +491,7 @@ ItemDrops :: struct {
         if item == null {
             return null;
         }
-        if item.self == null {
+        if !#alive(item) {
             return null;
         }
         // NOTE: We intentionally do NOT hold an Item_Instance reference for world drops.
@@ -518,10 +518,10 @@ ItemDrops :: struct {
     spawn_from_inventory_item_with_dropper_lockout :: proc(position: v2, item: Item_Instance, dropped_by: Player, lockout_seconds: float = 7.0) -> Item_Drop_Magnet {
         dropped := ItemDrops.spawn_from_inventory_item(position, item);
         if dropped == null return null;
-        if dropped.self == null return null;
+        if !#alive(dropped) return null;
 
         if dropped_by == null return dropped;
-        if dropped_by.self == null return dropped;
+        if !#alive(dropped_by) return dropped;
 
         dropped.dropped_by_player_user_id = dropped_by.get_user_id();
         if lockout_seconds < 0.0 {

@@ -774,7 +774,7 @@ quest_on_vault_deposit :: proc(player: Player) {
     fill_pct: s64 = 0;
     for v: component_iterator(Vault) {
         if v == null continue;
-        if v.entity == null || v.entity.self == null continue;
+        if v.entity == null || !#alive(v.entity) continue;
         if !is_owner_of_parent_base(v.entity, player) continue;
         if v.max_capacity > 0 {
             fill_pct = (v.stored_finished_bills * 100) / v.max_capacity;

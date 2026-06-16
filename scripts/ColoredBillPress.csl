@@ -268,7 +268,7 @@ Colored_Bill_Press :: class : Interactable {
         if spine_animator != null {
             spine = spine_animator;
         }
-        else if spine_entity != null && spine_entity.self != null {
+        else if spine_entity != null && #alive(spine_entity) {
             spine = spine_entity.get_component(Spine_Animator);
         }
         else {
@@ -516,7 +516,7 @@ Colored_Bill_Press :: class : Interactable {
         }
 
         inv := player.default_inventory;
-        if inv == null || inv.self == null || inv.capacity <= 0 {
+        if inv == null || !#alive(inv) || inv.capacity <= 0 {
             return;
         }
 
@@ -719,13 +719,13 @@ Colored_Bill_Press :: class : Interactable {
 
         inv := player.default_inventory;
         if inv == null return false;
-        if inv.self == null return false;
+        if !#alive(inv) return false;
         if inv.capacity <= 0 return false;
 
         for i: 0..inv.capacity-1 {
             item := inv.get_item(i);
             if item == null continue;
-            if item.self == null continue;
+            if !#alive(item) continue;
 
             defn := item.get_definition();
             if defn == null continue;

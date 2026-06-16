@@ -221,14 +221,14 @@ g :: proc(player: Player, item_id: string, count: s64 = 1) {
     }
 
     inv := player.default_inventory;
-    if inv == null || inv.self == null {
+    if inv == null || !#alive(inv) {
         Notifier.notify(player, "No inventory available.");
         return;
     }
 
     // Create an instance with the requested quantity.
     item := Items.create_item_instance(defn, count);
-    if item == null || item.self == null {
+    if item == null || !#alive(item) {
         Notifier.notify(player, "Failed to create item: %", {item_id});
         return;
     }
@@ -246,7 +246,7 @@ g :: proc(player: Player, item_id: string, count: s64 = 1) {
 
     if moved <= 0 {
         // Inventory full → clean up the instance we created (if it still exists).
-        if item != null && item.self != null {
+        if item != null && #alive(item) {
             Items.destroy_item_instance(item);
         }
         Notifier.notify(player, "Inventory full.");
@@ -285,14 +285,14 @@ server_destroy_all_items_in_inventory :: proc(player: Player) -> s64 {
     if !Game.is_server() return 0;
 
     inv := player.default_inventory;
-    if inv == null || inv.self == null return 0;
+    if inv == null || !#alive(inv) return 0;
     if inv.capacity <= 0 return 0;
 
     destroyed: s64 = 0;
     for slot: 0..inv.capacity-1 {
         item := inv.get_item(slot);
         if item == null continue;
-        if item.self == null continue;
+        if !#alive(item) continue;
         Items.destroy_item_instance(item);
         destroyed += 1;
     }
@@ -345,14 +345,14 @@ server_reset_player_progress :: proc(target: Player) {
     // Destroy spawned extra lanes (Lane 2-4 entities).
     for lane: 1..3 {
         e := target.lane_entities[lane];
-        if e != null && e.self != null {
+        if e != null && #alive(e) {
             e.destroy();
         }
         target.lane_entities[lane] = null;
     }
 
     // Clear existing lane unlock prompt (will be respawned as needed below).
-    if target.lane_unlock_prompt_entity != null && target.lane_unlock_prompt_entity.self != null {
+    if target.lane_unlock_prompt_entity != null && #alive(target.lane_unlock_prompt_entity) {
         target.lane_unlock_prompt_entity.destroy();
     }
     target.lane_unlock_prompt_entity = null;
@@ -422,7 +422,7 @@ migrate_legacy_coin_items_to_currency :: proc(player: Player) {
     if !Game.is_server() return;
 
     inv := player.default_inventory;
-    if inv == null || inv.self == null return;
+    if inv == null || !#alive(inv) return;
     if inv.capacity <= 0 return;
 
     total_converted: s64 = 0;
@@ -431,7 +431,7 @@ migrate_legacy_coin_items_to_currency :: proc(player: Player) {
     for slot: 0..inv.capacity-1 {
         item := inv.get_item(slot);
         if item == null continue;
-        if item.self == null continue;
+        if !#alive(item) continue;
 
         defn := item.get_definition();
         if defn == null continue;
@@ -441,7 +441,7 @@ migrate_legacy_coin_items_to_currency :: proc(player: Player) {
         for step: 0..MAX_STEPS {
             cur := inv.get_item(slot);
             if cur == null break;
-            if cur.self == null break;
+            if !#alive(cur) break;
             cur_defn := cur.get_definition();
             if cur_defn == null break;
             if cur_defn.get_id() != "coin" break;
@@ -465,7 +465,7 @@ draw_finished_bills_per_sec_hud :: proc(player: Player) {
     total_rate := 0.0;
     for press: component_iterator(Finished_Bill_Press) {
         if press == null continue;
-        if press.entity == null || press.entity.self == null continue;
+        if press.entity == null || !#alive(press.entity) continue;
         if !press.entity.get_world_enabled() continue;
         if !is_owner_of_parent_base(press.entity, player) continue;
 
@@ -507,7 +507,7 @@ draw_finished_bills_per_sec_hud :: proc(player: Player) {
 draw_lane_labels :: proc(player: Player) {
     if player == null return;
     if !player.is_local() return;
-    if player.base_entity == null || player.base_entity.self == null return;
+    if player.base_entity == null || !#alive(player.base_entity) return;
 
     gm := get_game_manager();
     if gm == null return;
@@ -524,14 +524,14 @@ draw_lane_labels :: proc(player: Player) {
     // Find an anchor world Y for a given lane by looking at an actual station entity
     // in that lane (so labels follow the real layout even if the base prefab shifts).
     find_lane_anchor_world_y :: proc(base_entity: Entity, lane_index: s64) -> float, bool {
-        if base_entity == null || base_entity.self == null return 0.0, false;
+        if base_entity == null || !#alive(base_entity) return 0.0, false;
         pb := base_entity.get_component(PlayerBase);
         if pb == null return 0.0, false;
 
         // Paper_Mill exists in every lane (including Lane 1 in the base prefab).
         for m: component_iterator(Paper_Mill) {
             if m == null continue;
-            if m.entity == null || m.entity.self == null continue;
+            if m.entity == null || !#alive(m.entity) continue;
             if m.lane_index != lane_index continue;
             if get_parent_player_base(m.entity) != pb continue;
             return m.entity.world_position.y, true;
@@ -540,21 +540,21 @@ draw_lane_labels :: proc(player: Player) {
         // Fallbacks in case a lane is missing a mill for some reason.
         for b: component_iterator(Blank_Bill_Press) {
             if b == null continue;
-            if b.entity == null || b.entity.self == null continue;
+            if b.entity == null || !#alive(b.entity) continue;
             if b.lane_index != lane_index continue;
             if get_parent_player_base(b.entity) != pb continue;
             return b.entity.world_position.y, true;
         }
         for c: component_iterator(Colored_Bill_Press) {
             if c == null continue;
-            if c.entity == null || c.entity.self == null continue;
+            if c.entity == null || !#alive(c.entity) continue;
             if c.lane_index != lane_index continue;
             if get_parent_player_base(c.entity) != pb continue;
             return c.entity.world_position.y, true;
         }
         for f: component_iterator(Finished_Bill_Press) {
             if f == null continue;
-            if f.entity == null || f.entity.self == null continue;
+            if f.entity == null || !#alive(f.entity) continue;
             if f.lane_index != lane_index continue;
             if get_parent_player_base(f.entity) != pb continue;
             return f.entity.world_position.y, true;
@@ -653,7 +653,7 @@ SPAWN_PROTECTION_SECONDS :: 10.0;
 
 player_is_in_own_base_safe_zone :: proc(player: Player) -> bool {
     if !#alive(player) return false;
-    if player.base_entity == null || player.base_entity.self == null return false;
+    if player.base_entity == null || !#alive(player.base_entity) return false;
 
     base_pos := player.base_entity.world_position;
     p_pos := player.entity.world_position;
@@ -801,7 +801,7 @@ Player :: class : Player_Base {
             if vault_entity_id == 0 return false;
             for v: component_iterator(Vault) {
                 if v == null continue;
-                if v.entity == null || v.entity.self == null continue;
+                if v.entity == null || !#alive(v.entity) continue;
                 if v.entity.id != vault_entity_id continue;
                 return is_owner_of_parent_base(v.entity, owner);
             }
@@ -1442,7 +1442,7 @@ Player :: class : Player_Base {
 
                 if is_protected && !should_disappear {
                     // Shield should be visible.
-                    if shield_entity == null || shield_entity.self == null {
+                    if shield_entity == null || !#alive(shield_entity) {
                         shield_entity = Scene.create_entity();
                         shield_spine = shield_entity.add_component(Spine_Animator);
                         shield_spine.awaken();
@@ -1464,11 +1464,11 @@ Player :: class : Player_Base {
                     }
 
                     // Follow player position (offset up to center on body).
-                    if entity != null && entity.self != null && shield_entity != null && shield_entity.self != null {
+                    if entity != null && #alive(entity) && shield_entity != null && #alive(shield_entity) {
                         shield_entity.set_local_position(entity.world_position + v2{0, 0.5});
                     }
                 }
-                else if shield_entity != null && shield_entity.self != null {
+                else if shield_entity != null && #alive(shield_entity) {
                     // Play disappear then destroy.
                     if !shield_playing_disappear {
                         shield_playing_disappear = true;
@@ -1488,7 +1488,7 @@ Player :: class : Player_Base {
                     }
 
                     // Keep following player while disappearing.
-                    if entity != null && entity.self != null && shield_entity != null && shield_entity.self != null {
+                    if entity != null && #alive(entity) && shield_entity != null && #alive(shield_entity) {
                         shield_entity.set_local_position(entity.world_position + v2{0, 0.5});
                     }
                 }
@@ -1539,7 +1539,7 @@ Player :: class : Player_Base {
                     if vault_theft_owner_notified {
                         for v: component_iterator(Vault) {
                             if v == null continue;
-                            if v.entity == null || v.entity.self == null continue;
+                            if v.entity == null || !#alive(v.entity) continue;
                             if v.entity.id != vault_theft_target_entity_id continue;
                             pb := get_parent_player_base(v.entity);
                             if pb != null {
@@ -1702,14 +1702,14 @@ Player :: class : Player_Base {
     tutorial_has_item_id :: method(item_id: string) -> bool {
         if item_id.count <= 0 return false;
         inv := default_inventory;
-        if inv == null || inv.self == null || inv.capacity <= 0 {
+        if inv == null || !#alive(inv) || inv.capacity <= 0 {
             return false;
         }
 
         for i: 0..inv.capacity-1 {
             item := inv.get_item(i);
             if item == null continue;
-            if item.self == null continue;
+            if !#alive(item) continue;
             defn := item.get_definition();
             if defn == null continue;
             if defn.get_id() == item_id {
@@ -1723,7 +1723,7 @@ Player :: class : Player_Base {
     tutorial_find_owned_paper_mill_lane0 :: method() -> Paper_Mill {
         for m: component_iterator(Paper_Mill) {
             if m == null continue;
-            if m.entity == null || m.entity.self == null continue;
+            if m.entity == null || !#alive(m.entity) continue;
             if !m.entity.get_world_enabled() continue;
             if m.lane_index != 0 continue;
             if is_owner_of_parent_base(m.entity, this) {
@@ -1736,7 +1736,7 @@ Player :: class : Player_Base {
     tutorial_find_owned_blank_bill_press_lane0 :: method() -> Blank_Bill_Press {
         for p: component_iterator(Blank_Bill_Press) {
             if p == null continue;
-            if p.entity == null || p.entity.self == null continue;
+            if p.entity == null || !#alive(p.entity) continue;
             if !p.entity.get_world_enabled() continue;
             if p.lane_index != 0 continue;
             if is_owner_of_parent_base(p.entity, this) {
@@ -1749,7 +1749,7 @@ Player :: class : Player_Base {
     tutorial_find_owned_colored_bill_press_lane0 :: method() -> Colored_Bill_Press {
         for p: component_iterator(Colored_Bill_Press) {
             if p == null continue;
-            if p.entity == null || p.entity.self == null continue;
+            if p.entity == null || !#alive(p.entity) continue;
             if !p.entity.get_world_enabled() continue;
             if p.lane_index != 0 continue;
             if is_owner_of_parent_base(p.entity, this) {
@@ -1762,7 +1762,7 @@ Player :: class : Player_Base {
     tutorial_find_owned_finished_bill_press_lane0 :: method() -> Finished_Bill_Press {
         for p: component_iterator(Finished_Bill_Press) {
             if p == null continue;
-            if p.entity == null || p.entity.self == null continue;
+            if p.entity == null || !#alive(p.entity) continue;
             if !p.entity.get_world_enabled() continue;
             if p.lane_index != 0 continue;
             if is_owner_of_parent_base(p.entity, this) {
@@ -1775,7 +1775,7 @@ Player :: class : Player_Base {
     tutorial_find_owned_vault :: method() -> Vault {
         for v: component_iterator(Vault) {
             if v == null continue;
-            if v.entity == null || v.entity.self == null continue;
+            if v.entity == null || !#alive(v.entity) continue;
             if !v.entity.get_world_enabled() continue;
             if is_owner_of_parent_base(v.entity, this) {
                 return v;
@@ -1787,7 +1787,7 @@ Player :: class : Player_Base {
     tutorial_find_owned_truck :: method() -> Truck {
         for t: component_iterator(Truck) {
             if t == null continue;
-            if t.entity == null || t.entity.self == null continue;
+            if t.entity == null || !#alive(t.entity) continue;
             if !t.entity.get_world_enabled() continue;
             if is_owner_of_parent_base(t.entity, this) {
                 return t;
@@ -1815,75 +1815,75 @@ Player :: class : Player_Base {
     }
 
     tutorial_step_get_target_world :: method(step: s64) -> v2, bool {
-        if entity == null || entity.self == null {
+        if entity == null || !#alive(entity) {
             return {}, false;
         }
 
         switch step {
             case 0: {
                 tree := find_closest_treecutting_tree_to_position(entity.world_position);
-                if tree != null && tree.entity != null && tree.entity.self != null && tree.entity.get_world_enabled() {
+                if tree != null && tree.entity != null && #alive(tree.entity) && tree.entity.get_world_enabled() {
                     return tree.entity.world_position, true;
                 }
                 return {}, false;
             }
             case 1: {
                 pm := tutorial_find_owned_paper_mill_lane0();
-                if pm != null && pm.entity != null && pm.entity.self != null {
+                if pm != null && pm.entity != null && #alive(pm.entity) {
                     return pm.entity.world_position, true;
                 }
             }
             case 2: {
                 pm := tutorial_find_owned_paper_mill_lane0();
-                if pm != null && pm.entity != null && pm.entity.self != null {
+                if pm != null && pm.entity != null && #alive(pm.entity) {
                     return pm.entity.world_position, true;
                 }
             }
             case 3: {
                 press := tutorial_find_owned_blank_bill_press_lane0();
-                if press != null && press.entity != null && press.entity.self != null {
+                if press != null && press.entity != null && #alive(press.entity) {
                     return press.entity.world_position, true;
                 }
             }
             case 4: {
                 press := tutorial_find_owned_blank_bill_press_lane0();
-                if press != null && press.entity != null && press.entity.self != null {
+                if press != null && press.entity != null && #alive(press.entity) {
                     return press.entity.world_position, true;
                 }
             }
             case 5: {
                 press := tutorial_find_owned_colored_bill_press_lane0();
-                if press != null && press.entity != null && press.entity.self != null {
+                if press != null && press.entity != null && #alive(press.entity) {
                     return press.entity.world_position, true;
                 }
             }
             case 6: {
                 press := tutorial_find_owned_colored_bill_press_lane0();
-                if press != null && press.entity != null && press.entity.self != null {
+                if press != null && press.entity != null && #alive(press.entity) {
                     return press.entity.world_position, true;
                 }
             }
             case 7: {
                 press := tutorial_find_owned_finished_bill_press_lane0();
-                if press != null && press.entity != null && press.entity.self != null {
+                if press != null && press.entity != null && #alive(press.entity) {
                     return press.entity.world_position, true;
                 }
             }
             case 8: {
                 press := tutorial_find_owned_finished_bill_press_lane0();
-                if press != null && press.entity != null && press.entity.self != null {
+                if press != null && press.entity != null && #alive(press.entity) {
                     return press.entity.world_position, true;
                 }
             }
             case 9: {
                 v := tutorial_find_owned_vault();
-                if v != null && v.entity != null && v.entity.self != null {
+                if v != null && v.entity != null && #alive(v.entity) {
                     return v.entity.world_position, true;
                 }
             }
             case 10: {
                 t := tutorial_find_owned_truck();
-                if t != null && t.entity != null && t.entity.self != null {
+                if t != null && t.entity != null && #alive(t.entity) {
                     return t.entity.world_position, true;
                 }
             }
@@ -2053,7 +2053,7 @@ Player :: class : Player_Base {
     ao_end :: method() {
         // Called when this component is destroyed
         // Cleanup local cosmetic entities (these are not parented under the player).
-        if shield_entity != null && shield_entity.self != null {
+        if shield_entity != null && #alive(shield_entity) {
             shield_entity.destroy();
         }
         shield_entity = null;
@@ -2118,7 +2118,7 @@ Player :: class : Player_Base {
         }
 
         vault_entity := interactable.entity;
-        if vault_entity == null || vault_entity.self == null return;
+        if vault_entity == null || !#alive(vault_entity) return;
 
         // Touch the "last hold" timestamp so ao_update doesn't clear state mid-hold.
         vault_theft_last_hold_time = get_time();
@@ -2578,7 +2578,7 @@ Player :: class : Player_Base {
     // Draws a screen-space arrow pointing toward a world-space `position`.
     DrawArrowToPosition :: proc(using this: Player, position: v2) {
         if this == null return;
-        if entity == null || entity.self == null return;
+        if entity == null || !#alive(entity) return;
 
         // Screen-space overlay so it can't be occluded by world sprites.
         UI.push_screen_draw_context();
@@ -2774,10 +2774,10 @@ Player :: class : Player_Base {
     server_start_death :: method() {
         if !Game.is_server() return;
         if death_pickup_lockout return; // already dying/dead
-        if entity == null || entity.self == null return;
+        if entity == null || !#alive(entity) return;
 
         // Quest: attribute kill to the last damage source.
-        if last_damage_source != null && last_damage_source.self != null {
+        if last_damage_source != null && #alive(last_damage_source) {
             if last_damage_source != this {
                 quest_on_pvp_kill(last_damage_source);
             }

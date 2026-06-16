@@ -244,7 +244,7 @@ Treecutting_Tree :: class : Interactable {
         }
 
         fx := Scene.instantiate(poof_prefab);
-        if fx == null || fx.self == null {
+        if fx == null || !#alive(fx) {
             return;
         }
 
@@ -259,7 +259,7 @@ Treecutting_Tree :: class : Interactable {
         }
 
         fx := Scene.instantiate(hit_prefab);
-        if fx == null || fx.self == null {
+        if fx == null || !#alive(fx) {
             return;
         }
 

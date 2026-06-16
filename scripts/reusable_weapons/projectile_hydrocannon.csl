@@ -121,7 +121,7 @@ Hydro_Cannon_Geyser :: class : Component {
 
         for t: nearby_trucks {
             if t == null continue;
-            if t.entity == null || t.entity.self == null continue;
+            if t.entity == null || !#alive(t.entity) continue;
 
             // Check if already hit by this geyser
             already_hit := false;
@@ -148,7 +148,7 @@ Hydro_Cannon_Geyser :: class : Component {
 
         for t: nearby_turrets {
             if t == null continue;
-            if t.entity == null || t.entity.self == null continue;
+            if t.entity == null || !#alive(t.entity) continue;
 
             // Check if already hit by this geyser
             already_hit := false;

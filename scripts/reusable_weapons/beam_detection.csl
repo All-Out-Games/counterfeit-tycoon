@@ -32,7 +32,7 @@ beam_line_damage :: proc(player: Player, origin: v2, direction: v2, range: float
 
     for t: nearby_trucks {
         if t == null continue;
-        if t.entity == null || t.entity.self == null continue;
+        if t.entity == null || !#alive(t.entity) continue;
 
         target_pos := t.entity.world_position;
         to_target := v2{target_pos.x - origin.x, target_pos.y - origin.y};
@@ -55,7 +55,7 @@ beam_line_damage :: proc(player: Player, origin: v2, direction: v2, range: float
     Scene.get_all_components_in_range(origin, range, ref nearby_turrets);
     for t: nearby_turrets {
         if t == null continue;
-        if t.entity == null || t.entity.self == null continue;
+        if t.entity == null || !#alive(t.entity) continue;
 
         target_pos := t.entity.world_position;
         to_target := v2{target_pos.x - origin.x, target_pos.y - origin.y};
@@ -107,7 +107,7 @@ beam_cone_damage :: proc(player: Player, origin: v2, direction: v2, range: float
 
     for t: nearby_trucks {
         if t == null continue;
-        if t.entity == null || t.entity.self == null continue;
+        if t.entity == null || !#alive(t.entity) continue;
 
         target_pos := t.entity.world_position;
         to_target := v2{target_pos.x - origin.x, target_pos.y - origin.y};
@@ -129,7 +129,7 @@ beam_cone_damage :: proc(player: Player, origin: v2, direction: v2, range: float
     Scene.get_all_components_in_range(origin, range, ref nearby_turrets);
     for t: nearby_turrets {
         if t == null continue;
-        if t.entity == null || t.entity.self == null continue;
+        if t.entity == null || !#alive(t.entity) continue;
 
         target_pos := t.entity.world_position;
         to_target := v2{target_pos.x - origin.x, target_pos.y - origin.y};
@@ -166,7 +166,7 @@ beam_radius_damage :: proc(player: Player, origin: v2, range: float, damage: flo
     Scene.get_all_components_in_range(origin, range, ref nearby_trucks);
     for t: nearby_trucks {
         if t == null continue;
-        if t.entity == null || t.entity.self == null continue;
+        if t.entity == null || !#alive(t.entity) continue;
         _ := t.server_register_weapon_hit(player.entity.id, damage);
     }
 

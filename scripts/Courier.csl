@@ -23,11 +23,11 @@ Courier_State :: enum {
 
 courier_find_finished_bill_press_for_base_and_lane :: proc(base: PlayerBase, lane_index: s64) -> Finished_Bill_Press {
     if base == null return null;
-    if base.entity == null || base.entity.self == null return null;
+    if base.entity == null || !#alive(base.entity) return null;
 
     for p: component_iterator(Finished_Bill_Press) {
         if p == null continue;
-        if p.entity == null || p.entity.self == null continue;
+        if p.entity == null || !#alive(p.entity) continue;
         if !p.entity.get_world_enabled() continue;
         if p.lane_index != lane_index continue;
 
@@ -41,11 +41,11 @@ courier_find_finished_bill_press_for_base_and_lane :: proc(base: PlayerBase, lan
 
 courier_find_vault_for_base :: proc(base: PlayerBase) -> Vault {
     if base == null return null;
-    if base.entity == null || base.entity.self == null return null;
+    if base.entity == null || !#alive(base.entity) return null;
 
     for v: component_iterator(Vault) {
         if v == null continue;
-        if v.entity == null || v.entity.self == null continue;
+        if v.entity == null || !#alive(v.entity) continue;
         if !v.entity.get_world_enabled() continue;
 
         pb := get_parent_player_base(v.entity);
@@ -158,13 +158,13 @@ Courier :: class : Component {
 
     target_pos_for_source :: method(press: Finished_Bill_Press) -> v2 {
         if press == null return entity.world_position;
-        if press.entity == null || press.entity.self == null return entity.world_position;
+        if press.entity == null || !#alive(press.entity) return entity.world_position;
         return press.entity.world_position + v2{0, -1.0};
     }
 
     target_pos_for_vault :: method(vault: Vault) -> v2 {
         if vault == null return entity.world_position;
-        if vault.entity == null || vault.entity.self == null return entity.world_position;
+        if vault.entity == null || !#alive(vault.entity) return entity.world_position;
         return vault.entity.world_position + v2{0, -1.0};
     }
 
@@ -237,15 +237,15 @@ Courier :: class : Component {
 
         if spine_animator != null {
             spine = spine_animator;
-            if spine_animator.entity != null && spine_animator.entity.self != null {
+            if spine_animator.entity != null && #alive(spine_animator.entity) {
                 target_entity = spine_animator.entity;
             }
         }
-        else if spine_entity != null && spine_entity.self != null {
+        else if spine_entity != null && #alive(spine_entity) {
             spine = spine_entity.get_component(Spine_Animator);
             target_entity = spine_entity;
         }
-        else if target_entity != null && target_entity.self != null {
+        else if target_entity != null && #alive(target_entity) {
             spine = target_entity.get_component(Spine_Animator);
         }
 
@@ -254,7 +254,7 @@ Courier :: class : Component {
         }
 
         if !spine_scale_initialized {
-            if target_entity != null && target_entity.self != null {
+            if target_entity != null && #alive(target_entity) {
                 spine_base_scale = target_entity.local_scale;
                 if spine_base_scale.x == 0 {
                     spine_base_scale.x = 1;
@@ -397,11 +397,11 @@ Courier :: class : Component {
 
         if spine_scale_initialized {
             target_entity := entity;
-            if spine_entity != null && spine_entity.self != null {
+            if spine_entity != null && #alive(spine_entity) {
                 target_entity = spine_entity;
             }
 
-            if target_entity != null && target_entity.self != null {
+            if target_entity != null && #alive(target_entity) {
                 if delta.x > 0.001 {
                     target_entity.set_local_scale({abs(spine_base_scale.x), spine_base_scale.y});
                 }
@@ -421,7 +421,7 @@ Courier :: class : Component {
         if pb == null return;
         owner := pb.get_owner();
         if owner == null return;
-        if owner.self == null return;
+        if !#alive(owner) return;
         if owner.animator == null return;
 
         spine.layer = owner.animator.layer;

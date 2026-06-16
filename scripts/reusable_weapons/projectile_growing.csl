@@ -77,7 +77,7 @@ Growing_Projectile :: class : Component {
 
             for hit_truck: nearby_trucks {
                 if hit_truck == null continue;
-                if hit_truck.entity == null || hit_truck.entity.self == null continue;
+                if hit_truck.entity == null || !#alive(hit_truck.entity) continue;
 
                 // Check if already hit
                 already_hit := false;
@@ -117,7 +117,7 @@ Growing_Projectile :: class : Component {
 
             for hit_turret: nearby_turrets {
                 if hit_turret == null continue;
-                if hit_turret.entity == null || hit_turret.entity.self == null continue;
+                if hit_turret.entity == null || !#alive(hit_turret.entity) continue;
 
                 // Check if already hit
                 already_hit := false;
