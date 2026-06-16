@@ -23,3 +23,5 @@ ao_debug.lock
 .claude
 .gemini
 CLAUDE.md
+.codex
+res/.upload_cache
