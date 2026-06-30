@@ -90,7 +90,8 @@
     "texture": {
       "pixels_per_unit": 80,
       "wrap_repeat": true
-    }
+    },
+    "should_mip": true
   },
   {
     "id": "Cliffs.png",
@@ -120,31 +121,36 @@
     "id": "road_mid_vert_0937cee37e15ecde.png",
     "texture": {
       "pixels_per_unit": 120
-    }
+    },
+    "should_mip": true
   },
   {
     "id": "road_end_horiz_2b3e51787499bf67.png",
     "texture": {
       "pixels_per_unit": 120
-    }
+    },
+    "should_mip": true
   },
   {
     "id": "road_bot1_4593df0d5ca0508c.png",
     "texture": {
       "pixels_per_unit": 120
-    }
+    },
+    "should_mip": true
   },
   {
     "id": "road_top1_23b8fdf29166ffeb.png",
     "texture": {
       "pixels_per_unit": 120
-    }
+    },
+    "should_mip": true
   },
   {
     "id": "road_end_vert_cc7b1f3cac8d20fc.png",
     "texture": {
       "pixels_per_unit": 120
-    }
+    },
+    "should_mip": true
   },
   {
     "id": "UI/Spark.png"
@@ -181,7 +187,8 @@
         5,
         0
       ]
-    }
+    },
+    "should_mip": true
   },
   {
     "id": "roadloop2.png",
@@ -201,10 +208,10 @@
     "id": "flagstone.png",
     "texture": {
       "slice": [
-        101.1000061035156250,
-        94.0800094604492188,
-        88.9680023193359375,
-        60.4800109863281250
+        101.10000610351562,
+        94.08000946044922,
+        88.96800231933594,
+        60.480010986328125
       ]
     }
   },
@@ -224,6 +231,12 @@
         0,
         -0.8999999761581421
       ]
+    }
+  },
+  {
+    "id": "Vault_high.png",
+    "texture": {
+      "resample_multiplier": 0.75
     }
   }
 ]

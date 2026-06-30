@@ -1693,6 +1693,9 @@ Player :: class : Player_Base {
         // Tutorial HUD (text + arrow).
         draw_tutorial_hud();
 
+        // Temporary UIK stress overlay.
+        draw_test_uik_ui(this);
+
         // Cosmetic: draw per-player screen-space particles on top.
         if ui_directed_particle_handler != null {
             ui_directed_particle_handler.update_and_draw(dt);

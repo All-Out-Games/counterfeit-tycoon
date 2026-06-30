@@ -1,0 +1,175 @@
+test_uik_button_desc :: proc(bg: UIK.Panel_Background_Kind, height: float = 62.0) -> UIK.Widget_Desc {
+    desc := UIK.widget_desc_button_auto_default(bg);
+    desc.panel.width = UIK.flex(1);
+    desc.panel.height = UIK.pixels(height);
+    desc.label_text.set_size_mult(0.72);
+    return desc;
+}
+
+draw_test_uik_button :: proc(id: string, label: string, bg: UIK.Panel_Background_Kind, clicked_count: ref s64) {
+    result := UIK.button(id, label, test_uik_button_desc(bg));
+    if result.clicked {
+        clicked_count += 1;
+    }
+}
+
+draw_test_uik_text_stack :: proc() {
+    body := UIK.text_body();
+    body.set_word_wrap(true);
+    body.set_size_mult(0.72);
+
+    UIK.text(UIK.text_title(), "Lots Of UIK Text");
+    UIK.divider(2, {1, 1, 1, 0.35});
+    UIK.text(body, "Counterfeit Tycoon UIK stress panel with wrapped body copy, short labels, dividers, progress bars, scroll rows, and many buttons.");
+    UIK.text(body, "This text is intentionally verbose so it fills space and checks UIK line handling inside fixed panel bounds.");
+    UIK.text(body, "Player: %", {"Local Test"});
+
+    for i: 0..9 {
+        UIK.text(body, "Text row %: Bills, wood, managers, upgrades, weapons, trucks, vaults, buttons, tabs, cards, counters, and status labels.", {i + 1});
+    }
+}
+
+draw_test_uik_progress_stack :: proc() {
+    now := get_time();
+    p1 := (sin(now * 0.9) + 1.0) * 0.5;
+    p2 := (cos(now * 0.7) + 1.0) * 0.5;
+    p3 := (sin(now * 1.4) + 1.0) * 0.5;
+
+    UIK.text(UIK.text_title(), "Meters");
+    UIK.progress_bar(UIK.panel_progress_bar(.PROGRESS_BAR_STYLE_1, p1, {0.2, 0.9, 0.45, 1}, UIK.flex(1), UIK.pixels(34)));
+    UIK.progress_bar(UIK.panel_progress_bar(.PROGRESS_BAR_STYLE_2, p2, {0.3, 0.65, 1.0, 1}, UIK.flex(1), UIK.pixels(34)));
+    UIK.progress_bar(UIK.panel_progress_bar(.PROGRESS_BAR_STYLE_1, p3, {1.0, 0.75, 0.25, 1}, UIK.flex(1), UIK.pixels(34)));
+}
+
+draw_test_uik_grid_buttons :: proc(clicked_count: ref s64) {
+    UIK.text(UIK.text_title(), "Button Grid");
+    UIK.grid_begin(3, 70);
+
+    for i: 0..14 {
+        bg: UIK.Panel_Background_Kind = .BUTTON_BASIC_BLUE;
+        switch i % 6 {
+            case 0: bg = .BUTTON_BASIC_GREEN;
+            case 1: bg = .BUTTON_BASIC_YELLOW;
+            case 2: bg = .BUTTON_BASIC_BLUE;
+            case 3: bg = .BUTTON_BASIC_PURPLE;
+            case 4: bg = .BUTTON_BASIC_ORANGE;
+            default: bg = .BUTTON_BASIC_RED;
+        }
+
+        draw_test_uik_button(
+            format_string("test_uik_grid_%", {i}),
+            format_string("Button %", {i + 1}),
+            bg,
+            ref clicked_count
+        );
+    }
+
+    UIK.grid_end();
+}
+
+draw_test_uik_rows :: proc(clicked_count: ref s64) {
+    row_text := UIK.text_body();
+    row_text.set_word_wrap(true);
+    row_text.set_size_mult(0.64);
+
+    for i: 0..11 {
+        row := UIK.panel_interior(.WHITE);
+        row.width = UIK.flex(1);
+        row.height = UIK.fit();
+        row.padding = v4{8, 10, 8, 10};
+        row.gap = 6;
+        UIK.panel_begin(row);
+
+        UIK.text(UIK.text_button(), "Scrollable Row %", {i + 1});
+        UIK.text(row_text, "Dense sample text beside regular controls. This exists only to flood the UIK layout with real text and repeated widgets.");
+
+        btn_row := UIK.layout_row(UIK.flex(1), UIK.fit(), 6);
+        UIK.panel_begin(btn_row);
+        draw_test_uik_button(format_string("test_uik_row_%_a", {i}), "Accept", .BUTTON_BASIC_GREEN, ref clicked_count);
+        draw_test_uik_button(format_string("test_uik_row_%_b", {i}), "Queue", .BUTTON_BASIC_BLUE, ref clicked_count);
+        draw_test_uik_button(format_string("test_uik_row_%_c", {i}), "Cancel", .BUTTON_BASIC_RED, ref clicked_count);
+        UIK.panel_end();
+
+        UIK.panel_end();
+    }
+}
+
+draw_test_uik_ui :: proc(player: Player) {
+    if player == null return;
+    if !player.is_local_or_server() return;
+
+    begin_desc := UIK.window(UIK.rect_window_large());
+    begin_desc.layer = 95;
+    UIK.begin(begin_desc);
+
+    shell := UIK.panel_modal(.TRANSP_BLACK, 10, v4{12, 12, 12, 12});
+    shell.opacity = 0.94;
+    UIK.panel_begin(shell);
+
+    UIK.title("UIK Test Wall", null, UIK.title_desc(.FANCY, {0.35, 0.85, 1.0, 1}));
+
+    clicked_count: s64;
+
+    top_row := UIK.layout_row(UIK.flex(1), UIK.fit(), 8);
+    UIK.panel_begin(top_row);
+    draw_test_uik_button("test_uik_top_coin", "Coins", .BUTTON_SHINY_YELLOW, ref clicked_count);
+    draw_test_uik_button("test_uik_top_shop", "Shop", .BUTTON_SHINY_GREEN, ref clicked_count);
+    draw_test_uik_button("test_uik_top_weapon", "Weapon", .BUTTON_SHINY_RED, ref clicked_count);
+    draw_test_uik_button("test_uik_top_upgrade", "Upgrade", .BUTTON_SHINY_BLUE, ref clicked_count);
+    draw_test_uik_button("test_uik_top_close", "Close", .BUTTON_BASIC_GREY, ref clicked_count);
+    UIK.panel_end();
+
+    UIK.text(UIK.text_body(), "Clicked this frame: %", {clicked_count});
+
+    body := UIK.layout_row(UIK.flex(1), UIK.flex(1), 12);
+    UIK.panel_begin(body);
+
+    left := UIK.panel_interior(.INSET);
+    left.width = UIK.flex(0.82);
+    left.height = UIK.flex(1);
+    left.padding = v4{10, 10, 10, 10};
+    left.gap = 8;
+    UIK.panel_begin(left);
+    UIK.list_begin("test_uik_left_scroll", UIK.layout_column());
+    draw_test_uik_text_stack();
+    UIK.divider(2, {1, 1, 1, 0.25});
+    draw_test_uik_progress_stack();
+    UIK.list_end();
+    UIK.panel_end();
+
+    middle := UIK.panel_interior(.INSET);
+    middle.width = UIK.flex(1.12);
+    middle.height = UIK.flex(1);
+    middle.padding = v4{10, 10, 10, 10};
+    middle.gap = 8;
+    UIK.panel_begin(middle);
+    UIK.list_begin("test_uik_grid_scroll", UIK.layout_column());
+    draw_test_uik_grid_buttons(ref clicked_count);
+    UIK.divider(2, {1, 1, 1, 0.25});
+    draw_test_uik_rows(ref clicked_count);
+    UIK.list_end();
+    UIK.panel_end();
+
+    right := UIK.panel_interior(.INSET);
+    right.width = UIK.flex(0.72);
+    right.height = UIK.flex(1);
+    right.padding = v4{10, 10, 10, 10};
+    right.gap = 8;
+    UIK.panel_begin(right);
+    UIK.text(UIK.text_title(), "Status Text");
+    UIK.divider(2, {1, 1, 1, 0.25});
+    for i: 0..17 {
+        UIK.text(UIK.text_body(), "Status %: Ready", {i + 1});
+    }
+    UIK.divider(2, {1, 1, 1, 0.25});
+    draw_test_uik_button("test_uik_big_primary", "Primary", .BUTTON_SHINY_GREEN, ref clicked_count);
+    draw_test_uik_button("test_uik_big_secondary", "Secondary", .BUTTON_SHINY_BLUE, ref clicked_count);
+    draw_test_uik_button("test_uik_big_warning", "Warning", .BUTTON_SHINY_ORANGE, ref clicked_count);
+    draw_test_uik_button("test_uik_big_danger", "Danger", .BUTTON_SHINY_RED, ref clicked_count);
+    UIK.panel_end();
+
+    UIK.panel_end();
+
+    UIK.panel_end();
+    UIK.end();
+}
