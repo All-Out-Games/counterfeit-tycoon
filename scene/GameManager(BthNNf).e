@@ -47,13 +47,4 @@
     "turret_tier_2_prefab_path": "TurretTier2.prefab",
     "turret_tier_3_prefab_path": "TurretTier3.prefab"
   }
-},
-{
-  "cid": 2,
-  "aoid": 96333147,
-  "component_type": "Internal_Component",
-  "internal_component_type": "MusicManager",
-  "data": {
-
-  }
 }

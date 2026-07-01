@@ -1082,13 +1082,17 @@ Player :: class : Player_Base {
         MaxHealth = 100;
         CurrentHealth = MaxHealth;
 
-        // Local-only: start background music once per client.
-        if this.is_local() {
-            #static music_manager_spawned: bool;
-            if !music_manager_spawned {
-                music_manager_spawned = true;
-                music_entity := Scene.create_entity();
-                _ := music_entity.add_component(MusicManager);
+        // Start background music once.
+        #static orbit_music_sound_id: u64;
+        if orbit_music_sound_id == 0 {
+            #static orbit_music_sfx := get_asset(SFX_Asset, "SFX/Orbit.wav");
+            if orbit_music_sfx != null {
+                desc := SFX.default_sfx_desc();
+                desc.positional = false;
+                desc.volume = 0.35;
+                desc.loop = true;
+                desc.channel = SFX_Channel.MUSIC;
+                orbit_music_sound_id = SFX.play(orbit_music_sfx, desc);
             }
         }
 
@@ -1692,9 +1696,6 @@ Player :: class : Player_Base {
 
         // Tutorial HUD (text + arrow).
         draw_tutorial_hud();
-
-        // Temporary UIK stress overlay.
-        draw_test_uik_ui(this);
 
         // Cosmetic: draw per-player screen-space particles on top.
         if ui_directed_particle_handler != null {
