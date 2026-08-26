@@ -469,7 +469,7 @@ GameManager :: class : Component {
             cached_lane_prefab,
             spawn_pos,
             ud,
-            proc(spawned_entity: Entity, userdata: Object) {
+            proc "p47_103c6fc9c22539384a0b6a38"(spawned_entity: Entity, userdata: Object) {
                 ud := userdata.(Spawn_Lane_Userdata);
                 if ud == null return;
                 if spawned_entity == null return;
@@ -610,7 +610,7 @@ GameManager :: class : Component {
                 cached_lane_unlock_prompt_prefab,
                 spawn_pos,
                 ud,
-                proc(spawned_entity: Entity, userdata: Object) {
+                proc "p47_fe5a7ed395d04e2433001fae"(spawned_entity: Entity, userdata: Object) {
                     ud := userdata.(Spawn_Lane_Userdata);
                     if ud == null return;
                     if spawned_entity == null return;
@@ -937,7 +937,7 @@ GameManager :: class : Component {
                 cached_manager_unlock_prompt_prefab,
                 spawn_pos,
                 ud,
-                proc(spawned_entity: Entity, userdata: Object) {
+                proc "p47_ea88777bfe7a9d628a5c2046"(spawned_entity: Entity, userdata: Object) {
                     ud := userdata.(Spawn_ManagerUnlock_Userdata);
                     if ud == null return;
                     if spawned_entity == null return;
@@ -1176,7 +1176,7 @@ GameManager :: class : Component {
                 cached_manager_unlock_prompt_prefab,
                 spawn_pos,
                 ud,
-                proc(spawned_entity: Entity, userdata: Object) {
+                proc "p47_d7206b28f70ed340818f1b6b"(spawned_entity: Entity, userdata: Object) {
                     ud := userdata.(Spawn_WoodchipperUnlock_Userdata);
                     if ud == null return;
                     if spawned_entity == null return;
@@ -1778,7 +1778,7 @@ GameManager :: class : Component {
             prefab,
             spawn_pos,
             ud,
-            proc(spawned_entity: Entity, userdata: Object) {
+            proc "p47_08e8273f81052f1b14f7432d"(spawned_entity: Entity, userdata: Object) {
                 ud := userdata.(Spawn_Turret_Userdata);
                 if ud == null return;
                 if spawned_entity == null || !#alive(spawned_entity) return;
@@ -1853,7 +1853,7 @@ GameManager :: class : Component {
             cached_press_operator_prefab,
             spawn_pos,
             ud,
-            proc(spawned_entity: Entity, userdata: Object) {
+            proc "p47_895b59152d9a972f54c013d3"(spawned_entity: Entity, userdata: Object) {
                 ud := userdata.(Spawn_PressOperator_Userdata);
                 if ud == null return;
                 if spawned_entity == null return;
@@ -1958,7 +1958,7 @@ GameManager :: class : Component {
             cached_colorist_prefab,
             spawn_pos,
             ud,
-            proc(spawned_entity: Entity, userdata: Object) {
+            proc "p47_952fe0e18476d8383387e586"(spawned_entity: Entity, userdata: Object) {
                 ud := userdata.(Spawn_Colorist_Userdata);
                 if ud == null return;
                 if spawned_entity == null return;
@@ -2062,7 +2062,7 @@ GameManager :: class : Component {
             cached_stamper_prefab,
             spawn_pos,
             ud,
-            proc(spawned_entity: Entity, userdata: Object) {
+            proc "p47_acfa388294335b8f1431eeba"(spawned_entity: Entity, userdata: Object) {
                 ud := userdata.(Spawn_Stamper_Userdata);
                 if ud == null return;
                 if spawned_entity == null return;
@@ -2166,7 +2166,7 @@ GameManager :: class : Component {
             cached_courier_prefab,
             spawn_pos,
             ud,
-            proc(spawned_entity: Entity, userdata: Object) {
+            proc "p47_ad036e7f6954814c1069a781"(spawned_entity: Entity, userdata: Object) {
                 ud := userdata.(Spawn_Courier_Userdata);
                 if ud == null return;
                 if spawned_entity == null return;
@@ -2268,7 +2268,7 @@ GameManager :: class : Component {
             cached_woodchipper_prefab,
             spawn_pos,
             ud,
-            proc(spawned_entity: Entity, userdata: Object) {
+            proc "p47_b3802ecfc28ee8ae09c081d2"(spawned_entity: Entity, userdata: Object) {
                 ud := userdata.(Spawn_Woodchipper_Userdata);
                 if ud == null return;
                 if spawned_entity == null return;
@@ -2435,7 +2435,7 @@ GameManager :: class : Component {
                 cached_player_base_prefab,
                 spawn_pos,
                 ud,
-                proc(spawned_entity: Entity, userdata: Object) {
+                proc "p47_859902a26b70d31bb2edbf64"(spawned_entity: Entity, userdata: Object) {
                     ud := userdata.(Spawn_Base_Userdata);
                     if ud == null return;
 

@@ -1633,7 +1633,7 @@ Player :: class : Player_Base {
         // Guard against inherited UI layer state going too low (can break input).
         UI.push_layer(-99);
         defer UI.pop_layer();
-        options := Inventory_Draw_Options.default();
+        options := Inventory_Draw_Options.hotbar_default();
         hotbar := Items.draw_hotbar(this, default_inventory, options);
         handle_equipped_item_changing(hotbar.selected_item_index);
         client_purchase_fx_tick(hotbar.entire_rect);

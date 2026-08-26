@@ -154,7 +154,7 @@ TreeManager :: class : Component {
                     cached_prefab,
                     pos,
                     this,
-                    proc(spawned_entity: Entity, userdata: Object) {
+                    proc "p47_a67cfae3b449f7f876cd7a18"(spawned_entity: Entity, userdata: Object) {
                         mgr := userdata.(TreeManager);
                         if mgr == null return;
                         if spawned_entity == null return;
