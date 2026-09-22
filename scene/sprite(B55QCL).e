@@ -20,7 +20,7 @@
   "component_type": "Internal_Component",
   "internal_component_type": "Sprite_Renderer",
   "data": {
-    "texture": "$AO/editor/icons/Resize Plus (Square).png",
+    "texture": "UI/Arrow.png",
     "scale": {
       "X": 32,
       "Y": 26.5000000000000000

@@ -85,13 +85,20 @@ Global_Leaderboard :: class : Component {
     }
 
     draw :: method() {
+        pos := entity.world_position;
+        board_rect := Rect.{pos, pos}.grow(2.4, 2.6, 2.6, 2.6);
+        if board_texture != null {
+            board_rect = board_rect.fit_aspect(board_texture.get_aspect());
+        }
+        if !Game.is_editor() && !Camera.is_visible(board_rect, 1.0) {
+            return;
+        }
+
         UI.push_world_draw_context();
         defer UI.pop_draw_context();
 
         UI.push_interpolation_anchor(entity);
         defer UI.pop_interpolation_anchor();
-
-        pos := entity.world_position;
 
         UI.push_z(pos.y);
         defer UI.pop_z();
@@ -102,9 +109,6 @@ Global_Leaderboard :: class : Component {
         viewport_rect := Rect.{pos, pos}.grow(0.5, 1.4, 1.68, 1.4);
 
         if board_texture != null {
-            board_rect := Rect.{pos, pos}.grow(2.4, 2.6, 2.6, 2.6);
-            board_rect = board_rect.fit_aspect(board_texture.get_aspect());
-
             if shadow_texture != null {
                 shadow_rect := board_rect.grow(-0.4).fit_aspect(shadow_texture.get_aspect()).offset(0, -1.8);
                 UI.push_layer_relative(-1);
@@ -139,7 +143,9 @@ Global_Leaderboard :: class : Component {
                     entry_rect := content_cut.cut_top(h);
                     if i == 0 { entry_rect = entry_rect.grow(0, 0.075, 0, 0); }
 
-                    this.draw_entry(entry_rect, i);
+                    if entry_rect.overlaps(viewport_rect) {
+                        this.draw_entry(entry_rect, i);
+                    }
                     UI.expand_current_scroll_view(entry_rect);
                     content_cut.cut_top(0.05);
                 }
@@ -212,7 +218,7 @@ Global_Leaderboard :: class : Component {
             name_ts.halign = .LEFT;
             name_rect := entry_rect.left_rect().offset(1, 0);
             if i == 0 { name_rect = name_rect.offset(0, -0.03); }
-            UI.text(name_rect, name_ts, display_name);
+            UI.text(name_rect, name_ts, "%", {display_name});
 
             score_ts := base_ts;
             score_ts.size   = text_size;
@@ -254,7 +260,7 @@ Global_Leaderboard :: class : Component {
         name_rect := my_rect.left_rect().offset(1, 0);
         display_name := my_entry.username;
         if display_name.count == 0 { display_name = "Me"; }
-        UI.text(name_rect, name_ts, display_name);
+        UI.text(name_rect, name_ts, "%", {display_name});
 
         score_ts := base_ts;
         score_ts.size   = text_size;
@@ -306,12 +312,10 @@ Global_Leaderboard :: class : Component {
         data.leaderboard_id = leaderboard_id;
         data.user_id = player.get_user_id();
         data.amount = amount;
-        #rootify_object(data);
         Save.ordered_get(leaderboard_id, data.user_id, 0.0, data, proc(entry: Ordered_Save_Entry, userdata: Object) {
             d := userdata.(Increment_Data);
             new_score := entry.value + d.amount;
             Save.ordered_set(d.leaderboard_id, d.user_id, new_score);
-            #free_root(d);
         });
     }
 

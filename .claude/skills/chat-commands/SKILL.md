@@ -7,7 +7,7 @@ Annotate a procedure with `@chat_command` to make it invocable via `/proc_name` 
 ```csl
 heal :: proc(player: Player, amount: int = 50) {
     player.health += amount;
-    Notifier.notify(player, "Healed for %!", {amount});
+    Notifier.notify(player, `Healed for {amount}!`);
 } @chat_command @owner
 ```
 

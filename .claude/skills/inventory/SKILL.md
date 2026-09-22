@@ -74,6 +74,8 @@ item := Items.create_item_instance(sword_defn, 1);
 will_destroy: bool;
 if Items.can_move_item_to_inventory(item, player.default_inventory, ref will_destroy) {
     Items.move_item_to_inventory(item, player.default_inventory);
+} else {
+    Items.destroy_item_instance(item);
 }
 ```
 
@@ -93,24 +95,24 @@ amount_moved := Items.move_as_many_items_as_possible_to_inventory(item, player.d
 
 ### Removing / Destroying Items
 ```csl
-Items.remove_item_from_inventory(item, player.default_inventory);
-Items.destroy_item_instance(item); // Entire stack
-Items.destroy_item_instance(item, 5); // Only 5 from stack
+// Choose one:
+Items.remove_item_from_inventory(item, player.default_inventory); // Detach without destroying
+Items.destroy_item_instance(item);    // Entire stack; auto-removes
+Items.destroy_item_instance(item, 5); // Or remove only 5
 ```
 
 ### Iterating Inventory
 ```csl
-for i: 0..player.default_inventory.capacity-1 {
-    item := player.default_inventory.get_item(i);
-    if item == null continue;
-
+for item, slot: player.default_inventory.slots() if item != null {
     defn := item.get_definition();
-    weapon_defn := defn.(Weapon_Definition);
-    if weapon_defn != null {
-        log_info("Found weapon with % damage", {weapon_defn.damage});
+    if defn.#type == Weapon_Definition {
+        weapon_defn := defn.(Weapon_Definition);
+        log_info(`Found weapon in slot {slot} with {weapon_defn.damage} damage`);
     }
 }
 ```
+
+`slots()` visits every slot in order and yields `null` for empty slots. Use `get_item(index)` only for random slot access.
 
 ### Swapping Items
 ```csl
@@ -147,10 +149,10 @@ Items :: struct {
 }
 ```
 
-### Item_Definition Methods
+### Item_Definition Fields and Methods
 ```csl
-defn.get_name() -> string;
-defn.get_id() -> string;
+defn.name;
+defn.id;
 defn.get_icon() -> Texture_Asset;
 ```
 
@@ -166,6 +168,7 @@ item.get_definition() -> Item_Definition;
 ### Inventory Methods
 
 ```csl
+for item, slot: inventory.slots() if item != null { /* ... */ }
 inventory.get_item(index: s64) -> Item_Instance; // May return null
 inventory.capacity
 ```
@@ -191,7 +194,7 @@ You must draw the inventory in `ao_late_update` inside `is_local_or_server()`.
 ```csl
 ao_late_update :: method(dt: float) {
     if this.is_local_or_server() {
-        options := Inventory_Draw_Options.default();
+        options := Inventory_Draw_Options.hotbar_default();
         options.hotbar_item_count = 5;
         options.enable_use_from_hotbar = true;
         options.scroll_item_selection = true;
@@ -212,7 +215,7 @@ ao_late_update :: method(dt: float) {
 ### Popup Inventory Grid (Chests, etc...)
 ```csl
 inventory_rect := UI.get_safe_screen_rect().inset(100);
-options := Inventory_Draw_Options.default();
+options := Inventory_Draw_Options.inventory_default();
 options.title = "Inventory";
 options.show_exit_button = true;
 options.show_background = true;
@@ -229,16 +232,23 @@ if closed { inventory_open = false; }
 Inventory_Draw_Options :: struct {
     title: string;
     show_exit_button: bool;
+    show_scroll_bar: bool;
+    show_background: bool;
     allow_drag_drop: bool;
     drag_drop_color_multiplier: v4;
-    hotbar_item_count: s32; // default: 6
+    hotbar_item_count: s32; // inventory_default: 0; hotbar_default: 6
     columns: s32;
     rows: s32;
     force_select_hotbar_index: s32; // -1 = none
     hide_bag_button: bool;
     enable_selection: bool;
     scroll_item_selection: bool;
+    keyboard_item_selection: bool;
     enable_use_from_hotbar: bool;
+    on_before_draw: (proc(item: Item_Instance, rect: Rect));
+    on_after_draw: (proc(item: Item_Instance, rect: Rect));
+    inventory_default :: proc() -> Inventory_Draw_Options;
+    hotbar_default :: proc() -> Inventory_Draw_Options;
 }
 ```
 

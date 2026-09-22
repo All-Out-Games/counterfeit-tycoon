@@ -31,6 +31,20 @@ Global variable initializers must be compile-time constants. Zero-initialized fi
 - Vector types: `v2`, `v3`, `v4` (float fields `.x`, `.y`, `.z`, `.w`; constructed with `v2{10, 20}`)
 - `string`, `typeid`, `any`
 
+### Strings and Template Strings
+`"..."` strings support backslash escapes (`\n`, `\t`, `\\`, ...). Backtick strings are raw (no backslash escapes, newlines allowed) and support `{expr}` interpolation:
+
+```csl
+name := "Ada";
+count := 0;
+msg := `Hi {name}, you have {count + 1} new messages`; // any expression works inside {}
+```
+
+- Interpolating templates compile to a `format_string` call, so they need `import "core:basic"` and are not compile-time constants.
+- A backtick string with no `{expr}` stays a plain raw string constant.
+- Literal braces: `{{` and `}}`. A single `}` in text is a compile error.
+- Backtick strings cannot nest inside `{}` (use `"..."` strings there).
+
 ## Structs
 Structs are value types (shallow-copied on assignment/pass).
 
@@ -73,7 +87,7 @@ Dog :: class {
     name: string;
 
     bark :: method() {
-        log_info("% says bark!", {name}); // implicit this.name
+        log_info(`{name} says bark!`); // implicit this.name
     }
 }
 
@@ -110,7 +124,17 @@ numbers.ordered_remove_by_index(0);
 ```
 
 ## Control Flow
-No parentheses around conditions. Enum values use `.` prefix in `switch`:
+Conditions normally omit parentheses. Enum values use `.` prefix in `switch`:
+
+### Compound literals in control-flow conditions
+
+A compound literal immediately before a control-flow body is ambiguous. This is the exception to the normal no-parentheses style: disambiguate with `.{}`, `Type.{}`, or parentheses.
+
+```csl
+if value == .{} {}
+if value == v2.{} {}
+if (value == v2{}) {}
+```
 
 ```csl
 switch tier {
@@ -148,6 +172,7 @@ switch tier {
 Do not write C-style fallthrough logic
 
 `for` also handles custom iterators: `for player: component_iterator(My_Player) { }`
+Numeric loops use `for i: 0..3 { }` (inclusive) or `for i: 0..<3 { }` (half-open), never `for i in ...`.
 
 Custom iterator-based `for` loops require a `next :: method() -> bool` and a `current` field.
 
@@ -163,8 +188,8 @@ UI.push_screen_draw_context();
 defer UI.pop_draw_context();
 ```
 
-`#alive(expr)` checks whether a class reference is still valid and MUST be used before accessing to prevent crashes. 
-`defer` runs a statement when the current scope exits and is commonly used for UI push/pop cleanup.
+`#alive(expr)` checks whether a class reference is still valid and MUST be used before accessing to prevent crashes.
+`defer` runs a statement when the current scope exits.
 
 ## Type Casting
 Use `expr.(T)` syntax: `b := 123.4.(int);`
@@ -193,11 +218,11 @@ min :: proc(a: $T, b: T) -> T {
 result := min(3, 5); // T is deduced as int
 ```
 
-> `T` is not a type. Never write `component_iterator(T)` or `[..]T` — always use the actual type name like `component_iterator(Enemy)` or `[..]Enemy`.
+> `T` is a type only inside a polymorphic declaration that binds `$T`; it is not a generic placeholder elsewhere. In concrete code use the actual type name, such as `component_iterator(Enemy)` or `[..]Enemy`.
 
 ## Function Pointers and Callbacks
 
-**CSL has no closures.** Pair a callback field with a `userdata: Object` field. Any class instance can be stored as `Object` and cast back:
+**CSL has no closures.** Proc literals cannot capture enclosing parameters or locals. Pair a callback field with a `userdata: Object` field. Any class instance can be stored as `Object` and cast back:
 
 ```csl
 on_death_userdata: Object;
@@ -226,12 +251,13 @@ if effect.#type == Slow_Effect {
 ```
 
 ## Multiple Return Values
+Wrap multiple return types in parentheses, as in `proc() -> (Thing, bool)`.
+
 ```csl
-get_thing :: proc() -> Thing, bool {
+get_thing :: proc() -> (Thing, bool) {
     return g_thing, true;
 }
 
 thing, ok := get_thing();
 if thing, ok := get_thing(); ok { }
-
-_ is NOT supported for discarding variables
+```
