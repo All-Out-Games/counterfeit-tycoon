@@ -1422,14 +1422,14 @@ Player :: class : Player_Base {
                     if flashing {
                         tick := ((now - damage_flash_start_time) * FLASH_HZ).(int);
                         if (tick % 2) == 0 {
-                            animator.instance.color_multiplier = {1, 1, 1, 1};
+                            animator.instance.color = {1, 1, 1, 1};
                         }
                         else {
-                            animator.instance.color_multiplier = {1, 0.2, 0.2, 1};
+                            animator.instance.color = {1, 0.2, 0.2, 1};
                         }
                     }
                     else {
-                        animator.instance.color_multiplier = {1, 1, 1, 1};
+                        animator.instance.color = {1, 1, 1, 1};
                     }
                 }
             }
